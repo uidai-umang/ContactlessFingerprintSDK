@@ -1,0 +1,105 @@
+<resources>
+    <string name="app_name">ContactlessFingerSDK</string>
+    <!--  Descriptions  -->
+    <string name="desc_bottom_sheet_image">Placeholder for Bottom Sheet Image</string>
+    <string name="desc_back_button">Back Button</string>
+    <string name="desc_guideline_item_icon">Guideline Item Icon</string>
+    <string name="desc_aadhaar_logo">Aadhaar logo</string>
+
+    <!--  Capture Screen Heading  -->
+    <string name="heading_initial_state">Place your finger inside the overlay</string>
+
+    <!--  Capture Screen Buttons  -->
+    <string name="btn_capture">Capture</string>
+    <string name="btn_retake">Retake</string>
+    <string name="btn_go_back">Go Back</string>
+    <string name="transaction_info">Ver: %1$s | %2$s | TxnId: %3$s</string>
+
+    <!-- Misc -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="heading_captured_images">Captured Images</string>
+    <string name="desc_captured_fingerprint_image">Captured Fingerprint Image</string>
+
+    <!-- Warning Messages -->
+    <string name="warning_title_internal_error">Internal error</string>
+    <string name="warning_desc_internal_error">We hit a snag while processing. Please try again.</string>
+
+    <string name="warning_title_low_light">Too Dark</string>
+    <string name="warning_desc_low_light">Move to better lighting so we can see clearly.</string>
+
+    <string name="warning_title_too_bright">Too Bright</string>
+    <string name="warning_desc_too_bright">Lighting is too strong. Shift to a softer, ambient area.</string>
+
+    <string name="warning_title_liveness">Liveness Failed</string>
+    <string name="warning_desc_liveness">Please stay still and face the camera for verification.</string>
+
+    <string name="warning_title_liveness_waiting">Processing For Liveness…</string>
+    <string name="warning_desc_liveness_waiting">Please wait we are processing for liveness.</string>
+
+    <string name="warning_title_glare">Glare Detected</string>
+    <string name="warning_desc_glare">There’s glare on your finger. Try adjusting lighting or angle.</string>
+
+    <string name="warning_title_no_finger">No Finger Detected</string>
+    <string name="warning_desc_no_finger">Position your clean, dry finger inside the oval for scanning.</string>
+
+    <string name="warning_title_finger_misaligned">Finger Misaligned</string>
+    <string name="warning_desc_finger_misaligned">Make sure the finger is flat, centered, and within the oval.</string>
+
+    <string name="warning_title_finger_too_close">Finger Too Close</string>
+    <string name="warning_desc_finger_too_close">Move your finger slightly back to fit the frame.</string>
+
+    <string name="warning_title_finger_too_much_close">Finger Too Much Close / Background Issue</string>
+    <string name="warning_desc_finger_too_much_close">Move your finger back to fit the frame or change the background.</string>
+
+    <string name="warning_title_finger_too_far">Finger Too Far</string>
+    <string name="warning_desc_finger_too_far">Move your finger closer to fit inside the overlay.</string>
+
+    <string name="warning_title_focus_not_locked">Focus Not Locked</string>
+    <string name="warning_desc_focus_not_locked">We\'re trying to focus. Keep still for a few seconds.</string>
+
+    <string name="warning_title_blur">Blur detected, Hold Steady!</string>
+    <string name="warning_desc_blur">Image is blurry. Please try scanning again with a steady hand.</string>
+
+    <!-- Info Messages -->
+    <string name="info_title_capture_now">Capture Now!</string>
+    <string name="info_desc_capture_now">You can capture the image now</string>
+
+    <string name="info_title_hold_still">Hold Steady! Capturing Now…</string>
+    <string name="info_desc_hold_still">Keep your finger still inside the oval so we can capture it.</string>
+
+    <string name="info_title_evaluating_image_quality">Evaluating Image Quality…</string>
+    <string name="info_desc_processing_image">Hang tight - we’re analyzing the scan.</string>
+
+    <string name="info_title_processing_segmentation">Checking Finger Presence…</string>
+
+    <string name="info_title_success">Scan Successful!</string>
+    <string name="info_desc_success">Finger image captured successfully. Redirecting now.</string>
+
+    <!-- Error Messages -->
+    <string name="error_title_blur">Blur detected</string>
+    <string name="error_desc_blur">Image is blurry. Please try scanning again with a steady hand.</string>
+
+    <string name="error_title_segmentation">Finger not found</string>
+    <string name="error_desc_segmentation">We couldn’t detect the finger. Ensure it\'s visible and try again.</string>
+
+    <string name="error_title_something_went_wrong">Unexpected error</string>
+    <string name="error_desc_something_went_wrong">Something went wrong during postprocessing. Please restart the scan.</string>
+
+    <string name="error_title_manual">Scan Failed</string>
+    <string name="error_desc_manual">Scan Failed Description</string>
+
+    <!--  Guideline Screen  -->
+    <string name="title_guideline">Authentication Guidelines</string>
+    <string name="subtitle_guideline">Please read the text carefully</string>
+    <string name="guideline1">Make sure your finger is clean and dry.</string>
+    <string name="guideline2">Use bright even-lighting, no glare or dark spots.</string>
+    <string name="guideline3">Make sure the camera lens is clean.</string>
+    <string name="guideline4">Don\'t use photo/video of your finger.</string>
+    <string name="guideline5">Avoid fingers with ink, paint, mehndi, tattoos.</string>
+    <string name="check_acknowledgement">I have read and understood these advisories and need not to be shown again</string>
+    <string name="btn_proceed">Proceed</string>
+    <string name="btn_loading_camera">Loading Camera…</string>
+    <string name="btn_debug_settings">Debug Settings</string>
+    <string name="chip_auto">Auto</string>
+    <string name="chip_manual">Manual</string>
+</resources>

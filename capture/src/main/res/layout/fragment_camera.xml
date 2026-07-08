@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="app.gov.uidai.capture.ui.camera.CameraFragment">
+
+    <app.gov.uidai.capture.ui.camera.view.AutoFitSurfaceView
+        android:id="@+id/view_finder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <app.gov.uidai.capture.ui.camera.view.OverlayMaskView
+        android:id="@+id/view_overlay_mask"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <FrameLayout
+            android:id="@+id/top_bar_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:background="@color/colorBackgroundOverlay"
+            android:foregroundTintMode="src_over"
+            android:paddingVertical="@dimen/_16dp"
+            android:paddingStart="@dimen/_16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:ignore="RtlSymmetry">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/md_theme_inverseSurface"
+                app:cardCornerRadius="@dimen/_48dp">
+
+                <ImageButton
+                    android:id="@+id/btn_close"
+                    android:layout_width="@dimen/_48dp"
+                    android:layout_height="@dimen/_48dp"
+                    android:layout_gravity="center"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/desc_back_button"
+                    android:src="@drawable/ic_baseline_arrow_back_24"
+                    app:tint="@color/md_theme_inverseOnSurface" />
+            </com.google.android.material.card.MaterialCardView>
+        </FrameLayout>
+
+        <app.gov.uidai.capture.ui.camera.view.OverlayView
+            android:id="@+id/view_overlay"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toTopOf="@id/bottom_camera_controller"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/top_bar_container" />
+
+        <FrameLayout
+            android:id="@+id/info_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/top_bar_container">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/heading_overlay"
+                style="@style/ConFinSDK.Chip.Info"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginTop="@dimen/_24dp"
+                tools:text="@string/app_name" />
+
+        </FrameLayout>
+
+
+        <app.gov.uidai.capture.ui.camera.view.BottomCameraControllerView
+            android:id="@+id/bottom_camera_controller"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            tools:layout_height="200dp" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <app.gov.uidai.capture.ui.camera.view.BottomSheetView
+        android:id="@+id/bottom_sheet_biometric"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="@dimen/margin_horizontal"
+        android:layout_marginVertical="@dimen/_16dp"
+        android:visibility="visible"
+        tools:layout_height="600dp" />
+</FrameLayout>

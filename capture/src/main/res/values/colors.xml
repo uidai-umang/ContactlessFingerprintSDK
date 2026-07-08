@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material Theme Colors -->
+    <color name="md_theme_primary">#2F100C</color>
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_primaryContainer">#31120E</color>
+    <color name="md_theme_onPrimaryContainer">#A97770</color>
+    <color name="md_theme_secondary">#874D31</color>
+    <color name="md_theme_onSecondary">#FFFFFF</color>
+    <color name="md_theme_secondaryContainer">#A46547</color>
+    <color name="md_theme_onSecondaryContainer">#FFFBFF</color>
+    <color name="md_theme_tertiary">#006674</color>
+    <color name="md_theme_onTertiary">#FFFFFF</color>
+    <color name="md_theme_tertiaryContainer">#008092</color>
+    <color name="md_theme_onTertiaryContainer">#F8FDFF</color>
+    <color name="md_theme_error">#AF0213</color>
+    <color name="md_theme_onError">#FFFFFF</color>
+    <color name="md_theme_errorContainer">#D32828</color>
+    <color name="md_theme_onErrorContainer">#FFEEEC</color>
+    <color name="md_theme_background">#FFF8F7</color>
+    <color name="md_theme_onBackground">#1F1B1A</color>
+    <color name="md_theme_surface">#FFF8F7</color>
+    <color name="md_theme_onSurface">#1F1B1A</color>
+    <color name="md_theme_surfaceVariant">#F2DEDB</color>
+    <color name="md_theme_onSurfaceVariant">#514442</color>
+    <color name="md_theme_outline">#837371</color>
+    <color name="md_theme_outlineVariant">#D5C2BF</color>
+    <color name="md_theme_scrim">#000000</color>
+    <color name="md_theme_inverseSurface">#0e0c0b</color>
+    <color name="md_theme_inverseOnSurface">#F9EEED</color>
+    <color name="md_theme_inversePrimary">#f3b9b0</color>
+    <color name="md_theme_surfaceDim">#E2D8D6</color>
+    <color name="md_theme_surfaceBright">#FFF8F7</color>
+    <color name="md_theme_surfaceContainerLowest">#FFFFFF</color>
+    <color name="md_theme_surfaceContainerLow">#FCF1F0</color>
+    <color name="md_theme_surfaceContainer">#F6ECEA</color>
+    <color name="md_theme_surfaceContainerHigh">#F0E6E4</color>
+    <color name="md_theme_surfaceContainerHighDark">#2e2928</color>
+    <color name="md_theme_surfaceContainerHighest">#EAE0DF</color>
+    <color name="md_theme_surfaceContainerHighestDark">#393333</color>
+
+    <!-- App Colors -->
+    <color name="colorBackgroundOverlay">#CC000000</color>
+    <color name="colorWarning">#7C5800</color>
+    <color name="colorOnWarning">#FFFFFF</color>
+    <color name="colorWarningContainer">#FAB401</color>
+    <color name="colorOnWarningContainer">#684900</color>
+    <color name="colorSuccess">#006C0A</color>
+    <color name="colorOnSuccess">#FFFFFF</color>
+    <color name="colorSuccessContainer">#008810</color>
+    <color name="colorOnSuccessContainer">#F8FFF0</color>
+</resources>

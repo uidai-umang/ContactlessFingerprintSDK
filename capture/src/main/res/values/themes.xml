@@ -1,0 +1,170 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base application theme. -->
+    <style name="Base.Theme.ContactlessFingerSDK" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:forceDarkAllowed" tools:targetApi="Q">false</item>
+
+        <!-- Colors -->
+        <item name="colorPrimary">@color/md_theme_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_error</item>
+        <item name="colorOnError">@color/md_theme_onError</item>
+        <item name="colorErrorContainer">@color/md_theme_errorContainer</item>
+        <item name="colorOnErrorContainer">@color/md_theme_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_background</item>
+        <item name="colorOnBackground">@color/md_theme_onBackground</item>
+        <item name="colorSurface">@color/md_theme_surface</item>
+        <item name="colorOnSurface">@color/md_theme_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_outline</item>
+        <item name="colorOutlineVariant">@color/md_theme_outlineVariant</item>
+        <item name="colorSurfaceInverse">@color/md_theme_inverseSurface</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_inverseOnSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_inversePrimary</item>
+        <item name="colorSurfaceDim">@color/md_theme_surfaceDim</item>
+        <item name="colorSurfaceBright">@color/md_theme_surfaceBright</item>
+        <item name="colorSurfaceContainerLowest">@color/md_theme_surfaceContainerLowest</item>
+        <item name="colorSurfaceContainerLow">@color/md_theme_surfaceContainerLow</item>
+        <item name="colorSurfaceContainer">@color/md_theme_surfaceContainer</item>
+        <item name="colorSurfaceContainerHigh">@color/md_theme_surfaceContainerHigh</item>
+        <item name="colorSurfaceContainerHighest">@color/md_theme_surfaceContainerHighest</item>
+        <item name="colorBackgroundOverlay">@color/colorBackgroundOverlay</item>
+        <item name="colorWarning">@color/colorWarning</item>
+        <item name="colorOnWarning">@color/colorOnWarning</item>
+        <item name="colorWarningContainer">@color/colorWarningContainer</item>
+        <item name="colorOnWarningContainer">@color/colorOnWarningContainer</item>
+        <item name="colorSuccess">@color/colorSuccess</item>
+        <item name="colorOnSuccess">@color/colorOnSuccess</item>
+        <item name="colorSuccessContainer">@color/colorSuccessContainer</item>
+        <item name="colorOnSuccessContainer">@color/colorOnSuccessContainer</item>
+
+        <!-- Text -->
+        <item name="textAppearanceTitleLarge">@style/ConFinSDK.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/ConFinSDK.TitleMedium</item>
+        <item name="textAppearanceBodyLargeEmphasized">@style/ConFinSDK.BodyXL</item>
+        <item name="textAppearanceBodyLarge">@style/ConFinSDK.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/ConFinSDK.BodyMedium</item>
+        <item name="textAppearanceLabelMedium">@style/ConFinSDK.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/ConFinSDK.LabelSmall</item>
+
+        <!-- Button -->
+        <item name="materialButtonStyle">@style/ConFinSDK.Button</item>
+        <item name="materialButtonOutlinedStyle">@style/ConFinSDK.Button.OutlinedButton</item>
+
+        <!-- Card -->
+        <item name="materialCardViewStyle">@style/ConFinSDK.Card</item>
+
+    </style>
+
+    <!-- Typography -->
+    <style name="ConFinSDK.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="fontFamily">@font/noto_sans_bold</item>
+        <item name="android:textColor">?attr/colorSecondary</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="ConFinSDK.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="fontFamily">@font/noto_sans_regular</item>
+        <item name="android:textColor">?attr/colorSecondary</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="ConFinSDK.BodyXL" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">@font/manrope_medium</item>
+        <item name="android:textSize">@dimen/_20sp</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="ConFinSDK.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">@font/manrope_medium</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="ConFinSDK.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="fontFamily">@font/manrope_medium</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="ConFinSDK.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+        <item name="fontFamily">@font/manrope_light</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="ConFinSDK.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+        <item name="fontFamily">@font/manrope_light</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <!-- Widget Styles -->
+    <style name="ConFinSDK.Button" parent="Widget.Material3.Button">
+        <item name="cornerRadius">@dimen/btn_corner_radius</item>
+        <item name="fontFamily">@font/noto_sans_medium</item>
+        <item name="android:textSize">@dimen/btn_text_size</item>
+        <item name="android:padding">@dimen/_16dp</item>
+    </style>
+
+    <style name="ConFinSDK.Button.OutlinedButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="cornerRadius">@dimen/btn_corner_radius</item>
+        <item name="fontFamily">@font/noto_sans_medium</item>
+        <item name="android:textSize">@dimen/btn_text_size</item>
+        <item name="android:paddingVertical">@dimen/_16dp</item>
+    </style>
+
+    <style name="ConFinSDK.Card" parent="Widget.MaterialComponents.CardView">
+        <item name="strokeColor">?attr/colorOutline</item>
+        <item name="strokeWidth">@dimen/_1dp</item>
+    </style>
+
+    <style name="ConFinSDK.ChipGroup.Toggle" parent="Widget.MaterialComponents.ChipGroup">
+        <item name="android:background">@drawable/bg_rounded_corner_48</item>
+        <item name="chipSpacingHorizontal">@dimen/_1dp</item>
+        <item name="chipSpacingVertical">0dp</item>
+        <item name="selectionRequired">true</item>
+        <item name="singleSelection">true</item>
+        <item name="singleLine">true</item>
+    </style>
+
+    <style name="ConFinSDK.Chip.Choice.Toggle" parent="Widget.MaterialComponents.Chip.Choice">
+        <item name="android:textAppearance">?attr/textAppearanceBodyLargeEmphasized</item>
+        <item name="android:textAlignment">center</item>
+        <item name="android:textColor">@color/toggle_chip_text</item>
+        <item name="chipBackgroundColor">@color/toggle_chip_background</item>
+        <item name="chipCornerRadius">@dimen/_48dp</item>
+        <item name="chipMinHeight">@dimen/_48dp</item>
+        <item name="android:paddingHorizontal">@dimen/_8dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:checkable">true</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="checkedIconVisible">false</item>
+    </style>
+
+    <style name="ConFinSDK.Chip.Info" parent="Widget.Material3.Chip.Assist">
+        <item name="android:textAppearance">?attr/textAppearanceBodyLarge</item>
+        <item name="android:textAlignment">center</item>
+        <item name="maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:textColor">@color/md_theme_inverseOnSurface</item>
+        <item name="chipBackgroundColor">@color/md_theme_inverseSurface</item>
+        <item name="chipCornerRadius">@dimen/_20dp</item>
+        <item name="chipMinHeight">@dimen/_40dp</item>
+        <item name="android:paddingHorizontal">@dimen/_8dp</item>
+        <item name="chipStrokeColor">?attr/colorOutline</item>
+        <item name="android:gravity">center</item>
+        <item name="android:checkable">false</item>
+        <item name="android:clickable">false</item>
+        <item name="android:focusable">false</item>
+        <item name="checkedIconVisible">false</item>
+    </style>
+</resources>

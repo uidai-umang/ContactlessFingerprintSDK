@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Display Margin -->
+    <dimen name="margin_horizontal">@dimen/_16dp</dimen>
+    <dimen name="margin_vertical">@dimen/_16dp</dimen>
+    <!-- Capture Screen Bottom Sheet -->
+    <dimen name="bottom_sheet_title_size">20sp</dimen>
+    <dimen name="bottom_sheet_desc_size">16sp</dimen>
+    <dimen name="bottom_sheet_corner_radius">24dp</dimen>
+    <dimen name="bottom_sheet_padding">@dimen/_16dp</dimen>
+    <dimen name="bottom_sheet_img_width">@dimen/_120dp</dimen>
+    <dimen name="bottom_sheet_img_height">@dimen/_120dp</dimen>
+    <!--- Button Text -->
+    <dimen name="btn_text_size">@dimen/_16sp</dimen>
+    <!-- General -->
+    <dimen name="btn_corner_radius">8dp</dimen>
+    <!-- Values (dp) -->
+    <dimen name="_1dp">1dp</dimen>
+    <dimen name="_2dp">2dp</dimen>
+    <dimen name="_4dp">4dp</dimen>
+    <dimen name="_8dp">8dp</dimen>
+    <dimen name="_12dp">12dp</dimen>
+    <dimen name="_16dp">16dp</dimen>
+    <dimen name="_20dp">20dp</dimen>
+    <dimen name="_24dp">24dp</dimen>
+    <dimen name="_32dp">32dp</dimen>
+    <dimen name="_40dp">40dp</dimen>
+    <dimen name="_48dp">48dp</dimen>
+    <dimen name="_56dp">56dp</dimen>
+    <dimen name="_64dp">64dp</dimen>
+    <dimen name="_80dp">80dp</dimen>
+    <dimen name="_96dp">96dp</dimen>
+    <dimen name="_120dp">120dp</dimen>
+    <!-- Values (sp) -->
+    <dimen name="_8sp">8sp</dimen>
+    <dimen name="_12sp">12sp</dimen>
+    <dimen name="_14sp">14sp</dimen>
+    <dimen name="_16sp">16sp</dimen>
+    <dimen name="_18sp">18sp</dimen>
+    <dimen name="_20sp">20sp</dimen>
+    <dimen name="_24sp">24sp</dimen>
+</resources>

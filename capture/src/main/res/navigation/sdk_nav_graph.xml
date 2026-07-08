@@ -1,0 +1,48 @@
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/sdk_nav_graph"
+    app:startDestination="@id/guidelineFragment">
+
+    <fragment
+        android:id="@+id/guidelineFragment"
+        android:name="app.gov.uidai.capture.ui.guideline.GuidelineFragment"
+        android:label="GuidelineFragment"
+        tools:layout="@layout/fragment_guideline" >
+
+        <argument
+            android:name="txnId"
+            app:argType="string" />
+
+        <action
+            android:id="@+id/action_guidelineFragment_to_cameraFragment"
+            app:destination="@id/cameraFragment"
+            app:launchSingleTop="true"
+            app:enterAnim="@anim/nav_default_enter_anim"
+            app:exitAnim="@anim/nav_default_exit_anim"
+            app:popEnterAnim="@anim/nav_default_pop_enter_anim"
+            app:popExitAnim="@anim/nav_default_pop_exit_anim"
+            app:popUpTo="@+id/guidelineFragment"
+            app:popUpToInclusive="true"/>
+
+        <action
+            android:id="@+id/action_guidelineFragment_to_debugSettingsFragment"
+            app:destination="@id/debugSettingsFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/cameraFragment"
+        android:name="app.gov.uidai.capture.ui.camera.CameraFragment"
+        android:label="CameraFragment" >
+
+        <argument
+            android:name="txnId"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/debugSettingsFragment"
+        android:name="app.gov.uidai.capture.ui.settings.DebugSettingsFragment"
+        android:label="DebugSettingsFragment" />
+
+</navigation>

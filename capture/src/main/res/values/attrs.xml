@@ -1,0 +1,11 @@
+<resources>
+    <attr name="colorBackgroundOverlay" format="color" />
+    <attr name="colorWarning" format="color" />
+    <attr name="colorOnWarning" format="color" />
+    <attr name="colorWarningContainer" format="color" />
+    <attr name="colorOnWarningContainer" format="color" />
+    <attr name="colorSuccess" format="color" />
+    <attr name="colorOnSuccess" format="color" />
+    <attr name="colorSuccessContainer" format="color" />
+    <attr name="colorOnSuccessContainer" format="color" />
+</resources>

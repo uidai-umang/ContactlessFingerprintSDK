@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Circular Border -->
+    <path
+        android:fillColor="@color/md_theme_inversePrimary"
+        android:pathData="M50,1 A49,49 0 1,1 49.9,1"
+        android:strokeWidth="0"
+        android:strokeColor="@color/md_theme_inversePrimary" />
+
+    <!-- Camera Icon scaled to half the radius -->
+    <group
+        android:pivotX="50"
+        android:pivotY="50"
+        android:scaleX="0.5"
+        android:scaleY="0.5">
+
+        <!-- Your camera path, scaled proportionally -->
+        <path
+            android:fillColor="@color/md_theme_primary"
+            android:pathData="M48,69.23q6.27,0 10.596,-4.327 4.327,-4.327 4.327,-10.596 0,-6.269 -4.327,-10.596Q54.27,39.384 48,39.384q-6.269,0 -10.596,4.327Q33.077,48.115 33.077,54.384q0,6.269 4.327,10.596Q41.731,69.23 48,69.23ZM48,65.384q-4.662,0 -7.792,-3.131 -3.131,-3.13 -3.131,-7.792 0,-4.662 3.131,-7.792 3.13,-3.131 7.792,-3.131 4.662,0 7.792,3.131 3.131,3.13 3.131,7.792 0,4.662 -3.131,7.792 -3.13,3.131 -7.792,3.131ZM18.462,80q-2.762,0 -4.612,-1.85Q12,76.3 12,73.538v-43.076q0,-2.762 1.85,-4.612Q15.7,24 18.462,24h11.83l5.462,-5.938q0.869,-0.97 2.111,-1.516Q39.108,16 40.5,16h15q1.392,0 2.635,0.546 1.242,0.546 2.111,1.516L65.708,24h11.83q2.762,0 4.612,1.85Q84,27.7 84,30.462v43.076q0,2.762 -1.85,4.612Q80.3,80 77.538,80H18.462Z" />
+    </group>
+</vector>

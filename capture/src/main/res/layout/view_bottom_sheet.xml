@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    tools:parentTag="android.widget.FrameLayout">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardBackgroundColor="@color/md_theme_inverseSurface"
+        app:cardCornerRadius="@dimen/bottom_sheet_corner_radius"
+        app:cardElevation="0dp">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="@dimen/bottom_sheet_padding">
+
+            <TextView
+                android:id="@+id/title_bottom_sheet"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textAppearance="?attr/textAppearanceTitleLarge"
+                android:textColor="@color/md_theme_inverseOnSurface"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:text="Liveness Check"
+                tools:textColor="@android:color/black"
+                tools:textSize="22sp" />
+
+            <LinearLayout
+                android:id="@+id/central_layout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/title_bottom_sheet">
+
+                <app.gov.uidai.capture.ui.camera.view.TimelineView
+                    android:id="@+id/timeline1_bottom_sheet"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/_80dp"
+                    android:layout_marginTop="@dimen/_8dp"
+                    android:contentDescription="@string/desc_bottom_sheet_image"
+                    android:padding="@dimen/_8dp"
+                    tools:visibility="visible" />
+
+                <app.gov.uidai.capture.ui.camera.view.TimelineView
+                    android:id="@+id/timeline2_bottom_sheet"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/_80dp"
+                    android:layout_marginTop="@dimen/_8dp"
+                    android:contentDescription="@string/desc_bottom_sheet_image"
+                    android:padding="@dimen/_8dp"
+                    tools:visibility="visible" />
+
+                <app.gov.uidai.capture.ui.camera.view.TimelineView
+                    android:id="@+id/timeline3_bottom_sheet"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/_80dp"
+                    android:layout_marginTop="@dimen/_8dp"
+                    android:contentDescription="@string/desc_bottom_sheet_image"
+                    android:padding="@dimen/_8dp"
+                    tools:visibility="visible" />
+            </LinearLayout>
+
+
+            <TextView
+                android:id="@+id/desc_bottom_sheet"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_16dp"
+                android:gravity="center"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="@color/md_theme_inverseOnSurface"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/central_layout"
+                tools:visibility="visible"
+                tools:text="Stay still and look at the camera. We're verifying that you're present and real."
+                tools:textColor="@android:color/black"
+                tools:textSize="16sp" />
+
+            <LinearLayout
+                android:id="@+id/error_btn_container"
+                style="?android:attr/buttonBarStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_16dp"
+                android:gravity="center"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/desc_bottom_sheet"
+                tools:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_retake"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="@dimen/_8dp"
+                    android:layout_weight="1"
+                    android:text="@string/btn_retake"
+                    android:textColor="@color/md_theme_primary"
+                    app:backgroundTint="@color/md_theme_inversePrimary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_go_back"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/_8dp"
+                    android:layout_weight="1"
+                    android:text="@string/btn_go_back"
+                    android:textColor="@color/md_theme_inverseOnSurface"
+                    app:strokeColor="@color/md_theme_inversePrimary" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/success_progress_container"
+                style="?android:attr/buttonBarStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/_16dp"
+                android:gravity="center"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/desc_bottom_sheet">
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progress_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:trackThickness="@dimen/_16dp"
+                    app:indicatorColor="@color/md_theme_surface"
+                    app:trackColor="@color/md_theme_secondary"
+                    android:layout_marginVertical="@dimen/_8dp"
+                    />
+
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+</merge>

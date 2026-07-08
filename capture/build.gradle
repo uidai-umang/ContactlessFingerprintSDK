@@ -1,0 +1,156 @@
+import com.chaquo.python.*
+import org.jetbrains.kotlin.cli.jvm.*
+
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.chaquopy)
+    alias(libs.plugins.navigation.safeargs)
+    alias(libs.plugins.dagger.hilt)
+    alias(libs.plugins.kotlin.ksp)
+    id("maven-publish")
+}
+
+android {
+    namespace 'app.gov.uidai.capture'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 28
+
+        python {
+            pip {
+                install "numpy"
+                install "pillow"
+                install "opencv-python-headless"
+            }
+        }
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags ""
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/jni/CMakeLists.txt"
+            version "3.22.1" // Use a version you have installed
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+    sourceSets {
+        main {
+            python { srcDir "src/main/python" }
+        }
+    }
+
+    publishing {
+        singleVariant("release")
+        singleVariant("debug")
+    }
+}
+
+dependencies {
+
+    implementation project(':network')
+    implementation project(":utility")
+
+    // Firebase
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.crashlytics
+
+    // Camera 2
+    implementation libs.androidx.camera.core
+    implementation libs.androidx.camera.camera2
+    implementation libs.androidx.camera.lifecycle
+    implementation libs.androidx.camera.view
+
+    // Dagger Hilt
+    implementation libs.hilt.android
+    ksp libs.hilt.compiler
+
+    // Navigation
+    implementation libs.androidx.navigation.fragment.ktx
+    implementation libs.androidx.navigation.ui.ktx
+
+    // TFLite
+    implementation libs.tensorflow.lite
+    implementation libs.tensorflow.lite.support
+
+    // Jackson
+    implementation libs.jackson.module.kotlin
+    implementation libs.jackson.dataformat.xml
+    implementation libs.stax.api
+
+    // Preference
+    implementation libs.androidx.preference.ktx
+
+    // MediaPipe
+    implementation libs.tasks.vision
+
+    // Navigation
+    implementation libs.androidx.navigation.fragment.ktx
+    implementation libs.androidx.navigation.ui.ktx
+
+    // Material 3
+    implementation libs.androidx.material3
+
+    // Gson
+    implementation libs.gson
+
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.appcompat
+    implementation libs.material
+    implementation libs.androidx.constraintlayout
+    implementation libs.androidx.lifecycle.livedata.ktx
+    implementation libs.androidx.lifecycle.viewmodel.ktx
+    implementation libs.androidx.fragment.ktx
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                artifactId = "capture"
+            }
+            debug(MavenPublication) {
+                from components.debug
+                artifactId = "capture"
+            }
+        }
+    }
+}
