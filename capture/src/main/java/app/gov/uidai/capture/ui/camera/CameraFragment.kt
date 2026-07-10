@@ -273,6 +273,7 @@ class CameraFragment : Fragment() {
         }
 
         binding.bottomCameraController.setCaptureButtonClickListener {
+            Log.d("FLOW_TRACE", "1. Capture button tapped — calling unlockAccumulator()")
             imageProcessor?.unlockAccumulator()
         }
 

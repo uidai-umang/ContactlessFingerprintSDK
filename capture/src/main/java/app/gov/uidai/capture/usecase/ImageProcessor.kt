@@ -254,6 +254,7 @@ abstract class ImageProcessor(
                     isStage2Processing.compareAndSet(false, true)
                 ) {
                     try {
+                        Log.d("FLOW_TRACE", "4. processStage2() starting now")
                         listener.onStartStage2Processing()
                         logExecutionTime(TAG, "STAGE.2") {
                             processStage2(it)
@@ -568,6 +569,7 @@ abstract class ImageProcessor(
                     capturedFrameBuffer.size >= preferenceStore.get(ProcessingSettings.IMAGE_COUNT_FOR_STAGE2)
                 if (isEnoughFrames) {
                     if (isCaptured.compareAndSet(false, true)) {
+                        Log.d("FLOW_TRACE", "2. isCaptured flipped true — firing controller.triggerCapture()")
                         controller.triggerCapture()
                     }
                     val batch = synchronized(capturedFrameBuffer) {
@@ -576,6 +578,7 @@ abstract class ImageProcessor(
                         batchToProcess
                     }
                     _capturedFrameFlow.update { batch }
+                    Log.d("FLOW_TRACE", "3. Batch of ${batch.size} frames dispatched to Stage 2 flow — processStage2 about to start")
                     Log.i(TAG, "Dispatched a batch of ${batch.size} frames to Stage 2.")
                 }
             }
