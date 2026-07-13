@@ -23,6 +23,7 @@ import app.gov.uidai.capture.usecase.factory.SegmentationFactory
 import app.gov.uidai.capture.utils.extension.crop
 import app.gov.uidai.capture.utils.extension.rotate
 import app.gov.uidai.capture.utils.extension.toBitmap
+import app.gov.uidai.capture.utils.logExecutionTime
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -79,19 +80,36 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
 
 
     override suspend fun processStage2(candidateBatch: List<CameraFrame>) {
+        val stage2StartTime = System.currentTimeMillis()
         val processingId = candidateBatch.first().processingId
         Log.d(TAG, "Processing Stage 2 for batch #$processingId")
+        Log.d("FLOW_TRACE", "processStage2() entered")
 
         try {
-            // Step 1: Perform segmentation on the last frame
             val cameraFrame = candidateBatch.last()
-            val (segCroppedByteArray, segCroppedByteArraySize) = cameraFrame.getByteArray(
-                requiresCropping = preferenceStore.get(ProcessingSettings.CROPPED_INPUT_TO_SEGMENTATION_MODEL),
-                cutoutRect = provider.getCutoutRectInImageCoordinates(
-                    Size(cameraFrame.width, cameraFrame.height),
-                    cameraFrame.rotationDegrees
+
+            // ----------------------------------------------------------------------
+            // SEGMENTATION — DISABLED per product decision.
+            // The verification/matching flow that required precise finger-boundary
+            // masking no longer exists. Current flow is "capture high-quality RGB
+            // image, crop, validate quality, send" — segmentation's actual mask
+            // output was never used downstream anyway (SegmentedFrame.finalBitmap
+            // already used the plain croppedBitmap, not segmentation's cropped
+            // result). Measured cost: ~6,577ms of the ~7,881ms total Manual mode
+            // post-capture time. Kept here, commented, for reference / possible
+            // future reinstatement if a verification flow is reintroduced.
+            // ----------------------------------------------------------------------
+
+            Log.d("FLOW_TRACE", "Building segmentation crop input")
+            val (segCroppedByteArray, segCroppedByteArraySize) = logExecutionTime(TAG, "ManualStage2.SegmentationCropPrep") {
+                cameraFrame.getByteArray(
+                    requiresCropping = preferenceStore.get(ProcessingSettings.CROPPED_INPUT_TO_SEGMENTATION_MODEL),
+                    cutoutRect = provider.getCutoutRectInImageCoordinates(
+                        Size(cameraFrame.width, cameraFrame.height),
+                        cameraFrame.rotationDegrees
+                    )
                 )
-            )
+            }
             val segmentationProvider = ImageDataProvider(
                 segCroppedByteArray,
                 segCroppedByteArraySize.width,
@@ -101,76 +119,70 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
 
             listener.onStage2ProcessingStageUpdate(ProcessingStage.SEGMENTATION)
 
-            val segmentationResult = runInterruptible {
-                segmentationCheck.run(segmentationProvider)
+            Log.d("FLOW_TRACE", "Running segmentation model")
+            val segmentationResult = logExecutionTime(TAG, "ManualStage2.SegmentationInference") {
+                runInterruptible {
+                    segmentationCheck.run(segmentationProvider)
+                }
             }
 
             if (preferenceStore.get(ProcessingSettings.SAVE_SEGMENTATION_INPUT)) {
                 controller.saveBitmap(segmentationProvider.getAsUprightBitmap(), "SegInput")
             }
 
-            val segmentedFrame = when (segmentationResult) {
-                is ProcessingResult.Failed -> {
-                    listener.onStage2Result(
-                        passed = false, errors = listOf(segmentationResult.cause as Error)
+
+            Log.d("FLOW_TRACE", "Building bitmaps directly from cutout crop (no segmentation)")
+
+            // fullBitmap — the entire uncropped frame
+            val (fullByteArray, fullByteArraySize) = logExecutionTime(TAG, "ManualStage2.FullBitmapCropPrep") {
+                cameraFrame.getByteArray(
+                    requiresCropping = false,
+                    cutoutRect = provider.getCutoutRectInImageCoordinates(
+                        Size(cameraFrame.width, cameraFrame.height),
+                        cameraFrame.rotationDegrees
                     )
-                    return
-                }
-
-                is ProcessingResult.Passed -> {
-                    val boundingBox = segmentationResult.data.box
-                    val finalBitmap = segmentationProvider.getAsUprightBitmap().crop(boundingBox)
-                    if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
-                        controller.saveBitmap(finalBitmap, "FinalOutput")
-                        segmentationResult.data.mask?.let {
-                            controller.saveBitmap(it, "FinalOutputMask")
-                        }
-                    }
-
-                    val (fullByteArray, fullByteArraySize) = cameraFrame.getByteArray(
-                        requiresCropping = false,
-                        cutoutRect = provider.getCutoutRectInImageCoordinates(
-                            Size(cameraFrame.width, cameraFrame.height),
-                            cameraFrame.rotationDegrees
-                        )
-                    )
-
-                    val fullBitmap = fullByteArray.toBitmap(fullByteArraySize)
-                        .rotate(cameraFrame.rotationDegrees)
-
-                    val (croppedByteArray, croppedByteArraySize) = cameraFrame.getByteArray(
-                        requiresCropping = true,
-                        cutoutRect = provider.getCutoutRectInImageCoordinates(
-                            Size(cameraFrame.width, cameraFrame.height),
-                            cameraFrame.rotationDegrees
-                        )
-                    )
-
-                    val croppedBitmap = croppedByteArray.toBitmap(croppedByteArraySize)
-                        .rotate(cameraFrame.rotationDegrees)
-
-                    SegmentedFrame(
-                        processingId = processingId,
-                        finalBitmap = croppedBitmap,
-                        fullBitmap = fullBitmap,
-                        croppedBitmap = croppedBitmap,
-                        timestamp = cameraFrame.timestamp,
-                        finalMask = segmentationResult.data.mask
-                    )
-                }
+                )
+            }
+            val fullBitmap = logExecutionTime(TAG, "ManualStage2.FullBitmapDecode") {
+                fullByteArray.toBitmap(fullByteArraySize).rotate(cameraFrame.rotationDegrees)
             }
 
-            segmentationProvider.clearCache()
-
-            val (segCroppedByteArray2, segCroppedByteArray2Size) = cameraFrame.getByteArray(
-                requiresCropping = true,
-                cutoutRect = provider.getCutoutRectInImageCoordinates(
-                    Size(cameraFrame.width, cameraFrame.height),
-                    cameraFrame.rotationDegrees
+            // croppedBitmap — plain cutout-rectangle crop, this is what actually
+            // gets sent as the final image now
+            val (croppedByteArray, croppedByteArraySize) = logExecutionTime(TAG, "ManualStage2.CroppedBitmapCropPrep") {
+                cameraFrame.getByteArray(
+                    requiresCropping = true,
+                    cutoutRect = provider.getCutoutRectInImageCoordinates(
+                        Size(cameraFrame.width, cameraFrame.height),
+                        cameraFrame.rotationDegrees
+                    )
                 )
+            }
+            val croppedBitmap = logExecutionTime(TAG, "ManualStage2.CroppedBitmapDecode") {
+                croppedByteArray.toBitmap(croppedByteArraySize).rotate(cameraFrame.rotationDegrees)
+            }
+
+            val segmentedFrame = SegmentedFrame(
+                processingId = processingId,
+                finalBitmap = croppedBitmap,
+                fullBitmap = fullBitmap,
+                croppedBitmap = croppedBitmap,
+                timestamp = cameraFrame.timestamp,
+                finalMask = null   // was segmentationResult.data.mask — no longer produced
             )
 
-            // Step 2: Run other checks on the segmented bitmap
+            // Step 2: Quality validation on the same cropped image that will be sent
+            Log.d("FLOW_TRACE", "Building finalImageProvider for quality re-validation")
+            val (segCroppedByteArray2, segCroppedByteArray2Size) = logExecutionTime(TAG, "ManualStage2.FinalImageProviderCropPrep") {
+                cameraFrame.getByteArray(
+                    requiresCropping = true,
+                    cutoutRect = provider.getCutoutRectInImageCoordinates(
+                        Size(cameraFrame.width, cameraFrame.height),
+                        cameraFrame.rotationDegrees
+                    )
+                )
+            }
+
             val finalImageProvider = ImageDataProvider(
                 segCroppedByteArray2,
                 segCroppedByteArray2Size.width,
@@ -180,35 +192,33 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
 
             listener.onStage2ProcessingStageUpdate(ProcessingStage.BLUR)
 
-            val brightnessResult = brightnessCheckStage2.run(finalImageProvider)
-            val glareResult = (stage1Methods[GLARE_CHECK]!!).run(finalImageProvider)
-            val blurResult = runInterruptible {
-                blurCheck.run(finalImageProvider)
+            Log.d("FLOW_TRACE", "Starting brightness/glare/blur re-validation (sequential)")
+            val brightnessResult = logExecutionTime(TAG, "ManualStage2.Brightness") {
+                brightnessCheckStage2.run(finalImageProvider)
             }
-
+            val glareResult = logExecutionTime(TAG, "ManualStage2.Glare") {
+                (stage1Methods[GLARE_CHECK]!!).run(finalImageProvider)
+            }
+            val blurResult = logExecutionTime(TAG, "ManualStage2.Blur") {
+                runInterruptible {
+                    blurCheck.run(finalImageProvider)
+                }
+            }
             finalImageProvider.clearCache()
 
+            Log.d("FLOW_TRACE", "All checks complete — evaluating pass/fail")
             val blurThreshold = preferenceStore.get(BlurSettings.THRESHOLD)
-
-            val minBrightness =
-                preferenceStore.get(BrightnessSettings.DARK_THRESHOLD) / 255f
-
-            val maxBrightness =
-                preferenceStore.get(BrightnessSettings.BRIGHT_THRESHOLD) / 255f
-
+            val minBrightness = preferenceStore.get(BrightnessSettings.DARK_THRESHOLD) / 255f
+            val maxBrightness = preferenceStore.get(BrightnessSettings.BRIGHT_THRESHOLD) / 255f
             val glareThresholdMin = preferenceStore.get(GlareSettings.VARIANCE_MIN)
                 .toFloat() / preferenceStore.get(GlareSettings.MAX_GLARE_VALUE)
-
             val glareThresholdMax = preferenceStore.get(GlareSettings.VARIANCE_MAX)
                 .toFloat() / preferenceStore.get(GlareSettings.MAX_GLARE_VALUE)
 
             val brightnessPassed = brightnessResult.passed &&
                     brightnessResult.confidence in minBrightness..maxBrightness
-
             val glarePassed = glareResult.passed
-
             val blurPassed = blurResult.passed
-
             val allPassed = brightnessPassed && glarePassed && blurPassed
 
             val errors = if (allPassed) {
@@ -234,8 +244,10 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
                 addToFinalBuffer(segmentedFrame)
             }
 
+            Log.d("FLOW_TRACE", "onStage2Result about to fire — passed=$allPassed")
             listener.onStage2Result(
-                passed = allPassed, errors = errors
+                passed = allPassed,
+                errors = errors
             )
 
         } catch (e: Exception) {
@@ -243,6 +255,9 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
             listener.onStage2Result(
                 passed = false, listOf()
             )
+        } finally {
+            Log.d(TAG, "Execution time -- ManualStage2.TOTAL: ${System.currentTimeMillis() - stage2StartTime}ms")
+            Log.d("FLOW_TRACE", "processStage2() finished")
         }
     }
 
