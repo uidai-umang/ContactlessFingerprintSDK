@@ -137,6 +137,17 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 return
             }
 
+            // ----------------------------------------------------------------------
+            // SEGMENTATION DISABLED (Testing)
+            //
+            // Temporarily bypassing segmentation to evaluate AutoCapture speed and
+            // overall capture experience. The current flow only requires selecting
+            // the best quality frame, cropping it using the capture cutout and
+            // returning it as the final image. Segmentation can be re-enabled later
+            // if required for finger-boundary validation.
+            // ----------------------------------------------------------------------
+
+            /*
             listener.onStage2ProcessingStageUpdate(ProcessingStage.SEGMENTATION)
 
             val blurSortedIndices = blurResults.indices.sortedByDescending {
@@ -215,7 +226,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
 
                     SegmentedFrame(
                         processingId = processingId,
-                        finalBitmap = finalBitmap,
+                        finalBitmap = croppedBitmap,
                         fullBitmap = fullBitmap,
                         croppedBitmap = croppedBitmap,
                         timestamp = bestFrame.timestamp,
@@ -225,6 +236,55 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             }
 
             segmentationProvider.clearCache()
+            */
+
+
+            val blurSortedIndices = blurResults.indices.sortedByDescending {
+                blurResults[it].confidence
+            }
+
+            // Use the sharpest frame directly
+            val bestFrame = candidateBatch[blurSortedIndices.first()]
+
+            // Full image
+            val (fullByteArray, fullByteArraySize) = bestFrame.getByteArray(
+                requiresCropping = false,
+                cutoutRect = provider.getCutoutRectInImageCoordinates(
+                    Size(bestFrame.width, bestFrame.height),
+                    bestFrame.rotationDegrees
+                )
+            )
+
+            val fullBitmap = fullByteArray
+                .toBitmap(fullByteArraySize)
+                .rotate(bestFrame.rotationDegrees)
+
+            // Cropped image (this is the final image that will be uploaded)
+            val (croppedByteArray, croppedByteArraySize) = bestFrame.getByteArray(
+                requiresCropping = true,
+                cutoutRect = provider.getCutoutRectInImageCoordinates(
+                    Size(bestFrame.width, bestFrame.height),
+                    bestFrame.rotationDegrees
+                )
+            )
+
+            val croppedBitmap = croppedByteArray
+                .toBitmap(croppedByteArraySize)
+                .rotate(bestFrame.rotationDegrees)
+
+            // Save debug output if enabled
+            if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
+                controller.saveBitmap(croppedBitmap, "FinalOutput")
+            }
+
+            val segmentedFrame = SegmentedFrame(
+                processingId = processingId,
+                finalBitmap = croppedBitmap,
+                fullBitmap = fullBitmap,
+                croppedBitmap = croppedBitmap,
+                timestamp = bestFrame.timestamp,
+                finalMask = null
+            )
 
             blurSortedIndices.forEach { _ ->
                 addToFinalBuffer(segmentedFrame)
