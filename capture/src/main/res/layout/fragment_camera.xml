@@ -90,6 +90,17 @@
             app:layout_constraintStart_toStartOf="parent"
             tools:layout_height="200dp" />
 
+        <app.gov.uidai.capture.ui.camera.view.LiveQualityScoresView
+            android:id="@+id/view_live_quality_scores"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_8dp"
+            android:layout_marginEnd="@dimen/_8dp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/top_bar_container"
+            tools:visibility="visible" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <app.gov.uidai.capture.ui.camera.view.BottomSheetView

@@ -84,4 +84,11 @@ object ProcessingSettings : PreferenceGroup {
         type = PreferenceType.BOOLEAN,
         defaultValue = false
     )
+
+    val SHOW_LIVE_QUALITY_SCORES = PreferenceParam(
+        key = "global.show_live_quality_scores",
+        displayName = "Show Live Quality Scores",
+        type = PreferenceType.BOOLEAN,
+        defaultValue = false
+    )
 }

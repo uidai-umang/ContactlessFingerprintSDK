@@ -9,6 +9,7 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import android.view.LayoutInflater
@@ -25,6 +26,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.navArgs
+import app.gov.uidai.capture.domain.model.LiveQualityScores
 import app.gov.uidai.capture.domain.model.ProcessingStage
 import app.gov.uidai.capture.ui.camera.manager.PermissionManager
 import app.gov.uidai.capture.ui.camera.model.CaptureState
@@ -33,7 +35,9 @@ import app.gov.uidai.capture.ui.camera.model.Stage2ResultValue
 import app.gov.uidai.capture.ui.camera.model.Warning
 import app.gov.uidai.capture.ui.camera.view.OverlayView
 import app.gov.uidai.capture.usecase.ImageProcessor
+import app.gov.uidai.capture.usecase.ProcessingSettings
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
+import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.utils.extension.animateToFitText
 import app.gov.uidai.capture.utils.extension.enablePulseOnTextChange
 import com.chaquo.python.Python
@@ -69,6 +73,11 @@ class CameraFragment : Fragment() {
 
     @Inject
     lateinit var imageProcessorFactory: ImageProcessorFactory
+
+    @Inject
+    lateinit var preferenceStore: PreferenceStore
+
+    private var lastLiveScoreUpdateMs = 0L
 
     private val uiInfoProvider = object : CameraController.UIInfoProvider {
         override val overlayViewCutoutRectCoordinates: RectF
@@ -148,6 +157,10 @@ class CameraFragment : Fragment() {
             viewModel.captureStateManager.reportStage1Result(passed, warnings, passedChecks)
         }
 
+        override fun onStage1ResultValues(values: LiveQualityScores) {
+            viewModel.captureStateManager.reportStage1ResultValues(values)
+        }
+
         override fun onStartStage2Processing() {
             viewModel.captureStateManager.reportIsStage2Processing(true)
         }
@@ -218,6 +231,25 @@ class CameraFragment : Fragment() {
         setupButtonClickListeners()
         setupOnBackPressed()
         observeUIState()
+        setupLiveQualityScoresDebugPanel()
+    }
+
+    private fun setupLiveQualityScoresDebugPanel() {
+        val isEnabled = preferenceStore.get(ProcessingSettings.SHOW_LIVE_QUALITY_SCORES)
+        binding.viewLiveQualityScores.isVisible = isEnabled
+        if (!isEnabled) return
+
+        lifecycleScope.launch {
+            viewModel.captureStateManager.stage1QualityScores.collectLatest { scores ->
+                scores ?: return@collectLatest
+                // Stage 1 emits at up to ~30fps; throttle UI redraws independently so the
+                // debug panel doesn't become a rendering bottleneck.
+                val now = SystemClock.uptimeMillis()
+                if (now - lastLiveScoreUpdateMs < LIVE_SCORE_THROTTLE_MS) return@collectLatest
+                lastLiveScoreUpdateMs = now
+                binding.viewLiveQualityScores.bind(scores)
+            }
+        }
     }
 
     private fun setupSurfaceView() {
@@ -521,6 +553,7 @@ class CameraFragment : Fragment() {
         private val TAG = CameraFragment::class.java.simpleName
 
         private const val TIMER_EXTENSION_DURATION = 10_000L // 10 seconds
+        private const val LIVE_SCORE_THROTTLE_MS = 150L
 
         const val CAPTURE_FRAGMENT_RESULT = "capture-fragment-result"
         const val KEY_RESULT_CODE = "result-code-key"

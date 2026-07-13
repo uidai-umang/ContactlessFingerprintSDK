@@ -1,6 +1,7 @@
 package app.gov.uidai.capture.ui.camera.manager
 
 import android.util.Log
+import app.gov.uidai.capture.domain.model.LiveQualityScores
 import app.gov.uidai.capture.domain.model.ProcessingStage
 import app.gov.uidai.capture.ui.camera.model.ActiveWarning
 import app.gov.uidai.capture.ui.camera.model.CaptureState
@@ -22,6 +23,11 @@ class CaptureStateManager @Inject constructor() {
 
     private val _captureState = MutableStateFlow<CaptureState>(CaptureState.Initial)
     val captureState = _captureState.asStateFlow()
+
+    // Live Stage 1 debug quality scores — independent of the capture state machine above,
+    // since these update every Stage 1 cycle regardless of warn/success/fail state.
+    private val _stage1QualityScores = MutableStateFlow<LiveQualityScores?>(null)
+    val stage1QualityScores = _stage1QualityScores.asStateFlow()
 
     private val activeWarnings = mutableListOf<ActiveWarning>()
     private val stage2Errors = mutableListOf<Error>()
@@ -201,6 +207,10 @@ class CaptureStateManager @Inject constructor() {
         updateCaptureState()
     }
 
+    fun reportStage1ResultValues(values: LiveQualityScores) {
+        _stage1QualityScores.value = values
+    }
+
     fun reportIsAccumulationHappening(value: Boolean) {
         isAccumulatingFrames.set(value)
         updateCaptureState()
@@ -223,6 +233,7 @@ class CaptureStateManager @Inject constructor() {
         isStage2Passed.set(null)
         stage2ResultValue.set(null)
         stage2ProcessingStageMessage.set(null)
+        _stage1QualityScores.value = null
         updateCaptureState()
     }
 }

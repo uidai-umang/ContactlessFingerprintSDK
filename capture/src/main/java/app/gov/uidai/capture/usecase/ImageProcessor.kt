@@ -11,7 +11,10 @@ import android.util.Size
 import androidx.lifecycle.LifecycleCoroutineScope
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
+import app.gov.uidai.capture.domain.config.BrightnessSettings
+import app.gov.uidai.capture.domain.config.FingerSettings
 import app.gov.uidai.capture.domain.config.GlareConfig
+import app.gov.uidai.capture.domain.config.GlareSettings
 import app.gov.uidai.capture.domain.method.brightness.BrightnessCheck
 import app.gov.uidai.capture.domain.method.finger.FingerCheckPythonMethod
 import app.gov.uidai.capture.domain.method.glare.GlareCheck
@@ -19,6 +22,8 @@ import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.FingerResultData
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ImageProcessingMethod
+import app.gov.uidai.capture.domain.model.LiveCheckScore
+import app.gov.uidai.capture.domain.model.LiveQualityScores
 import app.gov.uidai.capture.domain.model.ProcessingResult
 import app.gov.uidai.capture.domain.model.ProcessingStage
 import app.gov.uidai.capture.domain.model.SegmentedFrame
@@ -137,8 +142,9 @@ abstract class ImageProcessor(
     private val isCaptured = AtomicBoolean(false)
     protected val isStage1Passed = AtomicBoolean(false)
 
+    private val lastBlurConfidence = AtomicReference(0f)
     private val blurConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
-    private val fingerConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.8f)
+    private val fingerConfidence = RollingConfidence(windowSize = 4, requiredPassRate = 0.60f)
     private val glareConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.9f)
     private val brightnessConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
 
@@ -234,7 +240,14 @@ abstract class ImageProcessor(
             while (true) {
                 val frame = latestRawFrame1.getAndSet(null)
                 val startTime = System.currentTimeMillis()
-
+                if (frame != null) {
+                    Log.d(
+                        "ACCUM_DEBUG",
+                        "frame!=null=true isCaptured=${isCaptured.get()} " +
+                                "isReadyForAccumulation=$isReadyForAccumulation " +
+                                "isAccumulating=${isAccumulatingFrames.get()}"
+                    )
+                }
                 if (
                     frame != null &&
                     !isCaptured.get() &&
@@ -242,6 +255,7 @@ abstract class ImageProcessor(
                     isAccumulatingFrames.compareAndSet(false, true)
                 ) {
                     try {
+                        Log.d("ACCUM_DEBUG", "ENTERED accumulation block — calling onStartAccumulation")
                         listener.onStartAccumulation()
                         accumulateFrameForStage2(frame)
                     } finally {
@@ -388,6 +402,10 @@ abstract class ImageProcessor(
                 passedProcessingStages.add(ProcessingStage.NA)
             }
 
+            // Instantaneous — reflects only THIS frame, for live UI icons/scores
+            val isStage1PassedInstantaneous =
+                results.values.all { it.passed } && isBlurPassed.get() && (fingerResult?.passed ?: false) && provider.isFocusLockedForCapture
+
             val isStage1PassedRolling =
                 blurConfidence.isConfident() &&
                         fingerConfidence.isConfident() &&
@@ -413,6 +431,57 @@ abstract class ImageProcessor(
                 stage1PassedTime.set(null)
                 synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
             }
+
+            val glareResult = results[GLARE_CHECK]
+            val brightnessResult = results[BRIGHTNESS_CHECK]
+            val currentFingerResult = fingerResult
+
+            val liveScores = LiveQualityScores(
+                blur = LiveCheckScore(
+                    label = "Blur",
+                    currentValue = lastBlurConfidence.get(),
+                    acceptedMin = preferenceStore.get(BlurSettings.THRESHOLD),
+                    acceptedMax = 1.0f,
+                    passed = isBlurPassed.get()
+                ),
+                brightness = LiveCheckScore(
+                    label = "Brightness",
+                    currentValue = brightnessResult?.confidence ?: 0f,
+                    // Confidence is a pixel-ratio fraction (dark_ratio/bright_ratio, or their
+                    // average on pass) — lower is better, unlike blur/glare. There isn't a
+                    // single clean pass/fail bound (dark and bright each have their own percent
+                    // threshold), so this is the closest single-range approximation.
+                    acceptedMin = 0f,
+                    acceptedMax = max(
+                        preferenceStore.get(BrightnessSettings.DARK_PERCENT),
+                        preferenceStore.get(BrightnessSettings.BRIGHT_PERCENT)
+                    ),
+                    passed = brightnessResult?.passed ?: false
+                ),
+                glare = LiveCheckScore(
+                    label = "Glare",
+                    currentValue = glareResult?.confidence ?: 0f,
+                    // confidence is normalized to 0-1 (variance / maxGlareValue), so the
+                    // accepted range must be normalized the same way to stay on the same scale.
+                    acceptedMin = preferenceStore.get(GlareSettings.VARIANCE_MIN)
+                        .toFloat() / preferenceStore.get(GlareSettings.MAX_GLARE_VALUE),
+                    acceptedMax = preferenceStore.get(GlareSettings.VARIANCE_MAX)
+                        .toFloat() / preferenceStore.get(GlareSettings.MAX_GLARE_VALUE),
+                    passed = glareResult?.passed ?: false
+                ),
+                fingerDetected = LiveCheckScore(
+                    label = "Finger Detected",
+                    currentValue = currentFingerResult?.confidence ?: 0f,
+                    // HSV method reports a continuous area-ratio confidence; the default
+                    // Mediapipe method reports an effectively binary 0f/1f signal.
+                    acceptedMin = if (fingerCheck is FingerCheckPythonMethod)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MIN) else 1f,
+                    acceptedMax = if (fingerCheck is FingerCheckPythonMethod)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MAX) else 1f,
+                    passed = currentFingerResult?.passed ?: false
+                )
+            )
+            listener.onStage1ResultValues(liveScores)
 
             listener.onStage1Result(
                 passed = isStage1Passed.get(),
@@ -550,6 +619,7 @@ abstract class ImageProcessor(
 
             imageDataProvider.clearCache()
             isBlurPassed.set(blurResult.passed)
+            lastBlurConfidence.set(blurResult.confidence)
             blurConfidence.record(blurResult.passed)
         } catch (e: Exception) {
             Log.e(TAG, "Error in Blur processing", e)
@@ -720,6 +790,7 @@ abstract class ImageProcessor(
         fun onStartAccumulation()
         fun onStage1Error()
         fun onStage1Result(passed: Boolean, warnings: List<Warning>, passedChecks: List<ProcessingStage>)
+        fun onStage1ResultValues(values: LiveQualityScores)
         fun onStartStage2Processing()
         fun onStopStage2Processing()
         fun onStage2ProcessingStageUpdate(processingStage: ProcessingStage)
