@@ -2,6 +2,7 @@ package app.gov.uidai.capture.domain.method.segmentation
 
 import android.content.Context
 import android.graphics.RectF
+import android.util.Log
 import app.gov.uidai.capture.domain.config.SegmentationConfig
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ImageProcessingMethod
@@ -46,6 +47,7 @@ class YOLOAnalyserMethod(
             } ?: ProcessingResult.Failed(SegError.Segmentation, -1, 0f)
 
         } catch (e: Exception) {
+            Log.d(TAG, "$e")
             return ProcessingResult.Failed(SegError.SomethingWentWrong, -1, 0f, exception = e)
         }
     }
