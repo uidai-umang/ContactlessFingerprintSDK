@@ -290,6 +290,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 addToFinalBuffer(segmentedFrame)
             }
 
+            stopCaptureTimer()
             listener.onStage2Result(
                 passed = true,
                 listOf()

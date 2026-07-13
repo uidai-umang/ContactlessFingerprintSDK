@@ -166,6 +166,23 @@ abstract class ImageProcessor(
     private var accumulatorJob : Job? = null
     private var stage2Job : Job? = null
 
+    private val captureStartTime = AtomicLong(0L)
+
+    protected fun startCaptureTimer() {
+        captureStartTime.compareAndSet(0L, SystemClock.elapsedRealtime())
+    }
+
+    protected fun stopCaptureTimer() {
+        val elapsed = SystemClock.elapsedRealtime() - captureStartTime.get()
+
+        Log.i(
+            "CAPTURE_BENCHMARK",
+            "✅ Capture completed in ${elapsed} ms (${elapsed / 1000.0}s)"
+        )
+
+        captureStartTime.set(0L)
+    }
+
     /**
      * Start the processing loop that continuously pulls latest frames for processing
      */
@@ -696,6 +713,10 @@ abstract class ImageProcessor(
         if (isCollectingImage.compareAndSet(false, true)) {
             try {
                 val image = reader.acquireLatestImage() ?: return
+
+                // Start timing only once for this capture session
+                startCaptureTimer()
+
                 val processingId = processingCounter.incrementAndGet()
                 image.use {
                     val yRowStride = it.planes[0].rowStride
