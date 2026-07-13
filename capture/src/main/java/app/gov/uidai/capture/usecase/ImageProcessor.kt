@@ -30,6 +30,7 @@ import app.gov.uidai.capture.ui.camera.model.Warning
 import app.gov.uidai.capture.usecase.factory.BlurCheckFactory
 import app.gov.uidai.capture.usecase.factory.FingerCheckFactory
 import app.gov.uidai.capture.usecase.factory.SegmentationFactory
+import app.gov.uidai.capture.utils.RollingConfidence
 import app.gov.uidai.capture.utils.extension.toByteArray
 import app.gov.uidai.capture.utils.logExecutionTime
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +49,7 @@ import kotlinx.coroutines.runInterruptible
 import java.util.Collections
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
@@ -135,6 +137,11 @@ abstract class ImageProcessor(
     private val isCaptured = AtomicBoolean(false)
     protected val isStage1Passed = AtomicBoolean(false)
 
+    private val blurConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
+    private val fingerConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.8f)
+    private val glareConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.9f)
+    private val brightnessConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
+
     private val stage1PassedTime = AtomicReference<Long?>(null)
 
     abstract val DELAY_IN_ACCUMULATION_OF_FRAMES: Long
@@ -201,7 +208,7 @@ abstract class ImageProcessor(
             }
         }
 
-        blurCheckJob = coroutineScope.launch(Dispatchers.Default) {0
+        blurCheckJob = coroutineScope.launch(Dispatchers.Default) {
             while (true) {
                 val frame = latestRawFrame2.getAndSet(null)
                 val startTime = System.currentTimeMillis()
@@ -335,8 +342,14 @@ abstract class ImageProcessor(
                 when (result) {
                     is ProcessingResult.Passed<*> -> {
                         when (name) {
-                            GLARE_CHECK -> passedProcessingStages.add(ProcessingStage.GLARE)
-                            BRIGHTNESS_CHECK -> passedProcessingStages.add(ProcessingStage.BRIGHTNESS)
+                            GLARE_CHECK -> {
+                                passedProcessingStages.add(ProcessingStage.GLARE)
+                                glareConfidence.record(true)
+                            }
+                            BRIGHTNESS_CHECK ->  {
+                                passedProcessingStages.add(ProcessingStage.BRIGHTNESS)
+                                brightnessConfidence.record(true)
+                            }
                             LIVENESS_CHECK -> passedProcessingStages.add(ProcessingStage.LIVENESS)
                         }
                     }
@@ -344,6 +357,10 @@ abstract class ImageProcessor(
                     is ProcessingResult.Failed -> {
                         val cause = result.cause.toUiFailureCause()
                         warnings.add(cause.toWarning())
+                        when (name) {
+                            GLARE_CHECK -> glareConfidence.record(false)
+                            BRIGHTNESS_CHECK -> brightnessConfidence.record(false)
+                        }
                     }
                 }
             }
@@ -354,7 +371,6 @@ abstract class ImageProcessor(
             }
 
             val fingerResult = fingerResult.get()
-            val isFingerPassed = fingerResult?.passed ?: false
 
             fingerResult?.let {
                 when (it) {
@@ -365,9 +381,6 @@ abstract class ImageProcessor(
                 warnings.add(Warning.NoFinger)
             }
 
-            val stage1PrePassed =
-                results.values.all { it.passed } && isBlurPassed.get() && isFingerPassed
-
             // Check Focus Lock
             if (!provider.isFocusLockedForCapture) {
                 warnings.add(Warning.FocusNotLocked)
@@ -375,18 +388,30 @@ abstract class ImageProcessor(
                 passedProcessingStages.add(ProcessingStage.NA)
             }
 
-            isStage1Passed.set(
-                stage1PrePassed && provider.isFocusLockedForCapture
+            val isStage1PassedRolling =
+                blurConfidence.isConfident() &&
+                        fingerConfidence.isConfident() &&
+                        glareConfidence.isConfident() &&
+                        brightnessConfidence.isConfident() &&
+                        provider.isFocusLockedForCapture   // stays instantaneous — hardware state, not noisy the same way
+
+            isStage1Passed.set(isStage1PassedRolling)
+
+            Log.d(
+                "ROLLING",
+                "Blur=${blurConfidence.isConfident()} " +
+                        "Brightness=${brightnessConfidence.isConfident()} " +
+                        "Glare=${glareConfidence.isConfident()} " +
+                        "Finger=${fingerConfidence.isConfident()} " +
+                        "Focus=${provider.isFocusLockedForCapture}"
             )
 
-            if (isStage1Passed.get()) {
+            if (isStage1PassedRolling) {
                 stage1PassedTime.compareAndSet(null, SystemClock.uptimeMillis())
             } else {
                 listener.onStage1Error()
                 stage1PassedTime.set(null)
-                synchronized(capturedFrameBuffer) {
-                    capturedFrameBuffer.clear()
-                }
+                synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
             }
 
             listener.onStage1Result(
@@ -427,8 +452,10 @@ abstract class ImageProcessor(
                 )
             }
 
-            val fingerResult = runInterruptible {
-                 fingerCheck.run(imageDataProvider)
+            val fingerResult = logExecutionTime(TAG, "FingerCheck.ActualRun") {
+                runInterruptible {
+                    fingerCheck.run(imageDataProvider)
+                }
             }
 
             imageDataProvider.clearCache()
@@ -470,6 +497,8 @@ abstract class ImageProcessor(
             }
 
             this.fingerResult.set(fingerResult)
+            fingerConfidence.record(fingerResult.passed)
+            Log.d("FINGER_DEBUG", "fingerResult.passed=${fingerResult.passed}, raw result=$fingerResult")
         } catch (e: Exception) {
             Log.e(TAG, "FINGER -- Error in Finger Check processing", e)
         }
@@ -520,8 +549,8 @@ abstract class ImageProcessor(
             }
 
             imageDataProvider.clearCache()
-
             isBlurPassed.set(blurResult.passed)
+            blurConfidence.record(blurResult.passed)
         } catch (e: Exception) {
             Log.e(TAG, "Error in Blur processing", e)
         }
