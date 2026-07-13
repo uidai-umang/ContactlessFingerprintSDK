@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "624575312546",
+    "project_id": "contactlessfingerprintsdk",
+    "storage_bucket": "contactlessfingerprintsdk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:624575312546:android:5035c8fb0506a6e58e9dfb",
+        "android_client_info": {
+          "package_name": "in.gov.uidai.contactlessfingersdk_sita"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2-Tuc3-M18WJeRy9jXUpIyXjaozKP8kA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
