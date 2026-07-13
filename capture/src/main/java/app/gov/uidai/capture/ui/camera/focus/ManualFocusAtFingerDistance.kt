@@ -12,7 +12,7 @@ class ManualFocusAtFingerDistance(
     provider: CameraContextProvider
 ) : FocusManager(provider) {
     companion object {
-        private val TAG = ContinuousAF::class.simpleName
+        private val TAG = ManualFocusAtFingerDistance::class.simpleName
         const val FOCUS_TRIGGER_INTERVAL = 1000L
     }
 
@@ -24,10 +24,19 @@ class ManualFocusAtFingerDistance(
         val captureCallback = provider.captureCallback
         val cameraPreviewHandler = provider.cameraPreviewHandler
 
-        if (
-            getFocusState() == FocusState.TRIGGERING &&
-            ((SystemClock.uptimeMillis() - lastFocusTriggerTimeAtomic.get()) < FOCUS_TRIGGER_INTERVAL)
-        ) {
+//        if (
+//            getFocusState() == FocusState.TRIGGERING &&
+//            ((SystemClock.uptimeMillis() - lastFocusTriggerTimeAtomic.get()) < FOCUS_TRIGGER_INTERVAL)
+//        ) {
+//            Log.w(TAG, "FOCUS -- Focus triggered within ${FOCUS_TRIGGER_INTERVAL}ms, Skipping...")
+//            return
+//        }
+
+        // FIXED — this strategy never enters FocusState.TRIGGERING (no hardware
+        // CONTROL_AF_TRIGGER is used here), so checking for that state made this
+        // debounce dead code — it never actually fired. Rate-limit on elapsed
+        // time alone, matching what FOCUS_TRIGGER_INTERVAL's name intends.
+        if ((SystemClock.uptimeMillis() - lastFocusTriggerTimeAtomic.get()) < FOCUS_TRIGGER_INTERVAL) {
             Log.w(TAG, "FOCUS -- Focus triggered within ${FOCUS_TRIGGER_INTERVAL}ms, Skipping...")
             return
         }
