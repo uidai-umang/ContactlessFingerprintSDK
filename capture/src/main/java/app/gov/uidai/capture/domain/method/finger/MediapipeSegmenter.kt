@@ -92,7 +92,9 @@ class MediapipeSegmenter(
         val scaleX = scaledW.toFloat() / originalW
         val scaleY = scaledH.toFloat() / originalH
 
-        val scaledBitmap = bitmap.scale(previewSize.width, previewSize.height)
+        val scaledBitmap = logExecutionTime(TAG, "Bitmap Scale") {
+            bitmap.scale(previewSize.width, previewSize.height)
+        }
 
         Log.d(TAG, "ScaleX: $scaleX, ScaleY: $scaleY")
 
@@ -103,21 +105,30 @@ class MediapipeSegmenter(
             (cutoutRect.bottom * scaleY).toInt().coerceIn(0, scaledH)
         )
 
-        val mpImage = BitmapImageBuilder(scaledBitmap).build()
+        val mpImage = logExecutionTime(TAG, "BitmapImageBuilder") {
+            BitmapImageBuilder(scaledBitmap).build()
+        }
+
         val result = logExecutionTime(TAG, "Finger Check Inference Time") {
             imageSegmenter?.segment(mpImage)
         }
 
         val outputMPImage = result?.categoryMask()?.get()
-        val byteBuffer = ByteBufferExtractor.extract(outputMPImage)
+
+        val byteBuffer = logExecutionTime(TAG, "Extract ByteBuffer") {
+            ByteBufferExtractor.extract(outputMPImage)
+        }
 
         // Crop the mask buffer
-        val croppedBuffer = cropByteBuffer(
-            src = byteBuffer,
-            srcWidth = scaledW,
-            srcHeight = scaledH,
-            cropRect = scaledCutoutRect
-        )
+        // Crop the mask buffer
+        val croppedBuffer = logExecutionTime(TAG, "Crop ByteBuffer") {
+            cropByteBuffer(
+                src = byteBuffer,
+                srcWidth = scaledW,
+                srcHeight = scaledH,
+                cropRect = scaledCutoutRect
+            )
+        }
 
         // Run interpretation and mask creation on cropped buffer
         var (box, isValid) = logExecutionTime(TAG, "InterpretResult") {
@@ -144,9 +155,20 @@ class MediapipeSegmenter(
             )
         }
 
+        // ------------------------------------------------------------------
+        // TEMPORARILY DISABLED FOR PERFORMANCE BENCHMARKING
+        // This mask is only used for displaying the overlay.
+        // Finger detection, bounding box calculation and capture logic
+        // do NOT depend on it.
+        // ------------------------------------------------------------------
+
+        /*
         val mask = logExecutionTime(TAG, "Get Bitmap Mask") {
             createFingerMaskBitmap(byteBuffer, scaledW, scaledH)
         }
+        */
+
+        val mask: Bitmap? = null
 
         return ResultBundle(
             isValid = isValid,
