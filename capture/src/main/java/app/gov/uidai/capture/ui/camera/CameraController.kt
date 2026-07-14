@@ -3,6 +3,7 @@ package app.gov.uidai.capture.ui.camera
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.ImageFormat
+import android.graphics.PointF
 import android.graphics.Rect
 import android.graphics.RectF
 import android.hardware.camera2.CameraAccessException
@@ -10,6 +11,7 @@ import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
@@ -181,6 +183,8 @@ class CameraController @Inject constructor(
                         set(CaptureRequest.CONTROL_AF_TRIGGER, null)
                         set(CaptureRequest.CONTROL_AF_REGIONS, null)
                     }
+
+                    focusManager.setOptimalMode()
 
                     captureSession.setRepeatingRequest(
                         captureRequestBuilder.build(),
@@ -496,6 +500,40 @@ class CameraController @Inject constructor(
             Log.e(TAG, "Failed to get sensor orientation", e)
             0
         }
+    }
+
+    fun handleTapToFocus(tapPointInCroppedImage: PointF, cutoutRect: RectF, imageSize: Size) {
+        // Build a small square RectF around the tap point — reuses the
+        // EXISTING, already-working rect-to-MeteringRectangle conversion
+        // instead of a separate point-based one.
+        val tapTargetSize = imageSize.width * 0.12f  // ~12% of frame width, tune empirically
+        val tapRect = RectF(
+            tapPointInCroppedImage.x - tapTargetSize / 2,
+            tapPointInCroppedImage.y - tapTargetSize / 2,
+            tapPointInCroppedImage.x + tapTargetSize / 2,
+            tapPointInCroppedImage.y + tapTargetSize / 2
+        )
+        val meteringRect = convertCroppedRectToSensorMeteringRect(
+            fingerRectInCroppedImage = tapRect,
+            cutoutRectInFullImage = cutoutRect,
+            fullImageSize = Size(imageSize.width, imageSize.height),
+            sensorActiveArraySize = getSensorActiveArraySize()
+        )
+
+        captureRequestBuilder.apply {
+            set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
+            set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL)
+        }
+        captureSession.capture(captureRequestBuilder.build(), null, cameraPreviewHandler)
+
+        captureRequestBuilder.apply {
+            meteringRect?.let { set(CaptureRequest.CONTROL_AF_REGIONS, arrayOf(it)) }
+            set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START)
+        }
+        captureSession.capture(captureRequestBuilder.build(), captureCallback, cameraPreviewHandler)
+        // AF mode gets restored to whatever the active strategy actually uses
+        // once focus locks — see the processAFState fix below. Without that
+        // fix, every tap permanently strands the camera in AF_MODE_AUTO.
     }
 
     fun closeCamera() {

@@ -53,6 +53,8 @@ import `in`.gov.uidai.utility.constants.ResultCode
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import android.graphics.PointF
+import android.view.MotionEvent
 
 @AndroidEntryPoint
 class CameraFragment : Fragment() {
@@ -78,6 +80,8 @@ class CameraFragment : Fragment() {
     lateinit var preferenceStore: PreferenceStore
 
     private var lastLiveScoreUpdateMs = 0L
+
+    private var lastKnownImageSize: Size? = null
 
     private val uiInfoProvider = object : CameraController.UIInfoProvider {
         override val overlayViewCutoutRectCoordinates: RectF
@@ -116,6 +120,7 @@ class CameraFragment : Fragment() {
 
     private val imageProcessorController = object : ImageProcessor.Controller {
         override fun triggerFocusLock(fingerRect: RectF, cutoutRect: RectF, imageSize: Size) {
+            lastKnownImageSize = imageSize
             cameraController.triggerFocusLock(
                 fingerRect = fingerRect,
                 cutoutRect = cutoutRect,
@@ -232,6 +237,7 @@ class CameraFragment : Fragment() {
         setupOnBackPressed()
         observeUIState()
         setupLiveQualityScoresDebugPanel()
+        setupTapToFocus()
     }
 
     private fun setupLiveQualityScoresDebugPanel() {
@@ -546,6 +552,73 @@ class CameraFragment : Fragment() {
                     (KEY_CROPPED_IMAGE to croppedImage)
                 )
             )
+        }
+    }
+
+    private fun convertScreenTapToCroppedImageCoordinates(
+        tapX: Float,
+        tapY: Float,
+        viewFinderSize: Size,
+        imageSize: Size,
+        totalRotation: Int,
+        cutoutRectInFullImage: RectF
+    ): PointF {
+        val rotatedImageSize = when (totalRotation) {
+            90, 270 -> Size(imageSize.height, imageSize.width)
+            else -> imageSize
+        }
+        val scaleX = rotatedImageSize.width.toFloat() / viewFinderSize.width
+        val scaleY = rotatedImageSize.height.toFloat() / viewFinderSize.height
+        val xInRotated = tapX * scaleX
+        val yInRotated = tapY * scaleY
+
+        val pointInFullImage = when (totalRotation) {
+            90 -> PointF(yInRotated, rotatedImageSize.width.toFloat() - xInRotated)
+            180 -> PointF(
+                rotatedImageSize.width.toFloat() - xInRotated,
+                rotatedImageSize.height.toFloat() - yInRotated
+            )
+            270 -> PointF(rotatedImageSize.height.toFloat() - yInRotated, xInRotated)
+            else -> PointF(xInRotated, yInRotated)
+        }
+
+        return PointF(
+            pointInFullImage.x - cutoutRectInFullImage.left,
+            pointInFullImage.y - cutoutRectInFullImage.top
+        )
+    }
+
+    private fun setupTapToFocus() {
+        binding.viewFinder.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    val imageSize = lastKnownImageSize
+                    if (imageSize == null) {
+                        Log.w(TAG, "FOCUS -- Tap-to-focus ignored, no frame received yet")
+                        return@setOnTouchListener true
+                    }
+                    val cutoutRect = imageProcessorProvider.getCutoutRectInImageCoordinates(
+                        imageSize, imageProcessorProvider.totalRotation
+                    )
+                    val tapPointInCroppedImage = convertScreenTapToCroppedImageCoordinates(
+                        tapX = event.x,
+                        tapY = event.y,
+                        viewFinderSize = Size(view.width, view.height),
+                        imageSize = imageSize,
+                        totalRotation = imageProcessorProvider.totalRotation,
+                        cutoutRectInFullImage = cutoutRect
+                    )
+                    cameraController.handleTapToFocus(
+                        tapPointInCroppedImage = tapPointInCroppedImage,
+                        cutoutRect = cutoutRect,
+                        imageSize = imageSize
+                    )
+                }
+                MotionEvent.ACTION_UP -> {
+                    view.performClick()
+                }
+            }
+            true
         }
     }
 

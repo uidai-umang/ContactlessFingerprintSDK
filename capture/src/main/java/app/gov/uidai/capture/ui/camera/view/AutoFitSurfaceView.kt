@@ -55,6 +55,11 @@ class AutoFitSurfaceView @JvmOverloads constructor(
         }
     }
 
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+
     companion object {
         private val TAG = AutoFitSurfaceView::class.java.simpleName
     }
