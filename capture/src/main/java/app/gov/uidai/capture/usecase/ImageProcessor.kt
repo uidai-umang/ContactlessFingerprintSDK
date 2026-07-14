@@ -419,16 +419,22 @@ abstract class ImageProcessor(
                 passedProcessingStages.add(ProcessingStage.NA)
             }
 
-            // Instantaneous — reflects only THIS frame, for live UI icons/scores
             val isStage1PassedInstantaneous =
-                results.values.all { it.passed } && isBlurPassed.get() && (fingerResult?.passed ?: false) && provider.isFocusLockedForCapture
+                results.values.all { it.passed } && isBlurPassed.get() && provider.isFocusLockedForCapture
 
+            // Finger detection intentionally excluded from the gate — the current
+            // Mediapipe implementation costs ~2-2.5s per call, making it the
+            // dominant bottleneck for live capture readiness. processFinger() still
+            // runs continuously (needed for focus-lock targeting and the debug
+            // panel), its result just no longer blocks accumulation.
+            // TODO: reinstate as a live gate once a lightweight real-time model
+            // replaces Mediapipe here. A precise, mandatory finger-correctness
+            // check will be added to processStage2 (post-capture) separately.
             val isStage1PassedRolling =
                 blurConfidence.isConfident() &&
-                        fingerConfidence.isConfident() &&
                         glareConfidence.isConfident() &&
                         brightnessConfidence.isConfident() &&
-                        provider.isFocusLockedForCapture   // stays instantaneous — hardware state, not noisy the same way
+                        provider.isFocusLockedForCapture
 
             isStage1Passed.set(isStage1PassedRolling)
 
