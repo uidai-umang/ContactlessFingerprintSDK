@@ -143,7 +143,7 @@ abstract class ImageProcessor(
     protected val isStage1Passed = AtomicBoolean(false)
 
     private val lastBlurConfidence = AtomicReference(0f)
-    private val blurConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
+    private val blurConfidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
     private val fingerConfidence = RollingConfidence(windowSize = 4, requiredPassRate = 0.60f)
     private val glareConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.9f)
     private val brightnessConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)

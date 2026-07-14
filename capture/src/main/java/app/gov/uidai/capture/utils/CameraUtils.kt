@@ -220,11 +220,24 @@ object CameraUtils {
         // Create a "safe range" around this optimal distance (e.g., +/- 10%)
         val tolerance = 0.1f
         var minDistance = optimalDistanceMm * (1.0f - tolerance)
-        // Also, ensure our minimum is not less than the hardware's minimum focus distance
+        val wasClampedToHardwareFloor = minDistance <= 0 || minDistance < minFocusDistanceMM
+
         if (minDistance > 0) {
             minDistance = max(minDistance, minFocusDistanceMM)
         }
-        val maxDistance = minDistance + 2 * optimalDistanceMm * tolerance
+
+        // FIXED — when the hardware floor forces minDistance upward, size the
+        // tolerance band around THAT floor, not the pre-clamp optimal distance.
+        // Otherwise the window stays razor-thin and rejects real, stable focus
+        // results that land just above the hardware's absolute minimum — which
+        // is normal, expected variance for a human-held finger, not an error.
+        val maxDistance = if (wasClampedToHardwareFloor) {
+            minDistance * 1.8f   // placeholder multiplier — tune against your
+            // real observed 95-150mm cluster before shipping
+        } else {
+            minDistance + 2 * optimalDistanceMm * tolerance
+        }
+
         Log.d(TAG, "FOCUS_THRESHOLD -- $optimalDistanceMm ($minDistance, $maxDistance)")
         return minDistance to maxDistance
     }
