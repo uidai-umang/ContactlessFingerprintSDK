@@ -15,6 +15,8 @@ import app.gov.uidai.capture.domain.config.BrightnessSettings
 import app.gov.uidai.capture.domain.config.FingerSettings
 import app.gov.uidai.capture.domain.config.GlareConfig
 import app.gov.uidai.capture.domain.config.GlareSettings
+import app.gov.uidai.capture.domain.config.LaplacianBlurSettings
+import app.gov.uidai.capture.domain.method.blur.LaplacianBlurMethod
 import app.gov.uidai.capture.domain.method.brightness.BrightnessCheck
 import app.gov.uidai.capture.domain.method.finger.FingerCheckPythonMethod
 import app.gov.uidai.capture.domain.method.glare.GlareCheck
@@ -104,6 +106,10 @@ abstract class ImageProcessor(
 
     protected val blurCheck by lazy {
         blurCheckFactory.create()
+    }
+
+    private val liveBlurCheck by lazy {   // NEW — live gate only
+        LaplacianBlurMethod(minVariance = preferenceStore.get(LaplacianBlurSettings.MIN_VARIANCE))
     }
 
     protected val segmentationCheck by lazy {
@@ -618,7 +624,7 @@ abstract class ImageProcessor(
             )
 
             val blurResult = runInterruptible {
-                blurCheck.run(imageDataProvider)
+                liveBlurCheck.run(imageDataProvider)
             }
 
             if (preferenceStore.get(ProcessingSettings.SAVE_BLUR_INPUT)) {
