@@ -1,5 +1,6 @@
 package app.gov.uidai.capture.usecase
 
+import app.gov.uidai.capture.domain.model.CaptureStrategyType
 import app.gov.uidai.capture.pref.model.PreferenceGroup
 import app.gov.uidai.capture.pref.model.PreferenceParam
 import app.gov.uidai.capture.pref.model.PreferenceType
@@ -90,5 +91,20 @@ object ProcessingSettings : PreferenceGroup {
         displayName = "Show Live Quality Scores",
         type = PreferenceType.BOOLEAN,
         defaultValue = false
+    )
+
+    // ProcessingSettings.kt — add these two
+    val CAPTURE_STRATEGY = PreferenceParam(
+        key = "processing.capture_strategy",
+        displayName = "Capture Strategy",
+        type = PreferenceType.CHOICE,
+        defaultValue = CaptureStrategyType.FastStrategy
+    )
+
+    val ACCUMULATION_DELAY_OVERRIDE_MS = PreferenceParam(
+        key = "processing.accumulation_delay_override_ms",
+        displayName = "Accumulation Delay Override (ms, -1 = use strategy default)",
+        type = PreferenceType.INT,
+        defaultValue = -1
     )
 }
