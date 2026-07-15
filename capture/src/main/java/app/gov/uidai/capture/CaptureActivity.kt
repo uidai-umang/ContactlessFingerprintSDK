@@ -38,6 +38,10 @@ class CaptureActivity : AppCompatActivity() {
         val finalImage = result.getString(CameraFragment.KEY_FINAL_IMAGE)
         val fullImage = result.getString(CameraFragment.KEY_FULL_IMAGE)
         val croppedImage = result.getString(CameraFragment.KEY_CROPPED_IMAGE)
+        val blurScore = result.getFloat(CameraFragment.KEY_BLUR_SCORE, 0f)
+        val brightnessScore = result.getFloat(CameraFragment.KEY_BRIGHTNESS_SCORE, 0f)
+        val glareScore = result.getFloat(CameraFragment.KEY_GLARE_SCORE, 0f)
+
 
         var sdkResponse = SDKResponse()
 
@@ -70,6 +74,12 @@ class CaptureActivity : AppCompatActivity() {
                         sdkResponse = sdkResponse.copy(croppedImage = croppedImageUri.toString())
                     }
                 }
+
+                sdkResponse = sdkResponse.copy(
+                    blurScore = blurScore,
+                    brightnessScore = brightnessScore,
+                    glareScore = glareScore
+                )
 
                 Log.d(
                     TAG,
