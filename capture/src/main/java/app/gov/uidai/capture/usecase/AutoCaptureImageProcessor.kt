@@ -1,6 +1,7 @@
 package app.gov.uidai.capture.usecase
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.util.Log
 import android.util.Size
 import androidx.lifecycle.LifecycleCoroutineScope
@@ -280,13 +281,47 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 controller.saveBitmap(croppedBitmap, "FinalOutput")
             }
 
+            // Compute real quality scores for the delivered image — this is the
+// ground truth sent to the backend as metadata, independent of which
+// CaptureStrategyType gated the live capture. Blur reuses the already-
+// computed DenseNet confidence for the winning frame (no extra model
+// call); brightness/glare are re-run on the exact final cropped image
+// using the same lightweight checks already proven fast throughout
+// today's work.
+            val finalScoreProvider = ImageDataProvider(
+                croppedByteArray,
+                croppedByteArraySize.width,
+                croppedByteArraySize.height,
+                bestFrame.rotationDegrees
+            )
+            val finalBlurConfidence = blurResults[blurSortedIndices.first()].confidence
+            val finalBrightnessResult = stage1Methods[BRIGHTNESS_CHECK]!!.run(finalScoreProvider)
+            val finalGlareResult = stage1Methods[GLARE_CHECK]!!.run(finalScoreProvider)
+            finalScoreProvider.clearCache()
+
+// Option A — debug-only overlay, drawn onto a COPY of croppedBitmap.
+// Never touches finalBitmap/croppedBitmap themselves — the image that
+// actually ships to the backend stays clean in every build.
+            if (preferenceStore.get(ProcessingSettings.SHOW_LIVE_QUALITY_SCORES)) {
+                val debugOverlayBitmap = drawScoreOverlay(
+                    source = croppedBitmap,
+                    blur = finalBlurConfidence,
+                    brightness = finalBrightnessResult.confidence,
+                    glare = finalGlareResult.confidence
+                )
+                controller.saveBitmap(debugOverlayBitmap, "QualityScoreOverlay")
+            }
+
             val segmentedFrame = SegmentedFrame(
                 processingId = processingId,
                 finalBitmap = croppedBitmap,
                 fullBitmap = fullBitmap,
                 croppedBitmap = croppedBitmap,
                 timestamp = bestFrame.timestamp,
-                finalMask = null
+                finalMask = null,
+                blurScore = finalBlurConfidence,
+                brightnessScore = finalBrightnessResult.confidence,
+                glareScore = finalGlareResult.confidence
             )
 
             blurSortedIndices.forEach { _ ->
@@ -305,6 +340,32 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 listOf()
             )
         }
+    }
+
+    private fun drawScoreOverlay(
+        source: Bitmap,
+        blur: Float,
+        brightness: Float,
+        glare: Float
+    ): Bitmap {
+        val overlay = source.copy(source.config ?: Bitmap.Config.ARGB_8888, true)
+        val canvas = android.graphics.Canvas(overlay)
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.YELLOW
+            textSize = overlay.width * 0.045f
+            isAntiAlias = true
+            setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
+        }
+        val lineHeight = paint.textSize * 1.3f
+        var y = lineHeight
+        canvas.drawText("Strategy: ${preferenceStore.get(ProcessingSettings.CAPTURE_STRATEGY)}", 20f, y, paint)
+        y += lineHeight
+        canvas.drawText(String.format("Blur: %.3f", blur), 20f, y, paint)
+        y += lineHeight
+        canvas.drawText(String.format("Brightness: %.3f", brightness), 20f, y, paint)
+        y += lineHeight
+        canvas.drawText(String.format("Glare: %.3f", glare), 20f, y, paint)
+        return overlay
     }
 
     override fun unlockAccumulator() {

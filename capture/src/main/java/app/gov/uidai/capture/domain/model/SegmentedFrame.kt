@@ -11,5 +11,8 @@ data class SegmentedFrame(
     val finalMask: Bitmap? = null,
     val fullBitmap: Bitmap,
     val croppedBitmap: Bitmap,
-    val timestamp: Long
+    val timestamp: Long,
+    val blurScore: Float = 0f,
+    val brightnessScore: Float = 0f,
+    val glareScore: Float = 0f
 )
