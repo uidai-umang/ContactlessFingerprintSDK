@@ -11,6 +11,6 @@ object LaplacianBlurSettings : PreferenceGroup {
         key = "laplacian_blur.min_variance",
         displayName = "Min Variance (sharp threshold)",
         type = PreferenceType.FLOAT,
-        defaultValue = 80.0f
+        defaultValue = 94.0f
     )
 }
