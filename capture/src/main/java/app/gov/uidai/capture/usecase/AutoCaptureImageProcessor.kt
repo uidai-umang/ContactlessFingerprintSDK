@@ -73,7 +73,10 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     }
 
     override val DELAY_IN_ACCUMULATION_OF_FRAMES: Long
-        get() = 450L
+        get() {
+            val override = preferenceStore.get(ProcessingSettings.ACCUMULATION_DELAY_OVERRIDE_MS)
+            return if (override >= 0) override.toLong() else strategyConfig.accumulationDelayMs
+        }
 
     override val isReadyForAccumulation: Boolean
         get() =  isStage1Passed.get() && provider.isFocusLockedForCapture

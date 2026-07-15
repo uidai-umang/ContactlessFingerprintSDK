@@ -93,11 +93,10 @@ object ProcessingSettings : PreferenceGroup {
         defaultValue = false
     )
 
-    // ProcessingSettings.kt — add these two
     val CAPTURE_STRATEGY = PreferenceParam(
         key = "processing.capture_strategy",
         displayName = "Capture Strategy",
-        type = PreferenceType.CHOICE,
+        type = PreferenceType.CHOICE(CaptureStrategyType.entries),
         defaultValue = CaptureStrategyType.FastStrategy
     )
 
