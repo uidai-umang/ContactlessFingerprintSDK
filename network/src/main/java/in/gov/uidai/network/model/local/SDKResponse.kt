@@ -14,4 +14,11 @@ data class SDKResponse(
 
     @JacksonXmlProperty(isAttribute = true, localName = "croppedImage")
     val croppedImage: String? = null,
+
+    @JacksonXmlProperty(isAttribute = true, localName = "blurScore")
+    val blurScore: Float? = null,
+    @JacksonXmlProperty(isAttribute = true, localName = "brightnessScore")
+    val brightnessScore: Float? = null,
+    @JacksonXmlProperty(isAttribute = true, localName = "glareScore")
+    val glareScore: Float? = null,
 )

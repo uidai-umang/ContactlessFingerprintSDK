@@ -437,7 +437,10 @@ class CameraFragment : Fragment() {
                             resultCode = ResultCode.CAPTURE_SUCCESS,
                             finalImage = encodedBitmap,
                             fullImage = it.fullBitmap.toBase64(),
-                            croppedImage = it.croppedBitmap.toBase64()
+                            croppedImage = it.croppedBitmap.toBase64(),
+                            blurScore = it.blurScore,
+                            brightnessScore = it.brightnessScore,
+                            glareScore = it.glareScore
                         )
                     } ?: let {
                         Log.e(TAG, "ACTIVITY_RESULT -- No image found")
@@ -538,7 +541,10 @@ class CameraFragment : Fragment() {
         resultCode: Int = ResultCode.CAPTURE_USER_ABORT,
         finalImage: String? = null,
         fullImage: String? = null,
-        croppedImage: String? = null
+        croppedImage: String? = null,
+        blurScore: Float = 0f,
+        brightnessScore: Float = 0f,
+        glareScore: Float = 0f
     ) {
         val activity = activity ?: return
         if (!activity.isFinishing && !activity.isDestroyed) {
@@ -549,7 +555,10 @@ class CameraFragment : Fragment() {
                     (KEY_RESULT_CODE to resultCode),
                     (KEY_FINAL_IMAGE to finalImage),
                     (KEY_FULL_IMAGE to fullImage),
-                    (KEY_CROPPED_IMAGE to croppedImage)
+                    (KEY_CROPPED_IMAGE to croppedImage),
+                    (KEY_BLUR_SCORE to blurScore),
+                    (KEY_BRIGHTNESS_SCORE to brightnessScore),
+                    (KEY_GLARE_SCORE to glareScore)
                 )
             )
         }
@@ -633,5 +642,8 @@ class CameraFragment : Fragment() {
         const val KEY_FINAL_IMAGE = "final-image-key"
         const val KEY_FULL_IMAGE = "full-image-key"
         const val KEY_CROPPED_IMAGE = "cropped-image-key"
+        const val KEY_BLUR_SCORE = "blur-score-key"
+        const val KEY_BRIGHTNESS_SCORE = "brightness-score-key"
+        const val KEY_GLARE_SCORE = "glare-score-key"
     }
 }
