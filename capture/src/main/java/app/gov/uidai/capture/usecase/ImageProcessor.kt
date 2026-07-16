@@ -392,7 +392,9 @@ abstract class ImageProcessor(
             // NEW — lightweight finger check rides along in the same
             // parallel batch, same imageDataProvider, no extra decode.
             val fastFingerDeferred = async(stage1Dispatcher) {
-                liveFingerCheck.run(imageDataProvider)
+                logExecutionTime(TAG, "FastFingerCheck") {
+                    liveFingerCheck.run(imageDataProvider)
+                }
             }
 
             val results = deferredResults.mapValues { (_, deferred) -> deferred.await() }

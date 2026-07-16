@@ -2,6 +2,7 @@ package app.gov.uidai.capture.domain.method.finger
 
 import android.graphics.RectF
 import androidx.compose.ui.graphics.toAndroidRectF
+import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.domain.config.FingerConfig
 import app.gov.uidai.capture.domain.config.FingerResultStatus
 import app.gov.uidai.capture.domain.model.FingerResultData
@@ -24,6 +25,10 @@ class FingerCheckPythonMethod(
 
     private val py = Python.getInstance()
     private val fingerDetectorHSVModule = py.getModule("finger_detector_hsv")
+
+    init {
+        fingerDetectorHSVModule.callAttr("set_debug_enabled", BuildConfig.DEBUG)
+    }
 
     override fun run(provider: ImageDataProvider): ProcessingResult<FingerResultData> {
         if (!fingerConfig.enabled) {
