@@ -89,6 +89,6 @@ object FingerSettings : PreferenceGroup {
         "finger.edge_density_threshold_max",
         "Edge Density Max",
         PreferenceType.FLOAT,
-        5.0f
+        20.0f
     )
 }
