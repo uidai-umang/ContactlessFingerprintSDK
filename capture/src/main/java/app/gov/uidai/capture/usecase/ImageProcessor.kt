@@ -188,7 +188,7 @@ abstract class ImageProcessor(
     private val fingerConfidence = RollingConfidence(windowSize = 4, requiredPassRate = 0.60f)
     // NEW — separate tracker for the lightweight FastStrategy finger check.
     // PLACEHOLDER values — tune against real capture data.
-    private val fastFingerConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.8f)
+    private val fastFingerConfidence = RollingConfidence(windowSize = 6, requiredPassRate = 0.7f)
     private val glareConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.9f)
     private val brightnessConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
 
