@@ -282,12 +282,12 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             }
 
             // Compute real quality scores for the delivered image — this is the
-// ground truth sent to the backend as metadata, independent of which
-// CaptureStrategyType gated the live capture. Blur reuses the already-
-// computed DenseNet confidence for the winning frame (no extra model
-// call); brightness/glare are re-run on the exact final cropped image
-// using the same lightweight checks already proven fast throughout
-// today's work.
+            // ground truth sent to the backend as metadata, independent of which
+            // CaptureStrategyType gated the live capture. Blur reuses the already-
+            // computed DenseNet confidence for the winning frame (no extra model
+            // call); brightness/glare are re-run on the exact final cropped image
+            // using the same lightweight checks already proven fast throughout
+            // today's work.
             val finalScoreProvider = ImageDataProvider(
                 croppedByteArray,
                 croppedByteArraySize.width,
@@ -299,9 +299,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             val finalGlareResult = stage1Methods[GLARE_CHECK]!!.run(finalScoreProvider)
             finalScoreProvider.clearCache()
 
-// Option A — debug-only overlay, drawn onto a COPY of croppedBitmap.
-// Never touches finalBitmap/croppedBitmap themselves — the image that
-// actually ships to the backend stays clean in every build.
+            // Option A — debug-only overlay, drawn onto a COPY of croppedBitmap.
+            // Never touches finalBitmap/croppedBitmap themselves — the image that
+            // actually ships to the backend stays clean in every build.
             if (preferenceStore.get(ProcessingSettings.SHOW_LIVE_QUALITY_SCORES)) {
                 val debugOverlayBitmap = drawScoreOverlay(
                     source = croppedBitmap,
