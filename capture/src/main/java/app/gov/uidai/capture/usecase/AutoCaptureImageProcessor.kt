@@ -268,6 +268,10 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             )
             val finalBlurResult = blurCheck.run(finalScoreProvider)
             val finalBlurConfidence = finalBlurResult.confidence
+            Log.i(TAG, "FINAL_BLUR_RESCORE -- confidence=$finalBlurConfidence (this IS the delivered image)")
+
+            Log.i(TAG, "BLUR_INPUT_SIZE -- crop before resize: ${croppedByteArraySize.width}x${croppedByteArraySize.height}")
+
             // Final authoritative check — the delivered image itself must clear
             // the threshold, not just whichever candidate won the earlier ranking.
             if (finalBlurConfidence < blurThreshold) {
