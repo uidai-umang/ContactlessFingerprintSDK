@@ -500,8 +500,11 @@ abstract class ImageProcessor(
                 blur = LiveCheckScore(
                     label = "Blur",
                     currentValue = lastBlurConfidence.get(),
-                    acceptedMin = preferenceStore.get(BlurSettings.THRESHOLD),
-                    acceptedMax = 1.0f,
+                    acceptedMin = if (strategyConfig.useRollingConfidence)
+                        preferenceStore.get(LaplacianBlurSettings.MIN_VARIANCE)
+                    else
+                        preferenceStore.get(BlurSettings.THRESHOLD),
+                    acceptedMax = if (strategyConfig.useRollingConfidence) Float.MAX_VALUE else 1.0f,
                     passed = isBlurPassed.get()
                 ),
                 brightness = LiveCheckScore(
@@ -525,12 +528,24 @@ abstract class ImageProcessor(
                 ),
                 fingerDetected = LiveCheckScore(
                     label = "Finger Detected",
-                    currentValue = currentFingerResult?.confidence ?: 0f,
-                    acceptedMin = if (fingerCheck is FingerCheckPythonMethod)
-                        preferenceStore.get(FingerSettings.GOOD_AREA_MIN) else 1f,
-                    acceptedMax = if (fingerCheck is FingerCheckPythonMethod)
-                        preferenceStore.get(FingerSettings.GOOD_AREA_MAX) else 1f,
-                    passed = currentFingerResult?.passed ?: false
+                    currentValue = if (strategyConfig.useRollingConfidence)
+                        fastFingerResult.confidence
+                    else
+                        currentFingerResult?.confidence ?: 0f,
+                    acceptedMin = if (strategyConfig.useRollingConfidence)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MIN)
+                    else if (fingerCheck is FingerCheckPythonMethod)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MIN)
+                    else 1f,
+                    acceptedMax = if (strategyConfig.useRollingConfidence)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MAX)
+                    else if (fingerCheck is FingerCheckPythonMethod)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MAX)
+                    else 1f,
+                    passed = if (strategyConfig.useRollingConfidence)
+                        fastFingerResult.passed
+                    else
+                        currentFingerResult?.passed ?: false
                 )
             )
             listener.onStage1ResultValues(liveScores)
