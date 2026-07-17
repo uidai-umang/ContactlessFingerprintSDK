@@ -55,11 +55,11 @@ class LiveQualityScoresView @JvmOverloads constructor(
     }
 
     private fun bindRow(row: Row, score: LiveCheckScore) {
-        row.value.text = "%.2f (%.2f-%.2f)".format(
-            score.currentValue,
-            score.acceptedMin,
-            score.acceptedMax
-        )
+        row.value.text = if (score.acceptedMax == Float.MAX_VALUE) {
+            "%.2f (min: %.2f)".format(score.currentValue, score.acceptedMin)
+        } else {
+            "%.2f (%.2f, %.2f)".format(score.currentValue, score.acceptedMin, score.acceptedMax)
+        }
         row.indicator.isVisible = score.passed
     }
 }
