@@ -86,11 +86,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     override suspend fun processStage2(candidateBatch: List<CameraFrame>) {
         val processingId = candidateBatch.first().processingId
         Log.d(TAG, "Processing Stage 2 for batch #$processingId")
-
         try {
             listener.onStage2ProcessingStageUpdate(ProcessingStage.BLUR)
             val blurThreshold = preferenceStore.get(BlurSettings.THRESHOLD)
-
             val imageDataProviders = candidateBatch.map { frame ->
                 val (byteArray, byteArraySize) = frame.getByteArray(
                     requiresCropping = preferenceStore.get(ProcessingSettings.CROPPED_INPUT_TO_BLUR_MODEL),
@@ -106,7 +104,6 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     frame.rotationDegrees
                 )
             }
-
             // Step 1: Run blur check on all frames in parallel
             val blurResults = withContext(blurExecutor.asCoroutineDispatcher()) {
                 imageDataProviders.mapIndexed { i, provider ->
@@ -115,11 +112,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     }
                 }.awaitAll()
             }
-
             val isBlurPassed = blurResults.any {
                 it is ProcessingResult.Passed && it.confidence >= blurThreshold
             }
-
             if (preferenceStore.get(ProcessingSettings.SAVE_BLUR_INPUT)) {
                 imageDataProviders.forEachIndexed { i, provider ->
                     val conf = blurResults[i].confidence
@@ -130,17 +125,15 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     )
                 }
             }
-
             imageDataProviders.forEach { it.clearCache() }
-
             if (!isBlurPassed) {
+                Log.w(TAG, "STAGE2_REJECT -- Blur failed. Confidences: ${blurResults.map { it.confidence }}")
                 listener.onStage2Result(
                     passed = false,
                     errors = listOf(Error.Blur)
                 )
                 return
             }
-
             // ----------------------------------------------------------------------
             // SEGMENTATION DISABLED (Testing)
             //
@@ -150,14 +143,11 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             // returning it as the final image. Segmentation can be re-enabled later
             // if required for finger-boundary validation.
             // ----------------------------------------------------------------------
-
             /*
             listener.onStage2ProcessingStageUpdate(ProcessingStage.SEGMENTATION)
-
             val blurSortedIndices = blurResults.indices.sortedByDescending {
                 blurResults[it].confidence
             }
-
             // Step 2: Perform segmentation on the best frame
             val bestFrame = candidateBatch[blurSortedIndices.first()]
             val (segCroppedByteArray, segCroppedByteArraySize) = bestFrame.getByteArray(
@@ -176,16 +166,13 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             val segmentationResult = runInterruptible {
                 segmentationCheck.run(segmentationProvider)
             }
-
             if (preferenceStore.get(ProcessingSettings.SAVE_SEGMENTATION_INPUT)) {
                 controller.saveBitmap(
                     segmentationProvider.getAsUprightBitmap(),
                     "SegInput"
                 )
             }
-
             Log.d(TAG, "Segmentation Result: $segmentationResult")
-
             val segmentedFrame = when (segmentationResult) {
                 is ProcessingResult.Failed -> {
                     listener.onStage2Result(
@@ -194,11 +181,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     )
                     return
                 }
-
                 is ProcessingResult.Passed -> {
                     val boundingBox = segmentationResult.data.box
                     val finalBitmap = segmentationProvider.getAsUprightBitmap().crop(boundingBox)
-
                     val (fullByteArray, fullByteArraySize) = bestFrame.getByteArray(
                         requiresCropping = false,
                         cutoutRect = provider.getCutoutRectInImageCoordinates(
@@ -206,10 +191,8 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                             bestFrame.rotationDegrees
                         )
                     )
-
                     val fullBitmap = fullByteArray.toBitmap(fullByteArraySize)
                         .rotate(bestFrame.rotationDegrees)
-
                     val (croppedByteArray, croppedByteArraySize) = bestFrame.getByteArray(
                         requiresCropping = true,
                         cutoutRect = provider.getCutoutRectInImageCoordinates(
@@ -217,17 +200,14 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                             bestFrame.rotationDegrees
                         )
                     )
-
                     val croppedBitmap = croppedByteArray.toBitmap(croppedByteArraySize)
                         .rotate(bestFrame.rotationDegrees)
-
                     if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
                         controller.saveBitmap(finalBitmap, "FinalOutput")
                         segmentationResult.data.mask?.let {
                             controller.saveBitmap(it, "FinalOutputMask")
                         }
                     }
-
                     SegmentedFrame(
                         processingId = processingId,
                         finalBitmap = croppedBitmap,
@@ -238,18 +218,13 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     )
                 }
             }
-
             segmentationProvider.clearCache()
             */
-
-
             val blurSortedIndices = blurResults.indices.sortedByDescending {
                 blurResults[it].confidence
             }
-
             // Use the sharpest frame directly
             val bestFrame = candidateBatch[blurSortedIndices.first()]
-
             // Full image
             val (fullByteArray, fullByteArraySize) = bestFrame.getByteArray(
                 requiresCropping = false,
@@ -258,11 +233,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     bestFrame.rotationDegrees
                 )
             )
-
             val fullBitmap = fullByteArray
                 .toBitmap(fullByteArraySize)
                 .rotate(bestFrame.rotationDegrees)
-
             // Cropped image (this is the final image that will be uploaded)
             val (croppedByteArray, croppedByteArraySize) = bestFrame.getByteArray(
                 requiresCropping = true,
@@ -271,46 +244,44 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     bestFrame.rotationDegrees
                 )
             )
-
             val croppedBitmap = croppedByteArray
                 .toBitmap(croppedByteArraySize)
                 .rotate(bestFrame.rotationDegrees)
-
             // Save debug output if enabled
             if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
                 controller.saveBitmap(croppedBitmap, "FinalOutput")
             }
-
-            // Compute real quality scores for the delivered image — this is the
-            // ground truth sent to the backend as metadata, independent of which
-            // CaptureStrategyType gated the live capture. Blur reuses the already-
-            // computed DenseNet confidence for the winning frame (no extra model
-            // call); brightness/glare are re-run on the exact final cropped image
-            // using the same lightweight checks already proven fast throughout
-            // today's work.
+            // Compute real quality scores for the DELIVERED image — this is the
+            // ground truth sent to the backend as metadata. Blur is now RE-SCORED
+            // directly on croppedByteArray (the exact bytes that get saved and
+            // sent), instead of reusing the earlier ranking-stage score computed
+            // on a separately-decoded candidate. That earlier version could
+            // disagree with the delivered image's real sharpness — this is what
+            // let visibly blurry images through with a high reported blur_score
+            // (e.g. 0.969 on a genuinely blurry capture). Brightness/glare were
+            // already correctly scored on the final crop; only blur had this gap.
             val finalScoreProvider = ImageDataProvider(
                 croppedByteArray,
                 croppedByteArraySize.width,
                 croppedByteArraySize.height,
                 bestFrame.rotationDegrees
             )
-            val finalBlurConfidence = blurResults[blurSortedIndices.first()].confidence
+            val finalBlurResult = blurCheck.run(finalScoreProvider)
+            val finalBlurConfidence = finalBlurResult.confidence
+            // Final authoritative check — the delivered image itself must clear
+            // the threshold, not just whichever candidate won the earlier ranking.
+            if (finalBlurConfidence < blurThreshold) {
+                Log.w(TAG, "STAGE2_REJECT -- Final delivered crop failed re-check: $finalBlurConfidence (ranking-stage had suggested ${blurResults[blurSortedIndices.first()].confidence})")
+                finalScoreProvider.clearCache()
+                listener.onStage2Result(
+                    passed = false,
+                    errors = listOf(Error.Blur)
+                )
+                return
+            }
             val finalBrightnessResult = stage1Methods[BRIGHTNESS_CHECK]!!.run(finalScoreProvider)
             val finalGlareResult = stage1Methods[GLARE_CHECK]!!.run(finalScoreProvider)
             finalScoreProvider.clearCache()
-
-            // Option A — debug-only overlay, drawn onto a COPY of croppedBitmap.
-            // Never touches finalBitmap/croppedBitmap themselves — the image that
-            // actually ships to the backend stays clean in every build.
-            if (preferenceStore.get(ProcessingSettings.SHOW_LIVE_QUALITY_SCORES)) {
-                val debugOverlayBitmap = drawScoreOverlay(
-                    source = croppedBitmap,
-                    blur = finalBlurConfidence,
-                    brightness = finalBrightnessResult.confidence,
-                    glare = finalGlareResult.confidence
-                )
-                controller.saveBitmap(debugOverlayBitmap, "QualityScoreOverlay")
-            }
 
             val segmentedFrame = SegmentedFrame(
                 processingId = processingId,
@@ -323,11 +294,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 brightnessScore = finalBrightnessResult.confidence,
                 glareScore = finalGlareResult.confidence
             )
-
             blurSortedIndices.forEach { _ ->
                 addToFinalBuffer(segmentedFrame)
             }
-
             stopCaptureTimer()
             listener.onStage2Result(
                 passed = true,
@@ -341,7 +310,6 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             )
         }
     }
-
     private fun drawScoreOverlay(
         source: Bitmap,
         blur: Float,
