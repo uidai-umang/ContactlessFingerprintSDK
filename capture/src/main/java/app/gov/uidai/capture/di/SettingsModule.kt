@@ -10,6 +10,7 @@ import app.gov.uidai.capture.ui.camera.config.CameraSettings
 import app.gov.uidai.capture.ui.camera.config.SessionSettings
 import app.gov.uidai.capture.ui.settings.provider.SettingProvider
 import app.gov.uidai.capture.usecase.ProcessingSettings
+import app.gov.uidai.capture.domain.config.LiveCheckSettings
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -63,4 +64,9 @@ object SettingsModule {
     @IntoSet
     fun provideSegmentation(preferenceStore: PreferenceStore): SettingProvider =
         SettingProvider(preferenceStore, SegmentationSettings)
+
+    @Provides
+    @IntoSet
+    fun provideLiveCheck(preferenceStore: PreferenceStore): SettingProvider =
+        SettingProvider(preferenceStore, LiveCheckSettings)
 }

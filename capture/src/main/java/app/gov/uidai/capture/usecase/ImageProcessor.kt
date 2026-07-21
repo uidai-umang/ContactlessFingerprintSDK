@@ -1,4 +1,5 @@
 package app.gov.uidai.capture.usecase
+
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.RectF
@@ -11,11 +12,11 @@ import androidx.lifecycle.LifecycleCoroutineScope
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
 import app.gov.uidai.capture.domain.config.BrightnessSettings
-import app.gov.uidai.capture.domain.config.FingerConfig
 import app.gov.uidai.capture.domain.config.FingerSettings
 import app.gov.uidai.capture.domain.config.GlareConfig
 import app.gov.uidai.capture.domain.config.GlareSettings
 import app.gov.uidai.capture.domain.config.LaplacianBlurSettings
+import app.gov.uidai.capture.domain.config.LiveCheckSettings
 import app.gov.uidai.capture.domain.method.blur.LaplacianBlurMethod
 import app.gov.uidai.capture.domain.method.brightness.BrightnessCheck
 import app.gov.uidai.capture.domain.method.finger.FingerCheckPythonMethod
@@ -25,6 +26,7 @@ import app.gov.uidai.capture.domain.model.CaptureStrategyType
 import app.gov.uidai.capture.domain.model.FingerResultData
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ImageProcessingMethod
+import app.gov.uidai.capture.domain.model.LiveBlurMethodType
 import app.gov.uidai.capture.domain.model.LiveCheckScore
 import app.gov.uidai.capture.domain.model.LiveQualityScores
 import app.gov.uidai.capture.domain.model.ProcessingResult
@@ -57,7 +59,6 @@ import kotlinx.coroutines.runInterruptible
 import java.util.Collections
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
@@ -87,89 +88,75 @@ abstract class ImageProcessor(
         BRIGHTNESS_CHECK to BrightnessCheck(brightnessConfig)
     )
 
-    private val fingerCheck by lazy {
-        fingerCheckFactory.create(
-            getCutoutRect = provider::getCutoutRectInImageCoordinates,
-            getPreviewSize = provider::previewSize
-        )
-    }
-
+    // DenseNet instance — used by Stage 2's dedicated re-verify (always,
+    // regardless of experiment) AND as one of the live-blur options below.
     protected val blurCheck by lazy {
         blurCheckFactory.create()
     }
 
-    private val liveBlurCheck by lazy {
+    private val laplacianBlurCheck by lazy {
         LaplacianBlurMethod(minVariance = preferenceStore.get(LaplacianBlurSettings.MIN_VARIANCE))
-    }
-
-    // NEW — lightweight, classical (no neural net) finger-presence check
-    // used ONLY by FastStrategy's gate. Independent of `fingerCheck`
-    // above (which stays Mediapipe-driven for focus-lock targeting and
-    // StableStrategy). Built directly rather than via FingerCheckFactory
-    // since that factory's config is oriented around the Mediapipe path.
-    private val liveFingerCheck by lazy {
-        FingerCheckPythonMethod(
-            fingerConfig = FingerConfig(
-                enabled = true,
-                modelPath = "",
-                fingerCategoryIds = listOf(),
-                minFingerArea = preferenceStore.get(FingerSettings.MIN_FINGER_AREA),
-                maxFingerArea = preferenceStore.get(FingerSettings.MAX_FINGER_AREA),
-                goodAreaMin = preferenceStore.get(FingerSettings.GOOD_AREA_MIN),
-                goodAreaMax = preferenceStore.get(FingerSettings.GOOD_AREA_MAX),
-                textureThresholdMin = preferenceStore.get(FingerSettings.TEXTURE_THRESHOLD_MIN),
-                textureThresholdMax = preferenceStore.get(FingerSettings.TEXTURE_THRESHOLD_MAX),
-                edgeDensityThresholdMin = preferenceStore.get(FingerSettings.EDGE_DENSITY_THRESHOLD_MIN),
-                edgeDensityThresholdMax = preferenceStore.get(FingerSettings.EDGE_DENSITY_THRESHOLD_MAX)
-            )
-        )
     }
 
     protected val segmentationCheck by lazy {
         segmentationFactory.create()
     }
 
+    // Per-strategy check configuration. Rolling-vs-instantaneous stays
+    // strategy-wide; model choice for blur/finger is independently
+    // configurable per strategy via Debug Settings, letting heavy/light
+    // models be tested against either gating mechanism.
     protected data class CaptureStrategyConfig(
         val useRollingConfidence: Boolean,
-        val includeFingerInGate: Boolean,
-        val liveBlur: ImageProcessingMethod<Unit>,
         val accumulationDelayMs: Long
     )
+
+    // Model resolution is now flat — read ONCE, shared by whichever
+// strategy is active. Rolling vs instantaneous is the only thing
+// strategyConfig still varies by strategy.
+    private fun resolveLiveBlur(): ImageProcessingMethod<Unit> {
+        return when (preferenceStore.get(LiveCheckSettings.LIVE_BLUR_MODEL)) {
+            LiveBlurMethodType.Densenet, LiveBlurMethodType.NewDensenet -> blurCheck
+            LiveBlurMethodType.Laplacian -> laplacianBlurCheck
+        }
+    }
+
+    private fun resolveLiveFinger(): ImageProcessingMethod<FingerResultData> {
+        return fingerCheckFactory.create(
+            getCutoutRect = provider::getCutoutRectInImageCoordinates,
+            getPreviewSize = provider::previewSize,
+            methodOverride = preferenceStore.get(LiveCheckSettings.LIVE_FINGER_MODEL)
+        )
+    }
 
     protected val strategyConfig: CaptureStrategyConfig by lazy {
         when (preferenceStore.get(ProcessingSettings.CAPTURE_STRATEGY)) {
             CaptureStrategyType.StableStrategy -> CaptureStrategyConfig(
                 useRollingConfidence = false,
-                includeFingerInGate = true,
-                liveBlur = blurCheck,
                 accumulationDelayMs = 1_250L
             )
+
             CaptureStrategyType.FastStrategy -> CaptureStrategyConfig(
                 useRollingConfidence = true,
-                includeFingerInGate = true,   // CHANGED — was false. Now gated by
-                // fastFingerConfidence (lightweight
-                // HSV check), not the slow Mediapipe job.
-                liveBlur = liveBlurCheck,
                 accumulationDelayMs = 450L
             )
         }
     }
+
+    protected val liveBlur: ImageProcessingMethod<Unit> by lazy { resolveLiveBlur() }
+    protected val liveFinger: ImageProcessingMethod<FingerResultData> by lazy { resolveLiveFinger() }
 
     private val latestRawFrame0 = AtomicReference<CameraFrame?>()
     private val latestRawFrame1 = AtomicReference<CameraFrame?>()
     private val latestRawFrame2 = AtomicReference<CameraFrame?>()
     private val latestRawFrame3 = AtomicReference<CameraFrame?>()
 
-    private val capturedFrameBuffer = Collections.synchronizedList(
-        mutableListOf<CameraFrame>()
-    )
+    private val capturedFrameBuffer = Collections.synchronizedList(mutableListOf<CameraFrame>())
     private val _capturedFrameFlow = MutableStateFlow<List<CameraFrame>?>(null)
     private val capturedFrameFlow = _capturedFrameFlow.asStateFlow()
 
     private val processingCounter = AtomicLong(0)
-    private val finalBuffer = Collections.synchronizedList(
-        mutableListOf<SegmentedFrame>()
-    )
+    private val finalBuffer = Collections.synchronizedList(mutableListOf<SegmentedFrame>())
 
     private val isCollectingImage = AtomicBoolean(false)
     private val isStage1Processing = AtomicBoolean(false)
@@ -184,11 +171,15 @@ abstract class ImageProcessor(
     protected val isStage1Passed = AtomicBoolean(false)
 
     private val lastBlurConfidence = AtomicReference(0f)
+
+    // Shared trackers — same window/rate regardless of which model is
+    // plugged in for that check. Finger's window is deliberately small
+    // (4 samples) since Mediapipe can cost ~2-2.5s/call; a shared window
+    // must stay small enough that Mediapipe's fill time is survivable,
+    // per the fairness principle: heavy models run at their real cost,
+    // not hidden behind async caching.
     private val blurConfidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
-    private val fingerConfidence = RollingConfidence(windowSize = 4, requiredPassRate = 0.60f)
-    // NEW — separate tracker for the lightweight FastStrategy finger check.
-    // PLACEHOLDER values — tune against real capture data.
-    private val fastFingerConfidence = RollingConfidence(windowSize = 6, requiredPassRate = 0.7f)
+    private val fingerConfidence = RollingConfidence(windowSize = 4, requiredPassRate = 0.6f)
     private val glareConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.9f)
     private val brightnessConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
 
@@ -218,10 +209,7 @@ abstract class ImageProcessor(
 
     protected fun stopCaptureTimer() {
         val elapsed = SystemClock.elapsedRealtime() - captureStartTime.get()
-        Log.i(
-            "CAPTURE_BENCHMARK",
-            "✅ Capture completed in ${elapsed} ms (${elapsed / 1000.0}s)"
-        )
+        Log.i("CAPTURE_BENCHMARK", "✅ Capture completed in ${elapsed} ms (${elapsed / 1000.0}s)")
         captureStartTime.set(0L)
     }
 
@@ -230,16 +218,14 @@ abstract class ImageProcessor(
             while (true) {
                 val frame = latestRawFrame0.getAndSet(null)
                 val startTime = System.currentTimeMillis()
-                if (
-                    frame != null &&
-                    !isCaptured.get() &&
-                    isStage1Processing.compareAndSet(false, true)
+                if (frame != null && !isCaptured.get() && isStage1Processing.compareAndSet(
+                        false,
+                        true
+                    )
                 ) {
                     try {
                         ensureActive()
-                        logExecutionTime(TAG, "STAGE.1") {
-                            processStage1(frame)
-                        }
+                        logExecutionTime(TAG, "STAGE.1") { processStage1(frame) }
                     } finally {
                         isStage1Processing.set(false)
                     }
@@ -248,19 +234,22 @@ abstract class ImageProcessor(
             }
         }
 
+        // Finger check — ONE loop, always, regardless of strategy or
+        // model. Cost varies (HSV ~100-300ms, Mediapipe ~2-2.5s) but the
+        // architecture is now uniform: whichever model strategyConfig
+        // resolves to runs here, feeding the shared fingerConfidence
+        // tracker AND focus-lock targeting unconditionally.
         fingerCheckJob = coroutineScope.launch(Dispatchers.Default) {
             while (true) {
                 val frame = latestRawFrame3.getAndSet(null)
                 val startTime = System.currentTimeMillis()
-                if (
-                    frame != null &&
-                    !isCaptured.get() &&
-                    isFingerProcessing.compareAndSet(false, true)
+                if (frame != null && !isCaptured.get() && isFingerProcessing.compareAndSet(
+                        false,
+                        true
+                    )
                 ) {
                     try {
-                        logExecutionTime(TAG, "FingerCheck") {
-                            processFinger(frame)
-                        }
+                        logExecutionTime(TAG, "FingerCheck") { processFinger(frame) }
                     } finally {
                         isFingerProcessing.set(false)
                     }
@@ -273,15 +262,13 @@ abstract class ImageProcessor(
             while (true) {
                 val frame = latestRawFrame2.getAndSet(null)
                 val startTime = System.currentTimeMillis()
-                if (
-                    frame != null &&
-                    !isCaptured.get() &&
-                    isBlurProcessing.compareAndSet(false, true)
+                if (frame != null && !isCaptured.get() && isBlurProcessing.compareAndSet(
+                        false,
+                        true
+                    )
                 ) {
                     try {
-                        logExecutionTime(TAG, "Blur") {
-                            processBlur(frame)
-                        }
+                        logExecutionTime(TAG, "Blur") { processBlur(frame) }
                     } finally {
                         isBlurProcessing.set(false)
                     }
@@ -294,22 +281,10 @@ abstract class ImageProcessor(
             while (true) {
                 val frame = latestRawFrame1.getAndSet(null)
                 val startTime = System.currentTimeMillis()
-                if (frame != null) {
-                    Log.d(
-                        "ACCUM_DEBUG",
-                        "frame!=null=true isCaptured=${isCaptured.get()} " +
-                                "isReadyForAccumulation=$isReadyForAccumulation " +
-                                "isAccumulating=${isAccumulatingFrames.get()}"
-                    )
-                }
-                if (
-                    frame != null &&
-                    !isCaptured.get() &&
-                    isReadyForAccumulation &&
+                if (frame != null && !isCaptured.get() && isReadyForAccumulation &&
                     isAccumulatingFrames.compareAndSet(false, true)
                 ) {
                     try {
-                        Log.d("ACCUM_DEBUG", "ENTERED accumulation block — calling onStartAccumulation")
                         listener.onStartAccumulation()
                         accumulateFrameForStage2(frame)
                     } finally {
@@ -322,17 +297,12 @@ abstract class ImageProcessor(
 
         stage2Job = coroutineScope.launch(Dispatchers.Default) {
             capturedFrameFlow.collectLatest { it ->
-                if (
-                    it != null &&
-                    getFinalBufferSize() < REQUIRED_SUCCESSFUL_IMAGES &&
+                if (it != null && getFinalBufferSize() < REQUIRED_SUCCESSFUL_IMAGES &&
                     isStage2Processing.compareAndSet(false, true)
                 ) {
                     try {
-                        Log.d("FLOW_TRACE", "4. processStage2() starting now")
                         listener.onStartStage2Processing()
-                        logExecutionTime(TAG, "STAGE.2") {
-                            processStage2(it)
-                        }
+                        logExecutionTime(TAG, "STAGE.2") { processStage2(it) }
                     } finally {
                         isStage2Processing.set(false)
                         listener.onStopStage2Processing()
@@ -344,27 +314,15 @@ abstract class ImageProcessor(
 
     private suspend fun processStage1(frame: CameraFrame) = coroutineScope {
         val processingId = frame.processingId
-        Log.d(
-            TAG,
-            "Processing Stage 1 for frame #$processingId (timestamp: ${frame.timestamp})"
-        )
         try {
             val currentTime = System.currentTimeMillis()
-            if (currentTime - frame.timestamp > 500) {
-                Log.d(
-                    TAG,
-                    "Skipping old frame #$processingId (age: ${currentTime - frame.timestamp}ms)"
-                )
-                return@coroutineScope
-            }
+            if (currentTime - frame.timestamp > 500) return@coroutineScope
 
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
-                Size(frame.width, frame.height),
-                frame.rotationDegrees
+                Size(frame.width, frame.height), frame.rotationDegrees
             )
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(
-                requiresCropping = true,
-                cutoutRect = cutoutRect
+                requiresCropping = true, cutoutRect = cutoutRect
             )
             val imageDataProvider = ImageDataProvider(
                 croppedByteArray,
@@ -377,30 +335,13 @@ abstract class ImageProcessor(
                 controller.saveBitmap(imageDataProvider.getAsBitmap(), "Stage1Img")
             }
             if (preferenceStore.get(ProcessingSettings.SAVE_STAGE1_UPRIGHT_IMAGE)) {
-                controller.saveBitmap(
-                    imageDataProvider.getAsUprightBitmap(),
-                    "Stage1UpImg"
-                )
+                controller.saveBitmap(imageDataProvider.getAsUprightBitmap(), "Stage1UpImg")
             }
 
             val deferredResults = stage1Methods.map { (name, method) ->
-                name to async(stage1Dispatcher) {
-                    method.run(imageDataProvider)
-                }
+                name to async(stage1Dispatcher) { method.run(imageDataProvider) }
             }.toMap()
-
-            // NEW — lightweight finger check rides along in the same
-            // parallel batch, same imageDataProvider, no extra decode.
-            val fastFingerDeferred = async(stage1Dispatcher) {
-                logExecutionTime(TAG, "FastFingerCheck") {
-                    liveFingerCheck.run(imageDataProvider)
-                }
-            }
-
             val results = deferredResults.mapValues { (_, deferred) -> deferred.await() }
-            val fastFingerResult = fastFingerDeferred.await()
-            fastFingerConfidence.record(fastFingerResult.passed)
-
             imageDataProvider.clearCache()
 
             val warnings = mutableListOf<Warning>()
@@ -411,19 +352,23 @@ abstract class ImageProcessor(
                     is ProcessingResult.Passed<*> -> {
                         when (name) {
                             GLARE_CHECK -> {
-                                passedProcessingStages.add(ProcessingStage.GLARE)
-                                glareConfidence.record(true)
+                                passedProcessingStages.add(ProcessingStage.GLARE); glareConfidence.record(
+                                    true
+                                )
                             }
+
                             BRIGHTNESS_CHECK -> {
-                                passedProcessingStages.add(ProcessingStage.BRIGHTNESS)
-                                brightnessConfidence.record(true)
+                                passedProcessingStages.add(ProcessingStage.BRIGHTNESS); brightnessConfidence.record(
+                                    true
+                                )
                             }
+
                             LIVENESS_CHECK -> passedProcessingStages.add(ProcessingStage.LIVENESS)
                         }
                     }
+
                     is ProcessingResult.Failed -> {
-                        val cause = result.cause.toUiFailureCause()
-                        warnings.add(cause.toWarning())
+                        warnings.add(result.cause.toUiFailureCause().toWarning())
                         when (name) {
                             GLARE_CHECK -> glareConfidence.record(false)
                             BRIGHTNESS_CHECK -> brightnessConfidence.record(false)
@@ -437,16 +382,16 @@ abstract class ImageProcessor(
                 false -> warnings.add(Warning.Blur)
             }
 
-            val fingerResult = fingerResult.get()
-            val isFingerPassed = fingerResult?.passed ?: false
-            fingerResult?.let {
+            val currentFingerResult = fingerResult.get()
+            val isFingerPassed = currentFingerResult?.passed ?: false
+            currentFingerResult?.let {
                 when (it) {
                     is ProcessingResult.Passed -> passedProcessingStages.add(ProcessingStage.FINGER_DETECTION)
-                    is ProcessingResult.Failed -> warnings.add(it.cause.toUiFailureCause().toWarning())
+                    is ProcessingResult.Failed -> warnings.add(
+                        it.cause.toUiFailureCause().toWarning()
+                    )
                 }
-            } ?: {
-                warnings.add(Warning.NoFinger)
-            }
+            } ?: warnings.add(Warning.NoFinger)
 
             if (!provider.isFocusLockedForCapture) {
                 warnings.add(Warning.FocusNotLocked)
@@ -454,21 +399,20 @@ abstract class ImageProcessor(
                 passedProcessingStages.add(ProcessingStage.NA)
             }
 
-            // Unified gate — behavior fully determined by strategyConfig.
-            // StableStrategy: instantaneous per-frame AND, finger gated by
-            // the slower Mediapipe job's fingerConfidence.
-            // FastStrategy: rolling-confidence windows, finger gated by
-            // the lightweight liveFingerCheck's fastFingerConfidence.
+            // Unified gate — symmetric for blur AND finger now, since
+            // both are resolved per-strategy the same way. Rolling:
+            // both trackers must be confident. Instantaneous: both
+            // must have passed on THIS exact cached read.
             val isStage1PassedGate = if (strategyConfig.useRollingConfidence) {
                 blurConfidence.isConfident() &&
-                        (!strategyConfig.includeFingerInGate || fastFingerConfidence.isConfident()) &&
+                        fingerConfidence.isConfident() &&
                         glareConfidence.isConfident() &&
                         brightnessConfidence.isConfident() &&
                         provider.isFocusLockedForCapture
             } else {
                 results.values.all { it.passed } &&
                         isBlurPassed.get() &&
-                        (!strategyConfig.includeFingerInGate || isFingerPassed) &&
+                        isFingerPassed &&
                         provider.isFocusLockedForCapture
             }
 
@@ -476,11 +420,8 @@ abstract class ImageProcessor(
 
             Log.d(
                 "ROLLING",
-                "Blur=${blurConfidence.isConfident()} " +
-                        "Brightness=${brightnessConfidence.isConfident()} " +
-                        "Glare=${glareConfidence.isConfident()} " +
-                        "Finger=${fingerConfidence.isConfident()} " +
-                        "FastFinger=${fastFingerConfidence.isConfident()} " +
+                "Blur=${blurConfidence.isConfident()} Brightness=${brightnessConfidence.isConfident()} " +
+                        "Glare=${glareConfidence.isConfident()} Finger=${fingerConfidence.isConfident()} " +
                         "Focus=${provider.isFocusLockedForCapture}"
             )
 
@@ -494,17 +435,15 @@ abstract class ImageProcessor(
 
             val glareResult = results[GLARE_CHECK]
             val brightnessResult = results[BRIGHTNESS_CHECK]
-            val currentFingerResult = fingerResult
 
             val liveScores = LiveQualityScores(
                 blur = LiveCheckScore(
                     label = "Blur",
                     currentValue = lastBlurConfidence.get(),
-                    acceptedMin = if (strategyConfig.useRollingConfidence)
+                    acceptedMin = if (liveBlur is LaplacianBlurMethod)
                         preferenceStore.get(LaplacianBlurSettings.MIN_VARIANCE)
-                    else
-                        preferenceStore.get(BlurSettings.THRESHOLD),
-                    acceptedMax = if (strategyConfig.useRollingConfidence) Float.MAX_VALUE else 1.0f,
+                    else preferenceStore.get(BlurSettings.THRESHOLD),
+                    acceptedMax = if (liveBlur is LaplacianBlurMethod) Float.MAX_VALUE else 1.0f,
                     passed = isBlurPassed.get()
                 ),
                 brightness = LiveCheckScore(
@@ -528,33 +467,16 @@ abstract class ImageProcessor(
                 ),
                 fingerDetected = LiveCheckScore(
                     label = "Finger Detected",
-                    currentValue = if (strategyConfig.useRollingConfidence)
-                        fastFingerResult.confidence
-                    else
-                        currentFingerResult?.confidence ?: 0f,
-                    acceptedMin = if (strategyConfig.useRollingConfidence)
-                        preferenceStore.get(FingerSettings.GOOD_AREA_MIN)
-                    else if (fingerCheck is FingerCheckPythonMethod)
-                        preferenceStore.get(FingerSettings.GOOD_AREA_MIN)
-                    else 1f,
-                    acceptedMax = if (strategyConfig.useRollingConfidence)
-                        preferenceStore.get(FingerSettings.GOOD_AREA_MAX)
-                    else if (fingerCheck is FingerCheckPythonMethod)
-                        preferenceStore.get(FingerSettings.GOOD_AREA_MAX)
-                    else 1f,
-                    passed = if (strategyConfig.useRollingConfidence)
-                        fastFingerResult.passed
-                    else
-                        currentFingerResult?.passed ?: false
+                    currentValue = currentFingerResult?.confidence ?: 0f,
+                    acceptedMin = if (liveFinger is FingerCheckPythonMethod)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MIN) else 1f,
+                    acceptedMax = if (liveFinger is FingerCheckPythonMethod)
+                        preferenceStore.get(FingerSettings.GOOD_AREA_MAX) else 1f,
+                    passed = isFingerPassed
                 )
             )
             listener.onStage1ResultValues(liveScores)
-
-            listener.onStage1Result(
-                passed = isStage1Passed.get(),
-                warnings = warnings,
-                passedChecks = passedProcessingStages
-            )
+            listener.onStage1Result(isStage1Passed.get(), warnings, passedProcessingStages)
         } catch (e: Exception) {
             Log.e(TAG, "Error in Stage 1 processing", e)
         }
@@ -563,48 +485,40 @@ abstract class ImageProcessor(
     private suspend fun processFinger(frame: CameraFrame) {
         try {
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
-                Size(frame.width, frame.height),
-                frame.rotationDegrees
+                Size(frame.width, frame.height), frame.rotationDegrees
             )
             val (byteArray, byteArraySize) = frame.getByteArray(
-                requiresCropping = fingerCheck is FingerCheckPythonMethod,
+                requiresCropping = liveFinger is FingerCheckPythonMethod,
                 cutoutRect = cutoutRect
             )
             val imageDataProvider = ImageDataProvider(
-                byteArray,
-                byteArraySize.width,
-                byteArraySize.height,
-                frame.rotationDegrees
+                byteArray, byteArraySize.width, byteArraySize.height, frame.rotationDegrees
             )
-
             if (preferenceStore.get(ProcessingSettings.SAVE_FINGER_CHECK_INPUT)) {
-                controller.saveBitmap(
-                    imageDataProvider.getAsBitmap(),
-                    "FingerCheckInput"
-                )
+                controller.saveBitmap(imageDataProvider.getAsBitmap(), "FingerCheckInput")
             }
-
-            val fingerResult = logExecutionTime(TAG, "FingerCheck.ActualRun") {
-                runInterruptible {
-                    fingerCheck.run(imageDataProvider)
-                }
+            val result = logExecutionTime(TAG, "FingerCheck.ActualRun") {
+                runInterruptible { liveFinger.run(imageDataProvider) }
             }
             imageDataProvider.clearCache()
 
-            when (fingerResult) {
+            // Focus-lock targeting ALWAYS runs, regardless of which
+            // model produced this result — targeting is decoupled from
+            // the gating experiment.
+            when (result) {
                 is ProcessingResult.Passed -> {
-                    val data = fingerResult.data
-                    listener.onFingerMaskResult(data.mask, imageDataProvider.rotationDegrees)
+                    listener.onFingerMaskResult(result.data.mask, imageDataProvider.rotationDegrees)
                     if (!isCaptured.get()) {
                         controller.triggerFocusLock(
-                            data.box,
+                            result.data.box,
                             cutoutRect,
                             Size(frame.width, frame.height)
                         )
                     }
                 }
+
                 is ProcessingResult.Failed -> {
-                    fingerResult.data?.let { data ->
+                    result.data?.let { data ->
                         listener.onFingerMaskResult(null, imageDataProvider.rotationDegrees)
                         if (!isCaptured.get()) {
                             controller.triggerFocusLock(
@@ -616,9 +530,8 @@ abstract class ImageProcessor(
                     }
                 }
             }
-            this.fingerResult.set(fingerResult)
-            fingerConfidence.record(fingerResult.passed)
-            Log.d("FINGER_DEBUG", "fingerResult.passed=${fingerResult.passed}, raw result=$fingerResult")
+            fingerResult.set(result)
+            fingerConfidence.record(result.passed)
         } catch (e: Exception) {
             Log.e(TAG, "FINGER -- Error in Finger Check processing", e)
         }
@@ -628,12 +541,10 @@ abstract class ImageProcessor(
     private suspend fun processBlur(frame: CameraFrame) {
         try {
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
-                Size(frame.width, frame.height),
-                frame.rotationDegrees
+                Size(frame.width, frame.height), frame.rotationDegrees
             )
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(
-                requiresCropping = true,
-                cutoutRect = cutoutRect
+                requiresCropping = true, cutoutRect = cutoutRect
             )
             val imageDataProvider = ImageDataProvider(
                 croppedByteArray,
@@ -641,30 +552,24 @@ abstract class ImageProcessor(
                 croppedByteArraySize.height,
                 frame.rotationDegrees
             )
-
-            val blurResult = runInterruptible {
-                strategyConfig.liveBlur.run(imageDataProvider)
-            }
+            val blurResult = runInterruptible { liveBlur.run(imageDataProvider) }
 
             if (preferenceStore.get(ProcessingSettings.SAVE_BLUR_INPUT)) {
-                val conf = blurResult.confidence
-                val confFormatted = String.format("%.2f", conf).removePrefix("0")
+                val confFormatted = String.format("%.2f", blurResult.confidence).removePrefix("0")
                 controller.saveBitmap(
                     imageDataProvider.getAsUprightBitmap(),
                     "BlurInput($confFormatted)"
                 )
             }
-            if (preferenceStore.get(ProcessingSettings.SAVE_SHARP_IMAGES)) {
-                val conf = blurResult.confidence
-                val confFormatted = String.format("%.2f", conf).removePrefix("0")
-                if (conf >= preferenceStore.get(BlurSettings.THRESHOLD)) {
-                    controller.saveBitmap(
-                        imageDataProvider.getAsUprightBitmap(),
-                        "SharpImage($confFormatted)"
-                    )
-                }
+            if (preferenceStore.get(ProcessingSettings.SAVE_SHARP_IMAGES) &&
+                blurResult.confidence >= preferenceStore.get(BlurSettings.THRESHOLD)
+            ) {
+                val confFormatted = String.format("%.2f", blurResult.confidence).removePrefix("0")
+                controller.saveBitmap(
+                    imageDataProvider.getAsUprightBitmap(),
+                    "SharpImage($confFormatted)"
+                )
             }
-
             imageDataProvider.clearCache()
             isBlurPassed.set(blurResult.passed)
             lastBlurConfidence.set(blurResult.confidence)
@@ -678,48 +583,19 @@ abstract class ImageProcessor(
         val processingId = frame.processingId
         try {
             val currentTime = System.currentTimeMillis()
-            if (currentTime - frame.timestamp > 500) {
-                Log.d(
-                    TAG,
-                    "Skipping old frame (age: ${currentTime - frame.timestamp}ms)"
-                )
-                return
-            }
+            if (currentTime - frame.timestamp > 500) return
 
-            val timePassedAfterPreCaptureSuccess = stage1PassedTime.get()?.let {
-                SystemClock.uptimeMillis() - it
-            } ?: 0L
-            if (timePassedAfterPreCaptureSuccess < DELAY_IN_ACCUMULATION_OF_FRAMES) {
-                Log.d(
-                    TAG,
-                    "Skipping accumulator frame (time passed after success: ${timePassedAfterPreCaptureSuccess})"
-                )
-                return
-            }
+            val timePassed = stage1PassedTime.get()?.let { SystemClock.uptimeMillis() - it } ?: 0L
+            if (timePassed < DELAY_IN_ACCUMULATION_OF_FRAMES) return
+
+            synchronized(capturedFrameBuffer) { capturedFrameBuffer.add(frame) }
 
             synchronized(capturedFrameBuffer) {
-                capturedFrameBuffer.add(frame)
-            }
-            Log.d(
-                TAG,
-                "Added candidate frame #${processingId}. Batch size: ${capturedFrameBuffer.size}"
-            )
-
-            synchronized(capturedFrameBuffer) {
-                val isEnoughFrames =
-                    capturedFrameBuffer.size >= preferenceStore.get(ProcessingSettings.IMAGE_COUNT_FOR_STAGE2)
-                if (isEnoughFrames) {
-                    if (isCaptured.compareAndSet(false, true)) {
-                        Log.d("FLOW_TRACE", "2. isCaptured flipped true — firing controller.triggerCapture()")
-                        controller.triggerCapture()
-                    }
-                    val batch = synchronized(capturedFrameBuffer) {
-                        val batchToProcess = capturedFrameBuffer.toList()
-                        capturedFrameBuffer.clear()
-                        batchToProcess
-                    }
+                if (capturedFrameBuffer.size >= preferenceStore.get(ProcessingSettings.IMAGE_COUNT_FOR_STAGE2)) {
+                    if (isCaptured.compareAndSet(false, true)) controller.triggerCapture()
+                    val batch = capturedFrameBuffer.toList()
+                    capturedFrameBuffer.clear()
                     _capturedFrameFlow.update { batch }
-                    Log.d("FLOW_TRACE", "3. Batch of ${batch.size} frames dispatched to Stage 2 flow — processStage2 about to start")
                     Log.i(TAG, "Dispatched a batch of ${batch.size} frames to Stage 2.")
                 }
             }
@@ -737,16 +613,14 @@ abstract class ImageProcessor(
                 startCaptureTimer()
                 val processingId = processingCounter.incrementAndGet()
                 image.use {
-                    val yRowStride = it.planes[0].rowStride
-                    val byteArray = it.toByteArray()
                     val cameraFrame = CameraFrame(
                         processingId = processingId,
-                        byteArray = byteArray,
+                        byteArray = it.toByteArray(),
                         width = it.width,
                         height = it.height,
                         timestamp = System.currentTimeMillis(),
                         rotationDegrees = provider.totalRotation,
-                        yRowStride = yRowStride
+                        yRowStride = it.planes[0].rowStride
                     )
                     latestRawFrame3.set(cameraFrame)
                     latestRawFrame2.set(cameraFrame)
@@ -762,27 +636,18 @@ abstract class ImageProcessor(
     }
 
     internal fun addToFinalBuffer(image: SegmentedFrame) {
-        synchronized(finalBuffer) {
-            finalBuffer.add(image)
-            Log.d(TAG, "Final buffer size: ${finalBuffer.size}")
-            if (finalBuffer.size >= REQUIRED_SUCCESSFUL_IMAGES) {
-                Log.i(TAG, "Collection complete! ${finalBuffer.size} high-quality images collected")
-            }
-        }
+        synchronized(finalBuffer) { finalBuffer.add(image) }
     }
 
     private fun getFinalBufferSize(): Int = synchronized(finalBuffer) { finalBuffer.size }
 
     abstract fun unlockAccumulator()
-
-    fun getFinalFrame(): SegmentedFrame =
-        synchronized(finalBuffer) { finalBuffer.first() }
+    fun getFinalFrame(): SegmentedFrame = synchronized(finalBuffer) { finalBuffer.first() }
 
     open fun reset() {
-        latestRawFrame0.set(null)
-        latestRawFrame1.set(null)
-        latestRawFrame2.set(null)
-        latestRawFrame3.set(null)
+        latestRawFrame0.set(null); latestRawFrame1.set(null); latestRawFrame2.set(null); latestRawFrame3.set(
+            null
+        )
         synchronized(finalBuffer) { finalBuffer.clear() }
         synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
         _capturedFrameFlow.update { null }
@@ -791,17 +656,12 @@ abstract class ImageProcessor(
         isBlurPassed.set(false)
         isCaptured.set(false)
         fingerResult.set(null)
-        Log.i(TAG, "reset()")
     }
 
     open fun close() {
-        stage1Job?.cancel()
-        fingerCheckJob?.cancel()
-        blurCheckJob?.cancel()
-        accumulatorJob?.cancel()
-        stage2Job?.cancel()
+        stage1Job?.cancel(); fingerCheckJob?.cancel(); blurCheckJob?.cancel()
+        accumulatorJob?.cancel(); stage2Job?.cancel()
         stage1Dispatcher.close()
-        Log.i(TAG, "close()")
     }
 
     interface Provider {
@@ -822,7 +682,12 @@ abstract class ImageProcessor(
         fun onFingerMaskResult(mask: Bitmap?, rotation: Int)
         fun onStartAccumulation()
         fun onStage1Error()
-        fun onStage1Result(passed: Boolean, warnings: List<Warning>, passedChecks: List<ProcessingStage>)
+        fun onStage1Result(
+            passed: Boolean,
+            warnings: List<Warning>,
+            passedChecks: List<ProcessingStage>
+        )
+
         fun onStage1ResultValues(values: LiveQualityScores)
         fun onStartStage2Processing()
         fun onStopStage2Processing()

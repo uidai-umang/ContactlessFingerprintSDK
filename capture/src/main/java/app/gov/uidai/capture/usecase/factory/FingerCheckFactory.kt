@@ -20,10 +20,11 @@ class FingerCheckFactory @Inject constructor(
 ) {
     fun create(
         getCutoutRect: (Size, Int) -> RectF,
-        getPreviewSize: () -> Size
+        getPreviewSize: () -> Size,
+        methodOverride: FingerCheckMethodType? = null
     ): ImageProcessingMethod<FingerResultData> {
 
-        val method = preferenceStore.get(FingerSettings.METHOD)
+        val method = methodOverride ?: preferenceStore.get(FingerSettings.METHOD)
 
         val modelPath = when(method) {
             FingerCheckMethodType.MediapipeSelfieSegmenter -> "selfie_segmenter.tflite"
