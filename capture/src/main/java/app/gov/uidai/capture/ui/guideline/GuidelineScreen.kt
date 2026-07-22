@@ -191,8 +191,6 @@ private fun PurposeRightsCard() {
             )
         )
 
-        Spacer()
-
         HorizontalDivider(color = Colors.colourBorderBase, thickness = 1.dp)
 
         PURPOSE_RIGHTS_ITEMS.forEachIndexed { index, item ->
