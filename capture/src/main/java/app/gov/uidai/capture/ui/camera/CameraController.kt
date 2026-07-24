@@ -208,6 +208,21 @@ class CameraController @Inject constructor(
             processAFState(afState)
             val focusDistance = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
             processFocusDistance(focusDistance)
+            Log.d(TAG, "FRAME_DEBUG -- onCaptureCompleted fired")
+
+            Log.d(
+                TAG,
+                """
+                ======== Capture Result ========
+                AE Mode          : ${result.get(CaptureResult.CONTROL_AE_MODE)}
+                AE State         : ${result.get(CaptureResult.CONTROL_AE_STATE)}
+                Exposure Time    : ${result.get(CaptureResult.SENSOR_EXPOSURE_TIME)}
+                ISO              : ${result.get(CaptureResult.SENSOR_SENSITIVITY)}
+                Frame Duration   : ${result.get(CaptureResult.SENSOR_FRAME_DURATION)}
+                Focus Distance   : ${result.get(CaptureResult.LENS_FOCUS_DISTANCE)}
+                ===============================
+                """.trimIndent()
+            )
         }
     }
 
@@ -270,6 +285,11 @@ class CameraController @Inject constructor(
         targets: List<Surface>,
         handler: Handler? = null
     ) {
+        Log.d(TAG, "AE_RANGE -- Device supports exposure time: " +
+                "${characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)}")
+        Log.d(TAG, "AE_RANGE -- Device supports ISO: " +
+                "${characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)}")
+
         val sessionConfig = SessionConfiguration(
             SessionConfiguration.SESSION_REGULAR,
             targets.map {
@@ -350,8 +370,14 @@ class CameraController @Inject constructor(
                         }
                     }
 
+                    val request = captureRequestBuilder.build()
+
+                    for (key in request.keys) {
+                        Log.d(TAG, "${key.name} = ${request.get(key)}")
+                    }
+
                     session.setRepeatingRequest(
-                        captureRequestBuilder.build(),
+                        request,
                         captureCallback,
                         handler
                     )

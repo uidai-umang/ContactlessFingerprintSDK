@@ -21,6 +21,56 @@ object CameraUtils {
     fun getCameraId(cameraManager: CameraManager, facing: Int): String? {
         val cameraIds = cameraManager.cameraIdList.filter {
             val characteristics = cameraManager.getCameraCharacteristics(it)
+
+            val caps = characteristics.get(
+                CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
+            )
+            Log.d(TAG, "Camera $it capabilities = ${caps?.joinToString()}")
+
+            Log.d(
+                TAG,
+                "AE Modes = ${
+                    characteristics.get(
+                        CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES
+                    )?.joinToString()
+                }"
+            )
+
+            Log.d(
+                TAG,
+                "Hardware Level = ${
+                    characteristics.get(
+                        CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL
+                    )
+                }"
+            )
+
+            Log.d(
+                TAG,
+                "Capabilities = ${
+                    characteristics.get(
+                        CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
+                    )?.joinToString()
+                }"
+            )
+            Log.d(
+                TAG,
+                "AE Modes = ${
+                    characteristics.get(
+                        CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES
+                    )?.joinToString()
+                }"
+            )
+            Log.d(
+                TAG,
+                "Focal Lengths = ${
+                    characteristics.get(
+                        CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
+                    )?.joinToString()
+                }"
+            )
+
+
             val lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING)
             lensFacing == facing
         }

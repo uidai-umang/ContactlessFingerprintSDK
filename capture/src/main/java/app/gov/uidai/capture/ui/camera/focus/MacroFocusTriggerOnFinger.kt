@@ -16,7 +16,7 @@ class MacroFocusTriggerOnFinger(
 
     companion object {
         private val TAG = MacroFocusTriggerOnFinger::class.simpleName
-        const val FOCUS_TRIGGER_INTERVAL = 5000L
+        const val FOCUS_TRIGGER_INTERVAL = 500L
     }
 
     private val lastFocusTriggerTimeAtomic = AtomicLong(SystemClock.uptimeMillis() - FOCUS_TRIGGER_INTERVAL)
