@@ -31,6 +31,7 @@ tensorflowLite = "2.17.0"
 tensorflowLiteSupport = "0.5.0"
 composeBom = "2024.12.01"
 activityCompose = "1.9.3"
+hiltNavigationCompose = "1.2.0"
 
 [libraries]
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraCore" }
@@ -73,6 +74,9 @@ androidx-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview
 androidx-foundation = { module = "androidx.compose.foundation:foundation" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationSafeArgs" }
+
+androidx-hilt = {group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose"}
+
 
 
 
