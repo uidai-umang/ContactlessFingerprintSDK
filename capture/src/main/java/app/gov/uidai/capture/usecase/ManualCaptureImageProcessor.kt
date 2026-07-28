@@ -27,6 +27,7 @@ import app.gov.uidai.capture.utils.logExecutionTime
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runInterruptible
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -57,7 +58,7 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
     @AssistedFactory
     interface Factory {
         fun create(
-            coroutineScope: LifecycleCoroutineScope,
+            coroutineScope: CoroutineScope,
             provider: Provider,
             controller: Controller,
             listener: Listener

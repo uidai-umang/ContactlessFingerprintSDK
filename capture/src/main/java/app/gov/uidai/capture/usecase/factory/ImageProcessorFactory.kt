@@ -6,6 +6,7 @@ import app.gov.uidai.capture.ui.camera.config.CameraSettings
 import app.gov.uidai.capture.usecase.AutoCaptureImageProcessor
 import app.gov.uidai.capture.usecase.ImageProcessor
 import app.gov.uidai.capture.usecase.ManualCaptureImageProcessor
+import kotlinx.coroutines.CoroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,7 +17,7 @@ class ImageProcessorFactory @Inject constructor(
     private val manualCaptureImageProcessorFactory: ManualCaptureImageProcessor.Factory
 ) {
     fun create(
-        coroutineScope: LifecycleCoroutineScope,
+        coroutineScope: CoroutineScope,
         provider: ImageProcessor.Provider,
         controller: ImageProcessor.Controller,
         listener: ImageProcessor.Listener

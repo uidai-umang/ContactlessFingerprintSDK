@@ -24,6 +24,7 @@ import app.gov.uidai.capture.utils.extension.toBitmap
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -58,7 +59,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     @AssistedFactory
     interface Factory {
         fun create(
-            coroutineScope: LifecycleCoroutineScope,
+            coroutineScope: CoroutineScope,
             provider: Provider,
             controller: Controller,
             listener: Listener

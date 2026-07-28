@@ -14,12 +14,13 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asComposePath
@@ -65,9 +66,7 @@ fun CaptureOverlay(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val color = remember {
-        Animatable(state.color)
-    }
+    val color = remember { Animatable(state.color) }
     val strokeWidth = remember {
         Animatable(with(density) { THICK_STROKE.toPx() })
     }
@@ -150,15 +149,16 @@ fun CaptureOverlay(
     }
 
     Box(
-        modifier = modifier.size(OVAL_WIDTH, OVAL_HEIGHT)
+        modifier = modifier.fillMaxSize()
             .onGloballyPositioned { coordinates ->
                 val bounds = coordinates.boundsInParent()
                 cutoutBoundsHolder.rect = RectF(bounds.left, bounds.top, bounds.right, bounds.bottom)
             }
     ) {
         Canvas(
-            modifier = Modifier.size(OVAL_WIDTH, OVAL_HEIGHT)
+            modifier = Modifier.fillMaxSize()
         ) {
+
             val radius = min(size.width, size.height) / 2f
             val path = Path().apply {
                 val rectHalfHeight = (size.height - size.width) / 2f
@@ -173,6 +173,9 @@ fun CaptureOverlay(
                 close()
             }
             val composePath = path.asComposePath()
+
+            drawRect(color = Color.Black.copy(alpha = 0.6f))
+            drawPath(path = composePath, color = Color.Transparent, blendMode = BlendMode.Clear)
 
             // Base line — solid or dashed depending on animated dashGap
             val effect = if(dashGap.value > 0.1f) {
@@ -216,7 +219,7 @@ fun CaptureOverlay(
                     drawPath(
                         path = segment.asComposePath(),
                         color = color.value.copy(alpha = lineAlpha.value),
-
+                        style = Stroke(width = strokeWidth.value, cap = androidx.compose.ui.graphics.StrokeCap.Round)  // missing
                     )
                 }
             }

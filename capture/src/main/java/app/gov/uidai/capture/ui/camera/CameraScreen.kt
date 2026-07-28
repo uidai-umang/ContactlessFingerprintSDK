@@ -9,6 +9,7 @@ import android.util.Size
 import android.view.Surface
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,11 +20,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.SegmentedButtonDefaults.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,9 +44,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.gov.uidai.capture.domain.model.LiveCheckScore
 import app.gov.uidai.capture.domain.model.LiveQualityScores
 import app.gov.uidai.capture.domain.model.ProcessingStage
 import app.gov.uidai.capture.pref.PreferenceStore
@@ -49,9 +57,18 @@ import app.gov.uidai.capture.ui.camera.model.Error
 import app.gov.uidai.capture.ui.camera.model.Stage2ResultValue
 import app.gov.uidai.capture.ui.camera.model.Warning
 import app.gov.uidai.capture.usecase.ImageProcessor
+import app.gov.uidai.capture.usecase.ProcessingSettings
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
+import app.gov.uidai.capture.utils.KotlinUtils.RoundedCornerShapeCompat
+import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
+import app.gov.uidai.capture.utils.KotlinUtils.headingTextFor
 import app.gov.uidai.capture.utils.extension.toBase64
 import `in`.gov.uidai.utility.constants.ResultCode
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.sample
 
 data class CaptureResult(
     val resultCode: Int,
@@ -74,10 +91,9 @@ fun CameraScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val captureSate by viewModel.captureState.collectAsStateWithLifecycle()
+    val captureState by viewModel.captureState.collectAsStateWithLifecycle()
     val captureUIState by viewModel.captureUIState.collectAsStateWithLifecycle()
-    val liveScores by viewModel.captureStateManager.stage1QualityScores.collectAsStateWithLifecycle()
-
+    val showLiveScores = remember { preferenceStore.get(ProcessingSettings.SHOW_LIVE_QUALITY_SCORES) }
     val cutoutBoundsHolder = remember { CutoutBoundsHolder() }
     var viewFinderSize by remember { mutableStateOf(Size(0, 0)) }
     var overlayOriginInParent by remember { mutableStateOf(Offset.Zero) }
@@ -95,7 +111,7 @@ fun CameraScreen(
 
     val uiInfoProvider = remember {
         object : CameraController.UIInfoProvider {
-            override val viewFinderSurface: Surface get() = cameraController.camerSurface
+            override val viewFinderSurface: Surface get() = cameraController.currentSurface!!
             override val viewFinderSize: Size get() = viewFinderSize
             override val overlayViewCutoutRectCoordinates: RectF get() = cutoutBoundsHolder.rect
             override val deviceRotation: Int get() = getDeviceRotationCompat(context)
@@ -175,8 +191,8 @@ fun CameraScreen(
 
     BackHandler { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
 
-    LaunchedEffect(captureSate) {
-        if(captureSate is CaptureState.Success) {
+    LaunchedEffect(captureState) {
+        if(captureState is CaptureState.Success) {
             val segmentedFrame = imageProcessor?.getFinalFrame()
             if(segmentedFrame != null) {
                 val encodedBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
@@ -275,6 +291,12 @@ fun CameraScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            if (showLiveScores) {
+                Box(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 8.dp), contentAlignment = Alignment.BottomStart) {
+                    LiveQualityScoresPanel(scoresFlow = viewModel.captureStateManager.stage1QualityScores)
+                }
+            }
+
             // Bottom controller
             BottomCameraController(
                 isManualCapture = captureUIState.isManualCapture,
@@ -309,27 +331,88 @@ fun CameraScreen(
                     imageProcessor?.reset()
                     cameraController.retakeCapture()
                 },
-                onGoBack = { finish(CaptureResult(resultCode = app.gov.uidai.utility.constants.ResultCode.CAPTURE_USER_ABORT)) }
+                onGoBack = { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
             )
         }
     }
 }
 
+@Composable
+fun BottomCameraController(
+    isManualCapture: Boolean, isTorchOn: Boolean, isCaptureEnabled: Boolean,
+    isModeToggleEnabled: Boolean, version: String, txnId: String,
+    onCaptureClick: () -> Unit, onTorchClick: () -> Unit, onModeChange: (Boolean) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1A1A1A)).padding(20.dp)) {
+        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { onModeChange(false) }, enabled = isModeToggleEnabled) { Text("Auto") }
+            Button(onClick = { onModeChange(true) }, enabled = isModeToggleEnabled) { Text("Manual") }
+        }
+        Button(onClick = onCaptureClick, enabled = isCaptureEnabled) { Text("Capture") }
+        IconButton(onClick = onTorchClick) { Icon(Icons.Default.FlashOn, "Torch") }
+        Text("Ver: $version | TxnId: $txnId", color = Color.White.copy(alpha = 0.5f), fontSize = 9.sp)
+    }
+}
 
+@Composable
+fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack: () -> Unit) {
+    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShapeCompat()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(if (captureState is CaptureState.Success) "Success" else "Failed")
+            Row {
+                Button(onClick = onRetake) { Text("Retake") }
+                TextButton(onClick = onGoBack) { Text("Go Back") }
+            }
+        }
+    }
+}
 
+private const val LIVE_SCORE_THROTTLE_MS = 150L
 
+@OptIn(FlowPreview::class)
+@Composable
+fun LiveQualityScoresPanel(
+    scoresFlow: StateFlow<LiveQualityScores?>,
+    modifier: Modifier = Modifier
+) {
+    // Isolated collection + throttling — this composable recomposes at
+    // ~150ms max, NOT ~30fps, and only THIS composable recomposes, not
+    // the whole CameraScreen (the flow is passed in, not collected above).
+    var scores by remember { mutableStateOf<LiveQualityScores?>(null) }
+    LaunchedEffect(scoresFlow) {
+        scoresFlow.filterNotNull().sample(LIVE_SCORE_THROTTLE_MS).collectLatest { scores = it }
+    }
 
+    scores?.let { s ->
+        Column(
+            modifier = modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Black.copy(alpha = 0.6f))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            LiveScoreRow(s.blur)
+            LiveScoreRow(s.brightness)
+            LiveScoreRow(s.glare)
+            LiveScoreRow(s.fingerDetected)
+        }
+    }
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+@Composable
+private fun LiveScoreRow(score: LiveCheckScore) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(if (score.passed) Color(0xFF16A34A) else Color.Transparent)
+        )
+        val valueText = if (score.acceptedMax == Float.MAX_VALUE) {
+            "%.2f (min: %.2f)".format(score.currentValue, score.acceptedMin)
+        } else {
+            "%.2f (%.2f, %.2f)".format(score.currentValue, score.acceptedMin, score.acceptedMax)
+        }
+        Text(text = "${score.label}: $valueText", color = Color.White, fontSize = 10.sp)
+    }
+}

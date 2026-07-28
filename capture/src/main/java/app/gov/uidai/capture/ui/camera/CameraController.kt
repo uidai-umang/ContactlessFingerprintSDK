@@ -55,6 +55,8 @@ class CameraController @Inject constructor(
         private const val DESIRED_UPPER_FPS = 24
     }
 
+    var currentSurface: Surface? = null
+
     private var _uiInfoProvider: UIInfoProvider? = null
     private val uiInfoProvider
         get() = checkNotNull(_uiInfoProvider)
