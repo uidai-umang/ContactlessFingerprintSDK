@@ -1,19 +1,40 @@
 package app.gov.uidai.capture.ui.guideline
 
-import android.widget.Space
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,9 +50,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.R
-import app.gov.uidai.capture.ui.theme.Typography
 import app.gov.uidai.capture.ui.theme.Colors
 import app.gov.uidai.capture.ui.theme.Spacing
+import app.gov.uidai.capture.ui.theme.Typography
 
 // ── Static content — fixed copy from the mockup. Bold spans hardcoded
 // as substrings since this isn't localized yet; move to
@@ -39,7 +60,11 @@ import app.gov.uidai.capture.ui.theme.Spacing
 
 private enum class RightsBullet { CHECK, DOT }
 
-private data class RightsItem(val bullet: RightsBullet, val boldRanges: List<String>, val text: String)
+private data class RightsItem(
+    val bullet: RightsBullet,
+    val boldRanges: List<String>,
+    val text: String
+)
 
 private val PURPOSE_RIGHTS_ITEMS = listOf(
     RightsItem(
@@ -63,10 +88,22 @@ private data class GuidelineRow(val emoji: String, val boldRange: String, val te
 
 private val CAPTURE_GUIDELINE_ROWS = listOf(
     GuidelineRow("\uD83D\uDC97", "clean and dry", "Finger must be clean and dry"),
-    GuidelineRow("\u2600\uFE0F", "bright, even lighting", "Use bright, even lighting — no glare or shadows"),
+    GuidelineRow(
+        "\u2600\uFE0F",
+        "bright, even lighting",
+        "Use bright, even lighting — no glare or shadows"
+    ),
     GuidelineRow("\uD83D\uDCF7", "Camera lens clean", "Camera lens clean before starting"),
-    GuidelineRow("\uD83D\uDCF8", "Do not use a photo or video", "Do not use a photo or video — live capture only"),
-    GuidelineRow("\u270F\uFE0F", "ink, mehndi, or tattoos", "Avoid fingers with ink, mehndi, or tattoos"),
+    GuidelineRow(
+        "\uD83D\uDCF8",
+        "Do not use a photo or video",
+        "Do not use a photo or video — live capture only"
+    ),
+    GuidelineRow(
+        "\u270F\uFE0F",
+        "ink, mehndi, or tattoos",
+        "Avoid fingers with ink, mehndi, or tattoos"
+    ),
 )
 
 private fun buildBoldText(full: String, boldParts: List<String>): AnnotatedString =
@@ -97,6 +134,7 @@ fun GuidelineScreen(
     BackHandler(onBack = onBack)
 
     Scaffold(
+        modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars),
         containerColor = Colors.colourBase,
         topBar = { GuidelineTopBar(onBack = onBack) },
         bottomBar = {
@@ -274,7 +312,11 @@ private fun ConsentRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
             .clip(RoundedCornerShape(10.dp))
             .background(if (checked) Colors.colourInfoContainer else Colors.colourContainerBase)
             .then(
-                if (checked) Modifier.border(1.dp, Colors.colourInfoContainerBorder, RoundedCornerShape(10.dp))
+                if (checked) Modifier.border(
+                    1.dp,
+                    Colors.colourInfoContainerBorder,
+                    RoundedCornerShape(10.dp)
+                )
                 else Modifier
             )
             .clickable { onCheckedChange(!checked) }
@@ -350,7 +392,9 @@ private fun GuidelineBottomBar(
             shape = RoundedCornerShape(10.dp)
         ) {
             Text(
-                text = if (isLoading) stringResource(R.string.btn_loading_camera) else stringResource(R.string.btn_proceed),
+                text = if (isLoading) stringResource(R.string.btn_loading_camera) else stringResource(
+                    R.string.btn_proceed
+                ),
                 style = Typography.body1,
                 fontWeight = FontWeight.Bold
             )
