@@ -15,6 +15,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -150,28 +152,31 @@ fun CaptureOverlay(
 
     Box(
         modifier = modifier.fillMaxSize()
-            .onGloballyPositioned { coordinates ->
-                val bounds = coordinates.boundsInParent()
-                cutoutBoundsHolder.rect = RectF(bounds.left, bounds.top, bounds.right, bounds.bottom)
-            }
     ) {
         Canvas(
             modifier = Modifier.fillMaxSize()
-        ) {
+        )
+        {
 
-            val radius = min(size.width, size.height) / 2f
+            val ovalWidthPx = with(this) { OVAL_WIDTH.toPx() }
+            val ovalHeightPx = with(this) { OVAL_HEIGHT.toPx() }
+            val centerX = size.width / 2f
+            val centerY = size.height / 2f
+            val radius = ovalWidthPx / 2f
+
+            val rectHalfHeight = (ovalHeightPx - ovalWidthPx) / 2f
+
             val path = Path().apply {
-                val rectHalfHeight = (size.height - size.width) / 2f
-                val cx = size.width / 2f
-                val topArc = RectF(0f, 0f, size.width, size.height)
-                val bottomArc = RectF(0f, size.height - size.width, size.width, size.height)
-                moveTo(0f, size.height - size.width)
-                lineTo(0f, rectHalfHeight)
+                val topArc = RectF(centerX - radius, centerY - rectHalfHeight - radius, centerX + radius, centerY - rectHalfHeight + radius)
+                val bottomArc = RectF(centerX - radius, centerY + rectHalfHeight - radius, centerX + radius, centerY + rectHalfHeight + radius)
+                moveTo(centerX - radius, centerY + rectHalfHeight)
+                lineTo(centerX - radius, centerY - rectHalfHeight)
                 arcTo(topArc, 180f, 180f)
-                lineTo(size.width, size.height - rectHalfHeight)
+                lineTo(centerX + radius, centerY - rectHalfHeight)
                 arcTo(bottomArc, 0f, 180f)
                 close()
             }
+
             val composePath = path.asComposePath()
 
             drawRect(color = Color.Black.copy(alpha = 0.6f))
@@ -224,5 +229,18 @@ fun CaptureOverlay(
                 }
             }
         }
+
+        // NEW — separate, correctly-sized invisible box, matching the oval's
+        // REAL drawn dimensions exactly, not the whole screen container
+        Box(
+            modifier = Modifier
+                .align(androidx.compose.ui.Alignment.Center)
+                .size(OVAL_WIDTH, OVAL_HEIGHT)
+                .onGloballyPositioned { coordinates ->
+                    val bounds = coordinates.boundsInRoot()   // root-relative, not parent-relative
+                    cutoutBoundsHolder.rect = RectF(bounds.left, bounds.top, bounds.right, bounds.bottom)
+                }
+        )
+
     }
 }

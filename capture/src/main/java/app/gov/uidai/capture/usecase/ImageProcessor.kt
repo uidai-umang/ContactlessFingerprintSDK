@@ -321,6 +321,8 @@ abstract class ImageProcessor(
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
                 Size(frame.width, frame.height), frame.rotationDegrees
             )
+
+            Log.d(TAG, "CUTOUT_CHECK -- rect=$cutoutRect valid=${isCutoutRectValid(cutoutRect)} previewSize=${provider.previewSize}")
             if (!isCutoutRectValid(cutoutRect)) return@coroutineScope
 
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(

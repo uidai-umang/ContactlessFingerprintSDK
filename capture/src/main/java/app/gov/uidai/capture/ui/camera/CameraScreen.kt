@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Point
 import android.graphics.RectF
 import android.net.Uri
+import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.activity.compose.BackHandler
@@ -134,6 +135,7 @@ fun CameraScreen(
                 // space as the camera preview (both are direct children of
                 // the same parent Box) — no separate origin offset needed,
                 // unlike the old View version's left/top combination.
+                Log.d("CutoutDebug", "REAL viewFinderSize (Compose state) = $viewFinderSize")
                 return app.gov.uidai.capture.utils.getCutoutRectInImageCoordinates(
                     imageSize = imageSize,
                     totalRotation = rotation,
@@ -266,10 +268,8 @@ fun CameraScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-
             // Heading chip — pulsing text per state, same strings as before
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
                 Surface(shape = RoundedCornerShapeCompat(), color = Color.White.copy(alpha = 0.9f)) {
                     Text(
                         text = headingTextFor(captureState, viewModel),
@@ -279,10 +279,8 @@ fun CameraScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
             // The oval overlay — centered
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 CaptureOverlay(
                     state = captureState.toOverlayVisualState(),
                     progressAnimationDurationMs = (imageProcessor?.DELAY_IN_ACCUMULATION_OF_FRAMES?.minus(250))
@@ -291,7 +289,6 @@ fun CameraScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
 
             if (showLiveScores) {
                 Box(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 8.dp), contentAlignment = Alignment.BottomStart) {
