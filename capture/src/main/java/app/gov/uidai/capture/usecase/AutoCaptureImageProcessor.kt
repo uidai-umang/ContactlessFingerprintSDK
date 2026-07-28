@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.util.Log
 import android.util.Size
-import androidx.lifecycle.LifecycleCoroutineScope
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
 import app.gov.uidai.capture.domain.config.GlareConfig
@@ -18,7 +17,6 @@ import app.gov.uidai.capture.ui.camera.model.Error
 import app.gov.uidai.capture.usecase.factory.BlurCheckFactory
 import app.gov.uidai.capture.usecase.factory.FingerCheckFactory
 import app.gov.uidai.capture.usecase.factory.SegmentationFactory
-import app.gov.uidai.capture.utils.extension.crop
 import app.gov.uidai.capture.utils.extension.rotate
 import app.gov.uidai.capture.utils.extension.toBitmap
 import dagger.assisted.Assisted
@@ -28,7 +26,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
@@ -39,7 +36,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     brightnessConfig: BrightnessConfig,
     glareConfig: GlareConfig,
     settingsManager: PreferenceStore,
-    @Assisted coroutineScope: LifecycleCoroutineScope,
+    @Assisted coroutineScope: CoroutineScope,
     @Assisted provider: Provider,
     @Assisted controller: Controller,
     @Assisted listener: Listener
@@ -81,7 +78,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
         }
 
     override val isReadyForAccumulation: Boolean
-        get() =  isStage1Passed.get() && provider.isFocusLockedForCapture
+        get() = isStage1Passed.get() && provider.isFocusLockedForCapture
 
     @SuppressLint("DefaultLocale")
     override suspend fun processStage2(candidateBatch: List<CameraFrame>) {
@@ -128,7 +125,10 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             }
             imageDataProviders.forEach { it.clearCache() }
             if (!isBlurPassed) {
-                Log.w(TAG, "STAGE2_REJECT -- Blur failed. Confidences: ${blurResults.map { it.confidence }}")
+                Log.w(
+                    TAG,
+                    "STAGE2_REJECT -- Blur failed. Confidences: ${blurResults.map { it.confidence }}"
+                )
                 listener.onStage2Result(
                     passed = false,
                     errors = listOf(Error.Blur)
@@ -269,14 +269,23 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             )
             val finalBlurResult = blurCheck.run(finalScoreProvider)
             val finalBlurConfidence = finalBlurResult.confidence
-            Log.i(TAG, "FINAL_BLUR_RESCORE -- confidence=$finalBlurConfidence (this IS the delivered image)")
+            Log.i(
+                TAG,
+                "FINAL_BLUR_RESCORE -- confidence=$finalBlurConfidence (this IS the delivered image)"
+            )
 
-            Log.i(TAG, "BLUR_INPUT_SIZE -- crop before resize: ${croppedByteArraySize.width}x${croppedByteArraySize.height}")
+            Log.i(
+                TAG,
+                "BLUR_INPUT_SIZE -- crop before resize: ${croppedByteArraySize.width}x${croppedByteArraySize.height}"
+            )
 
             // Final authoritative check — the delivered image itself must clear
             // the threshold, not just whichever candidate won the earlier ranking.
             if (finalBlurConfidence < blurThreshold) {
-                Log.w(TAG, "STAGE2_REJECT -- Final delivered crop failed re-check: $finalBlurConfidence (ranking-stage had suggested ${blurResults[blurSortedIndices.first()].confidence})")
+                Log.w(
+                    TAG,
+                    "STAGE2_REJECT -- Final delivered crop failed re-check: $finalBlurConfidence (ranking-stage had suggested ${blurResults[blurSortedIndices.first()].confidence})"
+                )
                 finalScoreProvider.clearCache()
                 listener.onStage2Result(
                     passed = false,
@@ -315,6 +324,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             )
         }
     }
+
     private fun drawScoreOverlay(
         source: Bitmap,
         blur: Float,
@@ -331,7 +341,12 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
         }
         val lineHeight = paint.textSize * 1.3f
         var y = lineHeight
-        canvas.drawText("Strategy: ${preferenceStore.get(ProcessingSettings.CAPTURE_STRATEGY)}", 20f, y, paint)
+        canvas.drawText(
+            "Strategy: ${preferenceStore.get(ProcessingSettings.CAPTURE_STRATEGY)}",
+            20f,
+            y,
+            paint
+        )
         y += lineHeight
         canvas.drawText(String.format("Blur: %.3f", blur), 20f, y, paint)
         y += lineHeight

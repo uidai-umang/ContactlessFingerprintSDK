@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 import android.util.Size
-import androidx.lifecycle.LifecycleCoroutineScope
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
 import app.gov.uidai.capture.domain.config.BrightnessSettings
@@ -43,6 +42,7 @@ import app.gov.uidai.capture.usecase.factory.SegmentationFactory
 import app.gov.uidai.capture.utils.RollingConfidence
 import app.gov.uidai.capture.utils.extension.toByteArray
 import app.gov.uidai.capture.utils.logExecutionTime
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -64,7 +64,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 
 abstract class ImageProcessor(
-    protected val coroutineScope: LifecycleCoroutineScope,
+    protected val coroutineScope: CoroutineScope,
     protected val preferenceStore: PreferenceStore,
     protected val segmentationFactory: SegmentationFactory,
     protected val fingerCheckFactory: FingerCheckFactory,
