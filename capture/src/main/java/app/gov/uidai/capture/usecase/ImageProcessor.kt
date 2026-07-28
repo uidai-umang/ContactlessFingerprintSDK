@@ -321,6 +321,8 @@ abstract class ImageProcessor(
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
                 Size(frame.width, frame.height), frame.rotationDegrees
             )
+            if (!isCutoutRectValid(cutoutRect)) return@coroutineScope
+
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(
                 requiresCropping = true, cutoutRect = cutoutRect
             )
@@ -487,6 +489,9 @@ abstract class ImageProcessor(
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
                 Size(frame.width, frame.height), frame.rotationDegrees
             )
+
+            if (!isCutoutRectValid(cutoutRect)) return
+
             val (byteArray, byteArraySize) = frame.getByteArray(
                 requiresCropping = liveFinger is FingerCheckPythonMethod,
                 cutoutRect = cutoutRect
@@ -540,12 +545,24 @@ abstract class ImageProcessor(
     @SuppressLint("DefaultLocale")
     private suspend fun processBlur(frame: CameraFrame) {
         try {
+            // Guard against the startup race: skip frames until the overlay's
+            // real screen position and the preview's real measured size are
+            // both known. Before that, getCutoutRectInImageCoordinates()
+            // divides against zero-valued placeholders and produces NaN/Infinity.
+            if (provider.previewSize.width == 0 || provider.previewSize.height == 0) return
+
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
                 Size(frame.width, frame.height), frame.rotationDegrees
             )
+
+            if (!isCutoutRectValid(cutoutRect)) return
+
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(
                 requiresCropping = true, cutoutRect = cutoutRect
             )
+
+            Log.d(TAG, "BLUR_CRASH_CHECK -- cutoutRect=$cutoutRect frameSize=${frame.width}x${frame.height} croppedSize=${croppedByteArraySize.width}x${croppedByteArraySize.height} arrayLen=${croppedByteArray.size}")
+
             val imageDataProvider = ImageDataProvider(
                 croppedByteArray,
                 croppedByteArraySize.width,
@@ -607,6 +624,7 @@ abstract class ImageProcessor(
     abstract suspend fun processStage2(candidateBatch: List<CameraFrame>)
 
     override fun onImageAvailable(reader: ImageReader) {
+        Log.d(TAG, "IMAGE_AVAILABLE_TICK -- ${SystemClock.uptimeMillis()}")
         if (isCollectingImage.compareAndSet(false, true)) {
             try {
                 val image = reader.acquireLatestImage() ?: return
@@ -633,6 +651,14 @@ abstract class ImageProcessor(
                 isCollectingImage.set(false)
             }
         }
+    }
+
+    private fun isCutoutRectValid(rect: RectF): Boolean {
+        return !rect.left.isNaN() && !rect.top.isNaN() &&
+                !rect.right.isNaN() && !rect.bottom.isNaN() &&
+                rect.left.isFinite() && rect.top.isFinite() &&
+                rect.right.isFinite() && rect.bottom.isFinite() &&
+                rect.width() > 0f && rect.height() > 0f
     }
 
     internal fun addToFinalBuffer(image: SegmentedFrame) {

@@ -24,6 +24,8 @@ import app.gov.uidai.capture.ui.guideline.GuidelineScreen
 import app.gov.uidai.capture.ui.settings.DebugSettingsScreen
 import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import dagger.hilt.android.AndroidEntryPoint
 import `in`.gov.uidai.network.model.local.PidOptions
 import `in`.gov.uidai.network.model.local.SDKResponse
@@ -50,6 +52,10 @@ class CaptureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(this))
+        }
 
         // Unchanged from before — parse PID options BEFORE any UI is shown
         val req = intent.getStringExtra(JourneyConstant.REQUEST)

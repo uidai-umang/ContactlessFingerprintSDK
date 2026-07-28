@@ -222,13 +222,14 @@ fun CameraScreen(
                     cameraController.setUIInfoProvider(uiInfoProvider)
                     cameraController.initializeCamera()
                     viewModel.startSessionTimer()
-                    imageProcessor = imageProcessorFactory.create(
+                    val newProcessor = imageProcessorFactory.create(
                         coroutineScope = coroutineScope,
                         provider = imageProcessorProvider,
                         controller = imageProcessorController,
                         listener = imageProcessorListener
                     )
-                    cameraController.setOnImageAvailableListener(imageProcessor)
+                    imageProcessor = newProcessor
+                    cameraController.setOnImageAvailableListener(newProcessor)
                 },
                 onSurfaceDestroyed = {
                     viewModel.close()
@@ -236,6 +237,7 @@ fun CameraScreen(
                     cameraController.closeCamera()
                     imageProcessor?.close()
                 },
+                onSizeChanged = { size -> viewFinderSize = size },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -310,13 +312,14 @@ fun CameraScreen(
                 onModeChange = { isManual ->
                     viewModel.updateManualCaptureState(isManual)
                     imageProcessor?.close()
-                    imageProcessor = imageProcessorFactory.create(
+                    val newProcessor = imageProcessorFactory.create(
                         coroutineScope = coroutineScope,
                         provider = imageProcessorProvider,
                         controller = imageProcessorController,
                         listener = imageProcessorListener
                     )
-                    cameraController.setOnImageAvailableListener(imageProcessor)
+                    imageProcessor = newProcessor
+                    cameraController.setOnImageAvailableListener(newProcessor)   // was passing the stale imageProcessor read
                 }
             )
         }

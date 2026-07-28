@@ -9,16 +9,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import app.gov.uidai.capture.ui.camera.view.AutoFitSurfaceView
 
+private const val TAG = "CameraPreview"
 @Composable
 fun CameraPreview(
     previewSize: Size,
     onSurfaceReady: (SurfaceHolder) -> Unit,
     onSurfaceDestroyed: () -> Unit,
+    onSizeChanged: (Size) -> Unit,
     modifier: Modifier = Modifier
 ) {
     AndroidView(
         factory = { context ->
-            Log.d(TAG, "AndroidView factory invoked — creating AutoFitSurfaceView")
+            Log.d("CameraPreview", "factory — previewSize passed in: $previewSize")
             AutoFitSurfaceView(context).apply {
                 setAspectRatio(previewSize.width, previewSize.height)
                 holder.addCallback(object : SurfaceHolder.Callback {
@@ -30,7 +32,11 @@ fun CameraPreview(
 
                     override fun surfaceCreated(holder: SurfaceHolder) {
                         Log.d(TAG, "surfaceCreated")
-                        onSurfaceReady(holder)
+                        try {
+                            onSurfaceReady(holder)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "onSurfaceReady failed", e)
+                        }
                     }
 
                     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -41,6 +47,9 @@ fun CameraPreview(
                 })
             }
         },
-        modifier = modifier
+        modifier = modifier,
+        update = { view ->
+            onSizeChanged(Size(view.width, view.height))
+        }
     )
 }
