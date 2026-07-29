@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -233,46 +236,47 @@ fun CameraScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.systemBars)
     ) {
-        if (hasCameraPermission) {
-            CameraPreview(
-                previewSize = cameraController.getPreviewSize(),
-                onSurfaceReady = { holder ->
-                    cameraController.currentSurface = holder.surface
-                    cameraController.setUIInfoProvider(uiInfoProvider)
-                    cameraController.initializeCamera()
-                    viewModel.startSessionTimer()
-                    val newProcessor = imageProcessorFactory.create(
-                        coroutineScope = coroutineScope,
-                        provider = imageProcessorProvider,
-                        controller = imageProcessorController,
-                        listener = imageProcessorListener
-                    )
-                    imageProcessor = newProcessor
-                    cameraController.setOnImageAvailableListener(newProcessor)
-                },
-                onSurfaceDestroyed = {
-                    viewModel.close()
-                    cameraController.setOnImageAvailableListener(null)
-                    cameraController.closeCamera()
-                    imageProcessor?.close()
-                },
-                onSizeChanged = { size -> viewFinderSize = size },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            LaunchedEffect(Unit) {
-                // permission request wiring — same rememberLauncherForActivityResult
-                // pattern PermissionManager used, hoisted at the call site
-            }
-        }
-
         Column(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
             ) {
+                if (hasCameraPermission) {
+                    CameraPreview(
+                        previewSize = cameraController.getPreviewSize(),
+                        onSurfaceReady = { holder ->
+                            cameraController.currentSurface = holder.surface
+                            cameraController.setUIInfoProvider(uiInfoProvider)
+                            cameraController.initializeCamera()
+                            viewModel.startSessionTimer()
+                            val newProcessor = imageProcessorFactory.create(
+                                coroutineScope = coroutineScope,
+                                provider = imageProcessorProvider,
+                                controller = imageProcessorController,
+                                listener = imageProcessorListener
+                            )
+                            imageProcessor = newProcessor
+                            cameraController.setOnImageAvailableListener(newProcessor)
+                        },
+                        onSurfaceDestroyed = {
+                            viewModel.close()
+                            cameraController.setOnImageAvailableListener(null)
+                            cameraController.closeCamera()
+                            imageProcessor?.close()
+                        },
+                        onSizeChanged = { size -> viewFinderSize = size },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    LaunchedEffect(Unit) {
+                        // permission request wiring — same rememberLauncherForActivityResult
+                        // pattern PermissionManager used, hoisted at the call site
+                    }
+                }
+
                 CaptureOverlay(
                     state = captureState.toOverlayVisualState(),
                     progressAnimationDurationMs = (imageProcessor?.DELAY_IN_ACCUMULATION_OF_FRAMES?.minus(

@@ -322,7 +322,7 @@ abstract class ImageProcessor(
                 Size(frame.width, frame.height), frame.rotationDegrees
             )
 
-            Log.d(TAG, "CUTOUT_CHECK -- rect=$cutoutRect valid=${isCutoutRectValid(cutoutRect)} previewSize=${provider.previewSize}")
+            Log.d(TAG, "CUTOUT_CHECK -- rect=$cutoutRect valid=${isCutoutRectValid(cutoutRect)} previewSize=${provider.previewSize}, rotation=${frame.rotationDegrees}")
             if (!isCutoutRectValid(cutoutRect)) return@coroutineScope
 
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(
