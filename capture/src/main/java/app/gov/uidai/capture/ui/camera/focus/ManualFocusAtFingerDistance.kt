@@ -16,7 +16,10 @@ class ManualFocusAtFingerDistance(
         const val FOCUS_TRIGGER_INTERVAL = 500L
     }
 
+    private var lockCount = 0
+
     private val lastFocusTriggerTimeAtomic = AtomicLong(SystemClock.uptimeMillis())
+
 
     override fun lock(paramProvider: FocusLockParamProvider) {
         val requestBuilder = provider.captureRequestBuilder
@@ -46,6 +49,7 @@ class ManualFocusAtFingerDistance(
         }
 
         lastFocusTriggerTimeAtomic.set(now)
+        lockCount++
 
         val rawFingerDistance = paramProvider.getFingerDistance()
         val clampedDistance = rawFingerDistance.coerceIn(0.05f, 1f)
@@ -71,6 +75,7 @@ class ManualFocusAtFingerDistance(
 
     override fun unlock() {
         // Pass
+        lockCount = 0
     }
 
     override fun setOptimalMode() {
@@ -84,5 +89,6 @@ class ManualFocusAtFingerDistance(
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
             set(CaptureRequest.LENS_FOCUS_DISTANCE, minFocusDistance)
         }
+        lockCount = 0
     }
 }

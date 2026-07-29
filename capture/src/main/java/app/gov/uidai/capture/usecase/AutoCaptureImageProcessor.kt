@@ -7,6 +7,7 @@ import android.util.Size
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
 import app.gov.uidai.capture.domain.config.GlareConfig
+import app.gov.uidai.capture.domain.method.blur.LaplacianBlurMethod
 import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ProcessingResult
@@ -67,8 +68,11 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
         private val TAG = AutoCaptureImageProcessor::class.simpleName
     }
 
-    private val blurExecutor = Executors.newSingleThreadExecutor { r ->
+    private val blurExecutor = Executors.newFixedThreadPool(4) { r ->
         Thread(r, "BlurCheckThread")
+    }
+    private val stage2LaplacianCheck by lazy {
+        LaplacianBlurMethod(minVariance = 370f)
     }
 
     override val DELAY_IN_ACCUMULATION_OF_FRAMES: Long
@@ -102,20 +106,33 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     frame.rotationDegrees
                 )
             }
-            // Step 1: Run blur check on all frames in parallel
+            // Step 1: Run blur check on all frames in parallel — now DUAL:
+            // DenseNet (blurCheck) AND Stage 2's own, independent, stricter
+            // Laplacian check. Both must pass for a candidate to be eligible.
+            // This closes the exact gap found earlier this session — DenseNet's
+            // 224x224 resize destroys full-resolution sharpness signal that
+            // Laplacian, run at full crop resolution, still catches.
+            data class DualBlurResult(
+                val denseNet: ProcessingResult<Unit>,
+                val laplacian: ProcessingResult<Unit>
+            ) {
+                val bothPassed: Boolean
+                    get() = denseNet is ProcessingResult.Passed && denseNet.confidence >= blurThreshold &&
+                            laplacian.passed
+            }
             val blurResults = withContext(blurExecutor.asCoroutineDispatcher()) {
-                imageDataProviders.mapIndexed { i, provider ->
+                imageDataProviders.map { provider ->
                     async {
-                        blurCheck.run(provider)
+                        val denseNet = blurCheck.run(provider)
+                        val laplacian = stage2LaplacianCheck.run(provider)
+                        DualBlurResult(denseNet, laplacian)
                     }
                 }.awaitAll()
             }
-            val isBlurPassed = blurResults.any {
-                it is ProcessingResult.Passed && it.confidence >= blurThreshold
-            }
+            val isBlurPassed = blurResults.any { it.bothPassed }
             if (preferenceStore.get(ProcessingSettings.SAVE_BLUR_INPUT)) {
                 imageDataProviders.forEachIndexed { i, provider ->
-                    val conf = blurResults[i].confidence
+                    val conf = blurResults[i].denseNet.confidence
                     val confFormatted = String.format("%.2f", conf).removePrefix("0")
                     controller.saveBitmap(
                         provider.getAsUprightBitmap(),
@@ -127,7 +144,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             if (!isBlurPassed) {
                 Log.w(
                     TAG,
-                    "STAGE2_REJECT -- Blur failed. Confidences: ${blurResults.map { it.confidence }}"
+                    "STAGE2_REJECT -- Blur failed. DenseNet confidences: ${blurResults.map { it.denseNet.confidence }}, Laplacian passed: ${blurResults.map { it.laplacian.passed }}"
                 )
                 listener.onStage2Result(
                     passed = false,
@@ -221,10 +238,11 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             }
             segmentationProvider.clearCache()
             */
-            val blurSortedIndices = blurResults.indices.sortedByDescending {
-                blurResults[it].confidence
-            }
-            // Use the sharpest frame directly
+            // Only rank among candidates where BOTH checks passed
+            val blurSortedIndices = blurResults.indices
+                .filter { blurResults[it].bothPassed }
+                .sortedByDescending { blurResults[it].denseNet.confidence }
+            // Use the sharpest (dual-passed) frame directly
             val bestFrame = candidateBatch[blurSortedIndices.first()]
             // Full image
             val (fullByteArray, fullByteArraySize) = bestFrame.getByteArray(
@@ -261,30 +279,31 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             // let visibly blurry images through with a high reported blur_score
             // (e.g. 0.969 on a genuinely blurry capture). Brightness/glare were
             // already correctly scored on the final crop; only blur had this gap.
+            // Final re-score is ALSO now dual — DenseNet AND Laplacian, both
+            // must pass on the actually-delivered bytes, same as the ranking step.
             val finalScoreProvider = ImageDataProvider(
                 croppedByteArray,
                 croppedByteArraySize.width,
                 croppedByteArraySize.height,
                 bestFrame.rotationDegrees
             )
-            val finalBlurResult = blurCheck.run(finalScoreProvider)
-            val finalBlurConfidence = finalBlurResult.confidence
+            val finalDenseNetResult = blurCheck.run(finalScoreProvider)
+            val finalLaplacianResult = stage2LaplacianCheck.run(finalScoreProvider)
+            val finalBlurConfidence = finalDenseNetResult.confidence
             Log.i(
                 TAG,
-                "FINAL_BLUR_RESCORE -- confidence=$finalBlurConfidence (this IS the delivered image)"
+                "FINAL_BLUR_RESCORE -- denseNet=$finalBlurConfidence laplacianPassed=${finalLaplacianResult.passed} (this IS the delivered image)"
             )
-
             Log.i(
                 TAG,
                 "BLUR_INPUT_SIZE -- crop before resize: ${croppedByteArraySize.width}x${croppedByteArraySize.height}"
             )
-
             // Final authoritative check — the delivered image itself must clear
-            // the threshold, not just whichever candidate won the earlier ranking.
-            if (finalBlurConfidence < blurThreshold) {
+            // BOTH thresholds, not just whichever candidate won the earlier ranking.
+            if (finalBlurConfidence < blurThreshold || !finalLaplacianResult.passed) {
                 Log.w(
                     TAG,
-                    "STAGE2_REJECT -- Final delivered crop failed re-check: $finalBlurConfidence (ranking-stage had suggested ${blurResults[blurSortedIndices.first()].confidence})"
+                    "STAGE2_REJECT -- Final delivered crop failed dual re-check: denseNet=$finalBlurConfidence laplacianPassed=${finalLaplacianResult.passed} (ranking-stage had suggested denseNet=${blurResults[blurSortedIndices.first()].denseNet.confidence})"
                 )
                 finalScoreProvider.clearCache()
                 listener.onStage2Result(
@@ -296,7 +315,6 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             val finalBrightnessResult = stage1Methods[BRIGHTNESS_CHECK]!!.run(finalScoreProvider)
             val finalGlareResult = stage1Methods[GLARE_CHECK]!!.run(finalScoreProvider)
             finalScoreProvider.clearCache()
-
             val segmentedFrame = SegmentedFrame(
                 processingId = processingId,
                 finalBitmap = croppedBitmap,

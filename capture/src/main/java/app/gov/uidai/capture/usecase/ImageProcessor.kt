@@ -183,6 +183,9 @@ abstract class ImageProcessor(
     private val glareConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.9f)
     private val brightnessConfidence = RollingConfidence(windowSize = 10, requiredPassRate = 0.7f)
 
+    private data class BestFrameCandidate(val frame: CameraFrame, val stage1BlurConfidence: Float)
+    private val bestStage1Frame = AtomicReference<BestFrameCandidate?>(null)
+
     private val stage1PassedTime = AtomicReference<Long?>(null)
 
     abstract val DELAY_IN_ACCUMULATION_OF_FRAMES: Long
@@ -539,6 +542,7 @@ abstract class ImageProcessor(
             }
             fingerResult.set(result)
             fingerConfidence.record(result.passed)
+            Log.d("FINGER_TUNE", "passed=${result.passed} confidence=${result.confidence}")
         } catch (e: Exception) {
             Log.e(TAG, "FINGER -- Error in Finger Check processing", e)
         }
@@ -593,6 +597,21 @@ abstract class ImageProcessor(
             isBlurPassed.set(blurResult.passed)
             lastBlurConfidence.set(blurResult.confidence)
             blurConfidence.record(blurResult.passed)
+
+            // NEW — update the single best-frame tracker, gated on finger
+            // check having passed for the CURRENT cached finger result.
+            // Not gated on isBlurPassed itself — we want the genuinely
+            // best-scoring frame tracked even if it's still below Stage 1's
+            // own live threshold, since Stage 2 applies its own, separate,
+            // stricter thresholds later.
+            val fingerPassed = fingerResult.get()?.passed == true
+            if (fingerPassed) {
+                val current = bestStage1Frame.get()
+                if (current == null || blurResult.confidence > current.stage1BlurConfidence) {
+                    bestStage1Frame.set(BestFrameCandidate(frame, blurResult.confidence))
+                }
+            }
+
         } catch (e: Exception) {
             Log.e(TAG, "Error in Blur processing", e)
         }
@@ -612,10 +631,22 @@ abstract class ImageProcessor(
             synchronized(capturedFrameBuffer) {
                 if (capturedFrameBuffer.size >= preferenceStore.get(ProcessingSettings.IMAGE_COUNT_FOR_STAGE2)) {
                     if (isCaptured.compareAndSet(false, true)) controller.triggerCapture()
-                    val batch = capturedFrameBuffer.toList()
+                    val freshBatch = capturedFrameBuffer.toList()
                     capturedFrameBuffer.clear()
-                    _capturedFrameFlow.update { batch }
-                    Log.i(TAG, "Dispatched a batch of ${batch.size} frames to Stage 2.")
+
+                    // NEW — append the tracked best Stage 1 frame as a 4th candidate,
+                    // if one exists. Stage 2 treats it identically to the 3 fresh
+                    // frames — no special-casing, no carried-over score.
+                    val storedBest = bestStage1Frame.get()?.frame
+                    val finalBatch = if (storedBest != null) freshBatch + storedBest else freshBatch
+
+                    _capturedFrameFlow.update { finalBatch }
+
+                    // NEW — Stage 1 duration: from first frame arriving to batch dispatch
+                    val stage1Duration = SystemClock.elapsedRealtime() - captureStartTime.get()
+                    Log.i("STAGE1_BENCHMARK", "✅ Stage 1 completed in $stage1Duration ms (${stage1Duration / 1000.0}s)")
+
+                    Log.i(TAG, "Dispatched a batch of ${finalBatch.size} frames to Stage 2.")
                 }
             }
         } catch (e: Exception) {
@@ -684,6 +715,7 @@ abstract class ImageProcessor(
         isBlurPassed.set(false)
         isCaptured.set(false)
         fingerResult.set(null)
+        bestStage1Frame.set(null)
     }
 
     open fun close() {
