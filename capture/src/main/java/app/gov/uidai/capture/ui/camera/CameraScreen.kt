@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -53,6 +51,7 @@ import app.gov.uidai.capture.domain.model.LiveCheckScore
 import app.gov.uidai.capture.domain.model.LiveQualityScores
 import app.gov.uidai.capture.domain.model.ProcessingStage
 import app.gov.uidai.capture.pref.PreferenceStore
+import app.gov.uidai.capture.ui.camera.config.CameraSettings
 import app.gov.uidai.capture.ui.camera.model.CaptureState
 import app.gov.uidai.capture.ui.camera.model.Error
 import app.gov.uidai.capture.ui.camera.model.Stage2ResultValue
@@ -94,11 +93,13 @@ fun CameraScreen(
     val coroutineScope = rememberCoroutineScope()
     val captureState by viewModel.captureState.collectAsStateWithLifecycle()
     val captureUIState by viewModel.captureUIState.collectAsStateWithLifecycle()
-    val showLiveScores = remember { preferenceStore.get(ProcessingSettings.SHOW_LIVE_QUALITY_SCORES) }
+    val showLiveScores =
+        remember { preferenceStore.get(ProcessingSettings.SHOW_LIVE_QUALITY_SCORES) }
     val cutoutBoundsHolder = remember { CutoutBoundsHolder() }
     var viewFinderSize by remember { mutableStateOf(Size(0, 0)) }
     var overlayOriginInParent by remember { mutableStateOf(Offset.Zero) }
     var lastKnownImageSize by remember { mutableStateOf<Size?>(null) }
+    val showManualCaptureOption = remember { preferenceStore.get(CameraSettings.MANUAL_CAPTURE) }
 
     var imageProcessor by remember { mutableStateOf<ImageProcessor?>(null) }
     var hasCameraPermission by remember {
@@ -170,20 +171,33 @@ fun CameraScreen(
     val imageProcessorListener = remember {
         object : ImageProcessor.Listener {
             override fun onFingerMaskResult(mask: Bitmap?, rotation: Int) {}
-            override fun onStartAccumulation() = viewModel.captureStateManager.reportIsAccumulationHappening(true)
-            override fun onStage1Error() = viewModel.captureStateManager.reportIsAccumulationHappening(false)
+            override fun onStartAccumulation() =
+                viewModel.captureStateManager.reportIsAccumulationHappening(true)
+
+            override fun onStage1Error() =
+                viewModel.captureStateManager.reportIsAccumulationHappening(false)
+
             override fun onStage1Result(
                 passed: Boolean,
                 warnings: List<Warning>,
                 passedChecks: List<ProcessingStage>
             ) = viewModel.captureStateManager.reportStage1Result(passed, warnings, passedChecks)
-            override fun onStage1ResultValues(values: LiveQualityScores) = viewModel.captureStateManager.reportStage1ResultValues(values)
-            override fun onStartStage2Processing() = viewModel.captureStateManager.reportIsStage2Processing(true)
-            override fun onStopStage2Processing() = viewModel.captureStateManager.reportIsStage2Processing(false)
+
+            override fun onStage1ResultValues(values: LiveQualityScores) =
+                viewModel.captureStateManager.reportStage1ResultValues(values)
+
+            override fun onStartStage2Processing() =
+                viewModel.captureStateManager.reportIsStage2Processing(true)
+
+            override fun onStopStage2Processing() =
+                viewModel.captureStateManager.reportIsStage2Processing(false)
+
             override fun onStage2ProcessingStageUpdate(stage: ProcessingStage) =
                 viewModel.captureStateManager.reportStage2ProcessingStage(stage)
+
             override fun onStage2ResultValues(value: Stage2ResultValue) =
                 viewModel.captureStateManager.reportStage2ResultValues(value)
+
             override fun onStage2Result(passed: Boolean, errors: List<Error>) =
                 viewModel.captureStateManager.reportStage2Result(passed, errors)
         }
@@ -194,9 +208,9 @@ fun CameraScreen(
     BackHandler { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
 
     LaunchedEffect(captureState) {
-        if(captureState is CaptureState.Success) {
+        if (captureState is CaptureState.Success) {
             val segmentedFrame = imageProcessor?.getFinalFrame()
-            if(segmentedFrame != null) {
+            if (segmentedFrame != null) {
                 val encodedBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
                 finish(
                     CaptureResult(
@@ -215,7 +229,11 @@ fun CameraScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
         if (hasCameraPermission) {
             CameraPreview(
                 previewSize = cameraController.getPreviewSize(),
@@ -250,49 +268,72 @@ fun CameraScreen(
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // Top bar
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF2A2A2A))
-                        .then(Modifier), // clickable { finish(CaptureResult(ResultCode.CAPTURE_USER_ABORT)) }
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
-                    )
-                }
-            }
-
-            // Heading chip — pulsing text per state, same strings as before
-            Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
-                Surface(shape = RoundedCornerShapeCompat(), color = Color.White.copy(alpha = 0.9f)) {
-                    Text(
-                        text = headingTextFor(captureState, viewModel),
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp),
-                        color = Color.Black
-                    )
-                }
-            }
-
-            // The oval overlay — centered
-            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
                 CaptureOverlay(
                     state = captureState.toOverlayVisualState(),
-                    progressAnimationDurationMs = (imageProcessor?.DELAY_IN_ACCUMULATION_OF_FRAMES?.minus(250))
+                    progressAnimationDurationMs = (imageProcessor?.DELAY_IN_ACCUMULATION_OF_FRAMES?.minus(
+                        250
+                    ))
                         ?.coerceIn(0L, 20_000L) ?: 1000L,
                     cutoutBoundsHolder = cutoutBoundsHolder
                 )
-            }
 
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Top bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2A2A2A))
+                                .then(Modifier), // clickable { finish(CaptureResult(ResultCode.CAPTURE_USER_ABORT)) }
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White
+                            )
+                        }
+                    }
 
-            if (showLiveScores) {
-                Box(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 8.dp), contentAlignment = Alignment.BottomStart) {
-                    LiveQualityScoresPanel(scoresFlow = viewModel.captureStateManager.stage1QualityScores)
+                    // Heading chip — pulsing text per state, same strings as before
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShapeCompat(),
+                            color = Color.White.copy(alpha = 0.9f)
+                        ) {
+                            Text(
+                                text = headingTextFor(captureState, viewModel),
+                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp),
+                                color = Color.Black
+                            )
+                        }
+                    }
+
+                    if (showLiveScores) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 8.dp, bottom = 8.dp),
+                            contentAlignment = Alignment.BottomStart
+                        ) {
+                            LiveQualityScoresPanel(scoresFlow = viewModel.captureStateManager.stage1QualityScores)
+                        }
+                    }
                 }
             }
 
@@ -302,6 +343,7 @@ fun CameraScreen(
                 isTorchOn = captureUIState.isTorchOn,
                 isCaptureEnabled = captureState is CaptureState.Initial,
                 isModeToggleEnabled = captureState is CaptureState.Initial || captureState is CaptureState.Warn,
+                showManualCaptureOption = showManualCaptureOption,
                 version = captureUIState.version,
                 txnId = txnId,
                 onCaptureClick = { imageProcessor?.unlockAccumulator() },
@@ -340,17 +382,38 @@ fun CameraScreen(
 @Composable
 fun BottomCameraController(
     isManualCapture: Boolean, isTorchOn: Boolean, isCaptureEnabled: Boolean,
-    isModeToggleEnabled: Boolean, version: String, txnId: String,
+    isModeToggleEnabled: Boolean, showManualCaptureOption: Boolean, version: String, txnId: String,
     onCaptureClick: () -> Unit, onTorchClick: () -> Unit, onModeChange: (Boolean) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1A1A1A)).padding(20.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF1A1A1A))
+            .padding(20.dp)
+    ) {
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-            Button(onClick = { onModeChange(false) }, enabled = isModeToggleEnabled) { Text("Auto") }
-            Button(onClick = { onModeChange(true) }, enabled = isModeToggleEnabled) { Text("Manual") }
+            Button(
+                onClick = { onModeChange(false) },
+                enabled = isModeToggleEnabled
+            ) { Text("Auto") }
+
+            if (showManualCaptureOption) {
+                Button(
+                    onClick = { onModeChange(true) },
+                    enabled = isModeToggleEnabled
+                ) { Text("Manual") }
+            }
+
         }
-        Button(onClick = onCaptureClick, enabled = isCaptureEnabled) { Text("Capture") }
+        if (showManualCaptureOption) {
+            Button(onClick = onCaptureClick, enabled = isCaptureEnabled) { Text("Capture") }
+        }
         IconButton(onClick = onTorchClick) { Icon(Icons.Default.FlashOn, "Torch") }
-        Text("Ver: $version | TxnId: $txnId", color = Color.White.copy(alpha = 0.5f), fontSize = 9.sp)
+        Text(
+            "Ver: $version | TxnId: $txnId",
+            color = Color.White.copy(alpha = 0.5f),
+            fontSize = 9.sp
+        )
     }
 }
 
@@ -401,7 +464,10 @@ fun LiveQualityScoresPanel(
 
 @Composable
 private fun LiveScoreRow(score: LiveCheckScore) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         Box(
             modifier = Modifier
                 .size(7.dp)
