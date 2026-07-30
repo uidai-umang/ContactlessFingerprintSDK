@@ -6,8 +6,8 @@ sealed class CaptureRoutes(val route: String) {
         fun createRoute(txnId: String) = "$PATH_GUIDELINE/$txnId"
     }
 
-    data object Camera : CaptureRoutes("$PATH_CAMERA/{$ARG_TXN_ID}") {
-        fun createRoute(txnId: String) = "$PATH_CAMERA/$txnId"
+    data object Camera : CaptureRoutes("$PATH_CAMERA/{$ARG_TXN_ID}/{$ARG_FINGER_TYPE}") {
+        fun createRoute(txnId: String, fingerType: String) = "$PATH_CAMERA/$txnId/$fingerType"
     }
 
     data object DebugSettings : CaptureRoutes(PATH_DEBUG_SETTINGS)
@@ -17,5 +17,6 @@ sealed class CaptureRoutes(val route: String) {
         private const val PATH_CAMERA = "camera"
         private const val PATH_DEBUG_SETTINGS = "debug_settings"
         const val ARG_TXN_ID = "txnId"
+        const val ARG_FINGER_TYPE = "finger_type"
     }
 }

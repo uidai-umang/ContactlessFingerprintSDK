@@ -9,14 +9,18 @@ import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -25,13 +29,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -59,6 +72,7 @@ import app.gov.uidai.capture.ui.camera.model.CaptureState
 import app.gov.uidai.capture.ui.camera.model.Error
 import app.gov.uidai.capture.ui.camera.model.Stage2ResultValue
 import app.gov.uidai.capture.ui.camera.model.Warning
+import app.gov.uidai.capture.ui.theme.Colors
 import app.gov.uidai.capture.usecase.ImageProcessor
 import app.gov.uidai.capture.usecase.ProcessingSettings
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
@@ -72,6 +86,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.sample
+import java.nio.file.WatchEvent
 
 data class CaptureResult(
     val resultCode: Int,
@@ -86,6 +101,7 @@ data class CaptureResult(
 @Composable
 fun CameraScreen(
     txnId: String,
+    fingerType: String,
     cameraController: CameraController,
     imageProcessorFactory: ImageProcessorFactory,
     preferenceStore: PreferenceStore,
@@ -323,7 +339,7 @@ fun CameraScreen(
                             Text(
                                 text = headingTextFor(captureState, viewModel),
                                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp),
-                                color = Color.Black
+                                color = captureState.toOverlayVisualState().color
                             )
                         }
                     }
@@ -337,6 +353,30 @@ fun CameraScreen(
                         ) {
                             LiveQualityScoresPanel(scoresFlow = viewModel.captureStateManager.stage1QualityScores)
                         }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .background(
+                                Color.White.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = fingerType.replace("_", " "),
+                            color = Color.Black,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -370,15 +410,21 @@ fun CameraScreen(
         // Bottom sheet — shown for Success/Failed only, per traced OverlayView/CaptureStateManager logic
         val sheetState = captureState
         if (sheetState is CaptureState.Success || sheetState is CaptureState.Failed) {
-            BottomSheetResult(
-                captureState = sheetState,
-                onRetake = {
-                    viewModel.reset()
-                    imageProcessor?.reset()
-                    cameraController.retakeCapture()
-                },
-                onGoBack = { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .align(Alignment.BottomCenter)
+            ) {
+                BottomSheetResult(
+                    captureState = sheetState,
+                    onRetake = {
+                        viewModel.reset()
+                        imageProcessor?.reset()
+                        cameraController.retakeCapture()
+                    },
+                    onGoBack = { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
+                )
+            }
         }
     }
 }
@@ -395,40 +441,124 @@ fun BottomCameraController(
             .background(Color(0xFF1A1A1A))
             .padding(20.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Button(
                 onClick = { onModeChange(false) },
-                enabled = isModeToggleEnabled
-            ) { Text("Auto") }
+                enabled = isModeToggleEnabled,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF1A56A0),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF2A2A2A),
+                    disabledContentColor = Color.White.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) { Text("Auto", fontWeight = FontWeight.SemiBold) }
 
             if (showManualCaptureOption) {
                 Button(
                     onClick = { onModeChange(true) },
-                    enabled = isModeToggleEnabled
-                ) { Text("Manual") }
+                    enabled = isModeToggleEnabled,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1A56A0),
+                        contentColor = Color.White,
+                        disabledContainerColor = Color(0xFF2A2A2A),
+                        disabledContentColor = Color.White.copy(alpha = 0.4f)
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) { Text("Manual", fontWeight = FontWeight.SemiBold) }
             }
+        }
 
-        }
         if (showManualCaptureOption) {
-            Button(onClick = onCaptureClick, enabled = isCaptureEnabled) { Text("Capture") }
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onCaptureClick,
+                enabled = isCaptureEnabled,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF16A34A),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF2A2A2A),
+                    disabledContentColor = Color.White.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) { Text("Capture", fontWeight = FontWeight.Bold) }
         }
-        IconButton(onClick = onTorchClick) { Icon(Icons.Default.FlashOn, "Torch") }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onTorchClick) {
+                Icon(Icons.Default.FlashOn, "Torch", tint = if (isTorchOn) Color(0xFFEAB308) else Color.White.copy(alpha = 0.7f))
+            }
+        }
         Text(
-            "Ver: $version | TxnId: $txnId",
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            text = "Ver: $version | TxnId: $txnId",
             color = Color.White.copy(alpha = 0.5f),
             fontSize = 9.sp
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShapeCompat()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(if (captureState is CaptureState.Success) "Success" else "Failed")
-            Row {
-                Button(onClick = onRetake) { Text("Retake") }
-                TextButton(onClick = onGoBack) { Text("Go Back") }
+    val isSuccess = captureState is CaptureState.Success
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = {if(isSuccess){}else {onGoBack()}},   // swipe-down/scrim-tap behaves same as tapping Go Back/Done
+        sheetState = sheetState,
+        containerColor = Color.White,
+        contentColor = Color(0xFF1A56A0),
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF1A56A0).copy(alpha = 0.4f)) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    2.dp,
+                    Color(0xFF1A56A0),
+                    RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                )
+                .padding(20.dp)
+                .padding(bottom = 24.dp),   // extra bottom padding — sheets sit above system nav bar
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = if (isSuccess) Icons.Default.CheckCircle else Icons.Default.Warning,
+                contentDescription = null,
+                tint = Color(0xFF1A56A0),
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (isSuccess) "Capture Successful" else "Capture Failed",
+                color = Color(0xFF1A56A0),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (!isSuccess) {
+                    OutlinedButton(
+                        onClick = onRetake,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1A56A0)),
+                        border = BorderStroke(1.dp, Color(0xFF1A56A0))
+                    ) { Text("Retake") }
+                }
+                Button(
+                    onClick = {if(isSuccess){}else {onGoBack()}},
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A56A0))
+                ) { Text(if (isSuccess) "Done" else "Go Back") }
             }
         }
     }

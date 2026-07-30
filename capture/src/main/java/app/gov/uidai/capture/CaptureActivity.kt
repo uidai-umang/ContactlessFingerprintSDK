@@ -48,6 +48,7 @@ class CaptureActivity : ComponentActivity() {
     private var txnId: String = ""
     private var returnFullImage: Boolean = false
     private var returnCroppedImage: Boolean = false
+    private var fingerType: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +69,7 @@ class CaptureActivity : ComponentActivity() {
             txnId = pidOptions.custOpts?.param?.find { it.name == "txnId" }?.value.orEmpty()
             returnFullImage = pidOptions.custOpts?.param?.find { it.name == "fullImage" }?.value == "true"
             returnCroppedImage = pidOptions.custOpts?.param?.find { it.name == "croppedImage" }?.value == "true"
+            fingerType = pidOptions.custOpts?.param?.find { it.name == "fingerType" }?.value.orEmpty()
             Log.d(TAG, "Transaction Id: $txnId")
         } catch (_: Exception) {
             Toast.makeText(this, "Wrong Input PID Options Provided!", Toast.LENGTH_LONG).show()
@@ -87,7 +89,7 @@ class CaptureActivity : ComponentActivity() {
                         txnId = id,
                         onBack = { handleCaptureResult(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) },
                         onProceed = { proceedTxnId ->
-                            navController.navigate(CaptureRoutes.Camera.createRoute(proceedTxnId))
+                            navController.navigate(CaptureRoutes.Camera.createRoute(proceedTxnId, fingerType))
                         },
                         onDebugSettings = { navController.navigate(CaptureRoutes.DebugSettings.route) }
                     )
@@ -97,8 +99,10 @@ class CaptureActivity : ComponentActivity() {
                     arguments = listOf(navArgument(CaptureRoutes.ARG_TXN_ID) { type = NavType.StringType })
                 ) { backStackEntry ->
                     val id = backStackEntry.arguments?.getString(CaptureRoutes.ARG_TXN_ID).orEmpty()
+                    val finger = backStackEntry.arguments?.getString(CaptureRoutes.ARG_FINGER_TYPE).orEmpty()  // ADDED
                     CameraScreen(
                         txnId = id,
+                        fingerType = finger,
                         cameraController = cameraController,
                         imageProcessorFactory = imageProcessorFactory,
                         preferenceStore = preferenceStore,

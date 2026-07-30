@@ -180,6 +180,7 @@ fun CaptureOverlay(
             val composePath = path.asComposePath()
 
             drawRect(color = Color.Black.copy(alpha = 0.6f))
+            drawRect(color = color.value.copy(alpha = 0.15f))
             drawPath(path = composePath, color = Color.Transparent, blendMode = BlendMode.Clear)
 
             // Base line — solid or dashed depending on animated dashGap

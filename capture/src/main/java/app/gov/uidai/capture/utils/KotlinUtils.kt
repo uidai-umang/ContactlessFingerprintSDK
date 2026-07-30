@@ -6,6 +6,8 @@ import android.os.Build
 import android.view.Surface
 import android.view.WindowManager
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.gov.uidai.capture.ui.camera.CameraViewModel
 import app.gov.uidai.capture.ui.camera.model.CaptureState
@@ -30,12 +32,13 @@ object KotlinUtils {
 
     fun RoundedCornerShapeCompat() = RoundedCornerShape(30.dp)
 
+    @Composable
     fun headingTextFor(state: CaptureState, viewModel: CameraViewModel): String = when (state) {
         is CaptureState.Initial -> "Place your finger inside the overlay"
         is CaptureState.AutoCaptureTrigger -> "Hold steady"
         is CaptureState.AutoCaptureSuccess -> "Evaluating..."
         is CaptureState.Success -> "Captured"
         is CaptureState.Failed -> "Capture failed"
-        is CaptureState.Warn -> state.warning.let { "Warning" }  // real string resource lookup TODO
+        is CaptureState.Warn -> stringResource(state.warning.titleRes)
     }
 }
