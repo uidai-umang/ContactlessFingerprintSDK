@@ -74,6 +74,7 @@ object CameraUtils {
             val lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING)
             lensFacing == facing
         }
+        listAllCameraFocalInfo(cameraManager)
         Log.i(TAG, "Camera Ids: $cameraIds")
         return cameraIds.firstOrNull()
     }
