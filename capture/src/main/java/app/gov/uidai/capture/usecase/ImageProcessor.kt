@@ -39,6 +39,7 @@ import app.gov.uidai.capture.ui.camera.model.Warning
 import app.gov.uidai.capture.usecase.factory.BlurCheckFactory
 import app.gov.uidai.capture.usecase.factory.FingerCheckFactory
 import app.gov.uidai.capture.usecase.factory.SegmentationFactory
+import app.gov.uidai.capture.utils.BlurGate
 import app.gov.uidai.capture.utils.RollingConfidence
 import app.gov.uidai.capture.utils.extension.toByteArray
 import app.gov.uidai.capture.utils.logExecutionTime
@@ -142,6 +143,12 @@ abstract class ImageProcessor(
             )
         }
     }
+
+    private val blurGate = BlurGate(
+        targetThreshold = 370f,
+        fallbackThreshold = 330f,
+        maxWaitMs = 3_000L
+    )
 
     protected val liveBlur: ImageProcessingMethod<Unit> by lazy { resolveLiveBlur() }
     protected val liveFinger: ImageProcessingMethod<FingerResultData> by lazy { resolveLiveFinger() }
@@ -448,7 +455,7 @@ abstract class ImageProcessor(
                     label = "Blur",
                     currentValue = lastBlurConfidence.get(),
                     acceptedMin = if (liveBlur is LaplacianBlurMethod)
-                        preferenceStore.get(LaplacianBlurSettings.MIN_VARIANCE)
+                        blurGate.currentThreshold()
                     else preferenceStore.get(BlurSettings.THRESHOLD),
                     acceptedMax = if (liveBlur is LaplacianBlurMethod) Float.MAX_VALUE else 1.0f,
                     passed = isBlurPassed.get()
@@ -596,7 +603,16 @@ abstract class ImageProcessor(
             imageDataProvider.clearCache()
             isBlurPassed.set(blurResult.passed)
             lastBlurConfidence.set(blurResult.confidence)
-            blurConfidence.record(blurResult.passed)
+
+            // BlurGate only supplies the threshold — degrading from target
+            // to fallback after maxWaitMs. The actual pass/fail check and
+            // the rolling confidence window are the SAME mechanism as
+            // before, just checked against a threshold that can relax
+            // over time instead of a fixed constant.
+            val currentThreshold = blurGate.currentThreshold()
+            val passed = blurResult.confidence >= currentThreshold
+            isBlurPassed.set(passed)
+            blurConfidence.record(passed)
 
             // NEW — update the single best-frame tracker, gated on finger
             // check having passed for the CURRENT cached finger result.
