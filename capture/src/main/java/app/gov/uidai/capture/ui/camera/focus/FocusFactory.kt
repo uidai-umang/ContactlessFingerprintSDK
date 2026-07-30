@@ -20,6 +20,7 @@ class FocusFactory @Inject constructor(
             FocusType.ManualFocusAtFixedDistance -> ManualFocusAtFixedDistance(provider)
             FocusType.ManualFocusAtFingerDistance -> ManualFocusAtFingerDistance(provider)
             FocusType.MacroFocusTriggerOnFinger -> MacroFocusTriggerOnFinger(provider)
+            FocusType.HybridFingerDistanceFocus -> HybridFingerDistanceFocus(provider)
         }
     }
 }
