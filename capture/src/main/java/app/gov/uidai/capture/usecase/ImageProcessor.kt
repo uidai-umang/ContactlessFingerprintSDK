@@ -732,6 +732,7 @@ abstract class ImageProcessor(
         isCaptured.set(false)
         fingerResult.set(null)
         bestStage1Frame.set(null)
+        blurGate.reset()
     }
 
     open fun close() {
