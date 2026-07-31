@@ -72,7 +72,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
         Thread(r, "BlurCheckThread")
     }
     private val stage2LaplacianCheck by lazy {
-        LaplacianBlurMethod(minVariance = 350f)
+        LaplacianBlurMethod(minVariance = 330f)
     }
 
     override val DELAY_IN_ACCUMULATION_OF_FRAMES: Long
