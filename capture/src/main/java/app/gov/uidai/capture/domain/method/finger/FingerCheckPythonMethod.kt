@@ -44,6 +44,7 @@ class FingerCheckPythonMethod(
                 byteArray,
                 provider.width,
                 provider.height,
+                provider.rotationDegrees,
                 fingerConfig.minFingerArea,
                 fingerConfig.maxFingerArea,
                 fingerConfig.goodAreaMin,
