@@ -1,6 +1,7 @@
 package app.gov.uidai.capture.usecase
 
 import android.annotation.SuppressLint
+import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.RectF
 import android.media.ImageReader
@@ -8,6 +9,7 @@ import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 import android.util.Size
+import android.widget.Toast
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
 import app.gov.uidai.capture.domain.config.BrightnessSettings
@@ -22,6 +24,7 @@ import app.gov.uidai.capture.domain.method.finger.FingerCheckPythonMethod
 import app.gov.uidai.capture.domain.method.glare.GlareCheck
 import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.CaptureStrategyType
+import app.gov.uidai.capture.domain.model.FingerCheckMethodType
 import app.gov.uidai.capture.domain.model.FingerResultData
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ImageProcessingMethod
@@ -48,6 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -57,6 +61,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.selects.select
 import java.util.Collections
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -153,10 +158,19 @@ abstract class ImageProcessor(
     protected val liveBlur: ImageProcessingMethod<Unit> by lazy { resolveLiveBlur() }
     protected val liveFinger: ImageProcessingMethod<FingerResultData> by lazy { resolveLiveFinger() }
 
+    protected val mediapipeFinger: ImageProcessingMethod<FingerResultData> by lazy {
+        fingerCheckFactory.create(
+            getCutoutRect = provider::getCutoutRectInImageCoordinates,
+            getPreviewSize = provider::previewSize,
+            methodOverride = FingerCheckMethodType.MediapipeSelfieSegmenter
+        )
+    }
+
     private val latestRawFrame0 = AtomicReference<CameraFrame?>()
     private val latestRawFrame1 = AtomicReference<CameraFrame?>()
     private val latestRawFrame2 = AtomicReference<CameraFrame?>()
     private val latestRawFrame3 = AtomicReference<CameraFrame?>()
+    private val latestRawFrame4 = AtomicReference<CameraFrame?>()
 
     private val capturedFrameBuffer = Collections.synchronizedList(mutableListOf<CameraFrame>())
     private val _capturedFrameFlow = MutableStateFlow<List<CameraFrame>?>(null)
@@ -169,10 +183,13 @@ abstract class ImageProcessor(
     private val isStage1Processing = AtomicBoolean(false)
     private val isBlurProcessing = AtomicBoolean(false)
     private val isFingerProcessing = AtomicBoolean(false)
+    private val isMediapipeProcessing = AtomicBoolean(false)
     private val isAccumulatingFrames = AtomicBoolean(false)
     private val isStage2Processing = AtomicBoolean(false)
 
-    private val fingerResult = AtomicReference<ProcessingResult<FingerResultData>?>()
+    private val hsvFingerCheckResult = AtomicReference<ProcessingResult<FingerResultData>?>(null)
+    private val mediaPipeFingerCheckResult = AtomicReference<ProcessingResult<FingerResultData>?>(null)
+    private val fingerResult = AtomicReference<ProcessingResult<FingerResultData>?>(null)
     private val isBlurPassed = AtomicBoolean(false)
     private val isCaptured = AtomicBoolean(false)
     protected val isStage1Passed = AtomicBoolean(false)
@@ -207,6 +224,7 @@ abstract class ImageProcessor(
 
     private var stage1Job: Job? = null
     private var fingerCheckJob: Job? = null
+    private var mediapipeCheckJob: Job? = null
     private var blurCheckJob: Job? = null
     private var accumulatorJob: Job? = null
     private var stage2Job: Job? = null
@@ -244,24 +262,32 @@ abstract class ImageProcessor(
             }
         }
 
-        // Finger check — ONE loop, always, regardless of strategy or
-        // model. Cost varies (HSV ~100-300ms, Mediapipe ~2-2.5s) but the
-        // architecture is now uniform: whichever model strategyConfig
-        // resolves to runs here, feeding the shared fingerConfidence
-        // tracker AND focus-lock targeting unconditionally.
+        // HSV — fast, primary, ticks every frame exactly as before. Writes
+        // fingerResult on EVERY result, pass or fail — this is the loop the
+        // UI's normal state comes from.
         fingerCheckJob = coroutineScope.launch(Dispatchers.Default) {
             while (true) {
                 val frame = latestRawFrame3.getAndSet(null)
                 val startTime = System.currentTimeMillis()
-                if (frame != null && !isCaptured.get() && isFingerProcessing.compareAndSet(
-                        false,
-                        true
-                    )
-                ) {
+                if (frame != null && !isCaptured.get()) {
+                    processFingerHsv(frame)
+                }
+                delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
+            }
+        }
+
+        // Mediapipe — independent, slower, own cadence. Only ever WRITES
+        // fingerResult when it passes. A failure here is silently discarded
+        // -- no UI update, no gating, no interaction with HSV's loop at all.
+        mediapipeCheckJob = coroutineScope.launch(Dispatchers.Default) {
+            while (true) {
+                val frame = latestRawFrame4.getAndSet(null)  // NEW dedicated frame slot
+                val startTime = System.currentTimeMillis()
+                if (frame != null && !isCaptured.get() && isMediapipeProcessing.compareAndSet(false, true)) {
                     try {
-                        logExecutionTime(TAG, "FingerCheck") { processFinger(frame) }
+                        processFingerMediapipe(frame)
                     } finally {
-                        isFingerProcessing.set(false)
+                        isMediapipeProcessing.set(false)
                     }
                 }
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
@@ -496,62 +522,102 @@ abstract class ImageProcessor(
         }
     }
 
-    private suspend fun processFinger(frame: CameraFrame) {
+    private fun processFingerHsv(frame: CameraFrame) {
         try {
-            val cutoutRect = provider.getCutoutRectInImageCoordinates(
-                Size(frame.width, frame.height), frame.rotationDegrees
-            )
-
+            val cutoutRect = provider.getCutoutRectInImageCoordinates(Size(frame.width, frame.height), frame.rotationDegrees)
             if (!isCutoutRectValid(cutoutRect)) return
 
-            val (byteArray, byteArraySize) = frame.getByteArray(
-                requiresCropping = liveFinger is FingerCheckPythonMethod,
-                cutoutRect = cutoutRect
-            )
-            val imageDataProvider = ImageDataProvider(
-                byteArray, byteArraySize.width, byteArraySize.height, frame.rotationDegrees
-            )
+            val (byteArray, byteArraySize) = frame.getByteArray(requiresCropping = true, cutoutRect = cutoutRect)
+            val imageDataProvider = ImageDataProvider(byteArray, byteArraySize.width, byteArraySize.height, frame.rotationDegrees)
+
             if (preferenceStore.get(ProcessingSettings.SAVE_FINGER_CHECK_INPUT)) {
-                controller.saveBitmap(imageDataProvider.getAsBitmap(), "FingerCheckInput")
+                coroutineScope.launch { controller.saveBitmap(imageDataProvider.getAsBitmap(), "FingerCheckInput") }
             }
-            val result = logExecutionTime(TAG, "FingerCheck.ActualRun") {
-                runInterruptible { liveFinger.run(imageDataProvider) }
-            }
+
+            val result = liveFinger.run(imageDataProvider)
             imageDataProvider.clearCache()
 
-            // Focus-lock targeting ALWAYS runs, regardless of which
-            // model produced this result — targeting is decoupled from
-            // the gating experiment.
-            when (result) {
-                is ProcessingResult.Passed -> {
-                    listener.onFingerMaskResult(result.data.mask, imageDataProvider.rotationDegrees)
-                    if (!isCaptured.get()) {
-                        controller.triggerFocusLock(
-                            result.data.box,
-                            cutoutRect,
-                            Size(frame.width, frame.height)
-                        )
-                    }
-                }
+            hsvFingerCheckResult.set(result)
 
-                is ProcessingResult.Failed -> {
-                    result.data?.let { data ->
-                        listener.onFingerMaskResult(null, imageDataProvider.rotationDegrees)
-                        if (!isCaptured.get()) {
-                            controller.triggerFocusLock(
-                                data.box,
-                                cutoutRect,
-                                Size(frame.width, frame.height)
-                            )
-                        }
+            if (result.passed) {
+                // HSV success always applies -- no deferring needed for a pass.
+                applyFingerResult(result, cutoutRect, frame)
+                fingerResult.set(result)
+                fingerConfidence.record(true)
+                Log.d("FINGER_TUNE", "HSV passed=true confidence=${result.confidence}")
+            } else {
+                // HSV failed -- only let it overwrite fingerResult if Mediapipe
+                // ISN'T currently holding a success. A Mediapipe pass can never
+                // be knocked out by an HSV fail.
+                val mediapipeCurrentlyPassed = mediaPipeFingerCheckResult.get()?.passed == true
+                if (!mediapipeCurrentlyPassed) {
+                    applyFingerResult(result, cutoutRect, frame)
+                    fingerResult.set(result)
+                    fingerConfidence.record(false)
+                    Log.d("FINGER_TUNE", "HSV passed=false confidence=${result.confidence}")
+                } else {
+                    Log.d("FINGER_TUNE", "HSV failed but Mediapipe holds success -- deferring, not overwriting")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "FINGER -- Error in HSV finger check", e)
+        }
+    }
+
+    private fun processFingerMediapipe(frame: CameraFrame) {
+        try {
+            val cutoutRect = provider.getCutoutRectInImageCoordinates(Size(frame.width, frame.height), frame.rotationDegrees)
+            if (!isCutoutRectValid(cutoutRect)) return
+
+            val (byteArray, byteArraySize) = frame.getByteArray(requiresCropping = false, cutoutRect = cutoutRect)
+            val imageDataProvider = ImageDataProvider(byteArray, byteArraySize.width, byteArraySize.height, frame.rotationDegrees)
+
+            val result = mediapipeFinger.run(imageDataProvider)
+            imageDataProvider.clearCache()
+            mediaPipeFingerCheckResult.set(result)
+
+            if (result.passed) {
+                // Mediapipe success always applies -- symmetric with HSV's pass.
+                applyFingerResult(result, cutoutRect, frame)
+                fingerResult.set(result)
+                fingerConfidence.record(true)
+                Log.d("FINGER_TUNE", "MEDIAPIPE passed=true confidence=${result.confidence}")
+            } else {
+                // Mediapipe failed -- only surfaced if HSV ALSO currently fails
+                // AND HSV isn't the one holding a success either. Symmetric
+                // deferral: neither side's failure beats the other's success.
+                val hsvCurrentlyPassed = hsvFingerCheckResult.get()?.passed == true
+                val hsvCurrentlyFailed = hsvFingerCheckResult.get()?.passed == false
+                if (!hsvCurrentlyPassed && hsvCurrentlyFailed) {
+                    applyFingerResult(result, cutoutRect, frame)
+                    fingerResult.set(result)
+                    fingerConfidence.record(false)
+                    Log.d("FINGER_TUNE", "Mediapipe failed, HSV agrees -- shown")
+                } else {
+                    Log.d("FINGER_TUNE", "Mediapipe failed but not confirmed by HSV -- ignored")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "FINGER -- Error in Mediapipe finger check", e)
+        }
+    }
+
+    private fun applyFingerResult(result: ProcessingResult<FingerResultData>, cutoutRect: RectF, frame: CameraFrame) {
+        when (result) {
+            is ProcessingResult.Passed -> {
+                listener.onFingerMaskResult(result.data.mask, frame.rotationDegrees)
+                if (!isCaptured.get()) {
+                    controller.triggerFocusLock(result.data.box, cutoutRect, Size(frame.width, frame.height))
+                }
+            }
+            is ProcessingResult.Failed -> {
+                result.data?.let { data ->
+                    listener.onFingerMaskResult(null, frame.rotationDegrees)
+                    if (!isCaptured.get()) {
+                        controller.triggerFocusLock(data.box, cutoutRect, Size(frame.width, frame.height))
                     }
                 }
             }
-            fingerResult.set(result)
-            fingerConfidence.record(result.passed)
-            Log.d("FINGER_TUNE", "passed=${result.passed} confidence=${result.confidence}")
-        } catch (e: Exception) {
-            Log.e(TAG, "FINGER -- Error in Finger Check processing", e)
         }
     }
 
@@ -689,6 +755,7 @@ abstract class ImageProcessor(
                         rotationDegrees = provider.totalRotation,
                         yRowStride = it.planes[0].rowStride
                     )
+                    latestRawFrame4.set(cameraFrame)
                     latestRawFrame3.set(cameraFrame)
                     latestRawFrame2.set(cameraFrame)
                     latestRawFrame1.set(cameraFrame)
@@ -722,7 +789,7 @@ abstract class ImageProcessor(
     open fun reset() {
         latestRawFrame0.set(null); latestRawFrame1.set(null); latestRawFrame2.set(null); latestRawFrame3.set(
             null
-        )
+        ); latestRawFrame4.set(null)
         synchronized(finalBuffer) { finalBuffer.clear() }
         synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
         _capturedFrameFlow.update { null }
@@ -731,12 +798,14 @@ abstract class ImageProcessor(
         isBlurPassed.set(false)
         isCaptured.set(false)
         fingerResult.set(null)
+        hsvFingerCheckResult.set(null)
+        mediaPipeFingerCheckResult.set(null)
         bestStage1Frame.set(null)
         blurGate.reset()
     }
 
     open fun close() {
-        stage1Job?.cancel(); fingerCheckJob?.cancel(); blurCheckJob?.cancel()
+        stage1Job?.cancel(); fingerCheckJob?.cancel(); mediapipeCheckJob?.cancel(); blurCheckJob?.cancel()
         accumulatorJob?.cancel(); stage2Job?.cancel()
         stage1Dispatcher.close()
     }
