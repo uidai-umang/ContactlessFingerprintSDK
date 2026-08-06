@@ -10,8 +10,10 @@ import android.util.Size
 import android.view.Surface
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +50,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,6 +61,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,6 +91,7 @@ import app.gov.uidai.capture.utils.KotlinUtils.headingTextFor
 import app.gov.uidai.capture.utils.extension.toBase64
 import `in`.gov.uidai.utility.constants.ResultCode
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
@@ -121,6 +131,12 @@ fun CameraScreen(
     val showManualCaptureOption = remember { preferenceStore.get(CameraSettings.MANUAL_CAPTURE) }
 
     var imageProcessor by remember { mutableStateOf<ImageProcessor?>(null) }
+
+    var showReviewScreen by remember { mutableStateOf(false) }
+    var pendingCaptureResult by remember { mutableStateOf<CaptureResult?>(null) }
+    var reviewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -231,17 +247,17 @@ fun CameraScreen(
             val segmentedFrame = imageProcessor?.getFinalFrame()
             if (segmentedFrame != null) {
                 val encodedBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
-                finish(
-                    CaptureResult(
-                        resultCode = ResultCode.CAPTURE_SUCCESS,
-                        finalImage = encodedBitmap,
-                        fullImage = segmentedFrame.fullBitmap.toBase64(),
-                        croppedImage = segmentedFrame.croppedBitmap.toBase64(),
-                        blurScore = segmentedFrame.blurScore,
-                        brightnessScore = segmentedFrame.brightnessScore,
-                        glareScore = segmentedFrame.glareScore
-                    )
+                pendingCaptureResult = CaptureResult(
+                    resultCode = ResultCode.CAPTURE_SUCCESS,
+                    finalImage = encodedBitmap,
+                    fullImage = segmentedFrame.fullBitmap.toBase64(),
+                    croppedImage = segmentedFrame.croppedBitmap.toBase64(),
+                    blurScore = segmentedFrame.blurScore,
+                    brightnessScore = segmentedFrame.brightnessScore,
+                    glareScore = segmentedFrame.glareScore
                 )
+                reviewBitmap = segmentedFrame.croppedBitmap
+                showReviewScreen = true
             } else {
                 finish(CaptureResult(resultCode = ResultCode.CAPTURE_FAILED))
             }
@@ -407,21 +423,33 @@ fun CameraScreen(
             )
         }
 
-        // Bottom sheet — shown for Success/Failed only, per traced OverlayView/CaptureStateManager logic
+        if (showReviewScreen && reviewBitmap != null) {
+            CaptureReviewScreen(
+                bitmap = reviewBitmap!!,
+                blurScore = pendingCaptureResult?.blurScore ?: 0f,
+                brightnessScore = pendingCaptureResult?.brightnessScore ?: 0f,
+                glareScore = pendingCaptureResult?.glareScore ?: 0f,
+                onAccept = {
+                    pendingCaptureResult?.let { finish(it) }
+                },
+                onReject = {
+                    showReviewScreen = false
+                    reviewBitmap = null
+                    pendingCaptureResult = null
+                    viewModel.reset()
+                    imageProcessor?.reset()
+                    cameraController.retakeCapture()
+                }
+            )
+        }
+
+        // Bottom sheet — shown for Failed only, as Success is now handled by CaptureReviewScreen
         val sheetState = captureState
-        if (sheetState is CaptureState.Success || sheetState is CaptureState.Failed) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .align(Alignment.BottomCenter)
-            ) {
+        if (sheetState is CaptureState.Failed) {
+            Box(modifier = Modifier.fillMaxSize().align(Alignment.BottomCenter)) {
                 BottomSheetResult(
                     captureState = sheetState,
-                    onRetake = {
-                        viewModel.reset()
-                        imageProcessor?.reset()
-                        cameraController.retakeCapture()
-                    },
+                    onRetake = { viewModel.reset(); imageProcessor?.reset(); cameraController.retakeCapture() },
                     onGoBack = { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
                 )
             }
@@ -614,5 +642,124 @@ private fun LiveScoreRow(score: LiveCheckScore) {
             "%.2f (%.2f, %.2f)".format(score.currentValue, score.acceptedMin, score.acceptedMax)
         }
         Text(text = "${score.label}: $valueText", color = Color.White, fontSize = 10.sp)
+    }
+}
+
+@Composable
+fun CaptureReviewScreen(
+    bitmap: Bitmap,
+    blurScore: Float,
+    brightnessScore: Float,
+    glareScore: Float,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    var secondsLeft by remember { mutableIntStateOf(5) }
+
+    LaunchedEffect(Unit) {
+        while (secondsLeft > 0) {
+            delay(1000L)
+            secondsLeft -= 1
+        }
+        onAccept()
+    }
+
+    // Zoom/pan state for the reviewed image only
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val minScale = 1f
+    val maxScale = 5f
+
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            val newScale = (scale * zoom).coerceIn(minScale, maxScale)
+                            // Only accumulate pan while genuinely zoomed in --
+                            // avoids the image drifting off-screen at 1x.
+                            offset = if (newScale > 1f) {
+                                offset + pan
+                            } else {
+                                Offset.Zero
+                            }
+                            scale = newScale
+                        }
+                    }
+            ) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offset.x,
+                            translationY = offset.y
+                        )
+                )
+                // Reset-zoom affordance -- only visible once actually zoomed,
+                // since double-tap-to-reset is easy to miss otherwise.
+                if (scale > 1f) {
+                    IconButton(
+                        onClick = { scale = 1f; offset = Offset.Zero },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ZoomOut,
+                            contentDescription = "Reset zoom",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1A1A1A))
+                    .padding(20.dp)
+            ) {
+                Text("Review Capture", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Blur: %.2f".format(blurScore), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                Text("Brightness: %.2f".format(brightnessScore), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                Text("Glare: %.2f".format(glareScore), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        OutlinedButton(
+                            onClick = onReject,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            border = BorderStroke(1.dp, Color.White)
+                        ) { Text("Retry") }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Retry in ${secondsLeft}s",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 11.sp,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+                    }
+                    Button(
+                        onClick = onAccept,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
+                    ) { Text("Accept") }
+                }
+            }
+        }
     }
 }
