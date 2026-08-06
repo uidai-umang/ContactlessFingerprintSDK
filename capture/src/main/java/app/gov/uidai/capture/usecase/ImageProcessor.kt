@@ -118,8 +118,8 @@ abstract class ImageProcessor(
     )
 
     // Model resolution is now flat — read ONCE, shared by whichever
-// strategy is active. Rolling vs instantaneous is the only thing
-// strategyConfig still varies by strategy.
+    // strategy is active. Rolling vs instantaneous is the only thing
+    // strategyConfig still varies by strategy.
     private fun resolveLiveBlur(): ImageProcessingMethod<Unit> {
         return when (preferenceStore.get(LiveCheckSettings.LIVE_BLUR_MODEL)) {
             LiveBlurMethodType.Densenet, LiveBlurMethodType.NewDensenet -> blurCheck
