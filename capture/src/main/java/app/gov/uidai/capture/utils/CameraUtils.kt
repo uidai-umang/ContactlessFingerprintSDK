@@ -1,6 +1,8 @@
 package app.gov.uidai.capture.utils
 
 import android.content.Context
+import android.graphics.PointF
+import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -295,5 +297,30 @@ object CameraUtils {
 
     fun diopterToDistance(diopter: Float): Float {
         return if (diopter > 0) 1.0f / diopter else Float.POSITIVE_INFINITY
+    }
+
+    fun convertScreenTapToCroppedImageCoordinates(
+        tapX: Float, tapY: Float,
+        viewFinderSize: Size, imageSize: Size, totalRotation: Int,
+        cutoutRectInFullImage: RectF
+    ): PointF {
+        val rotatedImageSize = when (totalRotation) {
+            90, 270 -> Size(imageSize.height, imageSize.width)
+            else -> imageSize
+        }
+        val scaleX = rotatedImageSize.width.toFloat() / viewFinderSize.width
+        val scaleY = rotatedImageSize.height.toFloat() / viewFinderSize.height
+        val xInRotated = tapX * scaleX
+        val yInRotated = tapY * scaleY
+        val pointInFullImage = when (totalRotation) {
+            90 -> PointF(yInRotated, rotatedImageSize.width.toFloat() - xInRotated)
+            180 -> PointF(rotatedImageSize.width.toFloat() - xInRotated, rotatedImageSize.height.toFloat() - yInRotated)
+            270 -> PointF(rotatedImageSize.height.toFloat() - yInRotated, xInRotated)
+            else -> PointF(xInRotated, yInRotated)
+        }
+        return PointF(
+            pointInFullImage.x - cutoutRectInFullImage.left,
+            pointInFullImage.y - cutoutRectInFullImage.top
+        )
     }
 }

@@ -563,6 +563,8 @@ class CameraController @Inject constructor(
             sensorActiveArraySize = getSensorActiveArraySize()
         )
 
+        focusManager.updateFocusState(FocusState.TRIGGERING)
+
         captureRequestBuilder.apply {
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
             set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL)

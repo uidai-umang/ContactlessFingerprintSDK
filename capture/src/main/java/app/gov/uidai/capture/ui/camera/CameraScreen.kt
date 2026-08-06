@@ -3,6 +3,7 @@ package app.gov.uidai.capture.ui.camera
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Point
+import android.graphics.PointF
 import android.graphics.RectF
 import android.net.Uri
 import android.util.Log
@@ -85,6 +86,7 @@ import app.gov.uidai.capture.ui.theme.Colors
 import app.gov.uidai.capture.usecase.ImageProcessor
 import app.gov.uidai.capture.usecase.ProcessingSettings
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
+import app.gov.uidai.capture.utils.CameraUtils
 import app.gov.uidai.capture.utils.KotlinUtils.RoundedCornerShapeCompat
 import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
 import app.gov.uidai.capture.utils.KotlinUtils.headingTextFor
@@ -300,6 +302,24 @@ fun CameraScreen(
                             imageProcessor?.close()
                         },
                         onSizeChanged = { size -> viewFinderSize = size },
+                        onTapToFocus = { tapOffset, previewViewSize ->
+                            // Tap arrives in Compose-Box pixel coordinates. handleTapToFocus
+                            // expects a point in the same "cropped image" coordinate space
+                            // getCutoutRectInImageCoordinates already establishes -- so we
+                            // reuse imageProcessorProvider's own conversion rather than
+                            // inventing a second one.
+                            val imageSize = lastKnownImageSize ?: return@CameraPreview
+                            val cutoutRect = imageProcessorProvider.getCutoutRectInImageCoordinates(
+                                imageSize, imageProcessorProvider.totalRotation
+                            )
+                            val tapPointInCroppedImage = CameraUtils.convertScreenTapToCroppedImageCoordinates(
+                                tapX = tapOffset.x, tapY = tapOffset.y,
+                                viewFinderSize = previewViewSize, imageSize = imageSize,
+                                totalRotation = imageProcessorProvider.totalRotation,
+                                cutoutRectInFullImage = cutoutRect
+                            )
+                            cameraController.handleTapToFocus(tapPointInCroppedImage, cutoutRect, imageSize)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
