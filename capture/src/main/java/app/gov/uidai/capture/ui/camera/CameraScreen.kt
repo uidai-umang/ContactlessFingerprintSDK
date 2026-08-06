@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -246,6 +247,8 @@ fun CameraScreen(
 
     LaunchedEffect(captureState) {
         if (captureState is CaptureState.Success) {
+            showReviewScreen = true
+            reviewBitmap = null
             val segmentedFrame = imageProcessor?.getFinalFrame()
             if (segmentedFrame != null) {
                 val encodedBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
@@ -259,8 +262,8 @@ fun CameraScreen(
                     glareScore = segmentedFrame.glareScore
                 )
                 reviewBitmap = segmentedFrame.croppedBitmap
-                showReviewScreen = true
             } else {
+                showReviewScreen = false
                 finish(CaptureResult(resultCode = ResultCode.CAPTURE_FAILED))
             }
         }
@@ -443,9 +446,9 @@ fun CameraScreen(
             )
         }
 
-        if (showReviewScreen && reviewBitmap != null) {
+        if (showReviewScreen) {
             CaptureReviewScreen(
-                bitmap = reviewBitmap!!,
+                bitmap = reviewBitmap,
                 blurScore = pendingCaptureResult?.blurScore ?: 0f,
                 brightnessScore = pendingCaptureResult?.brightnessScore ?: 0f,
                 glareScore = pendingCaptureResult?.glareScore ?: 0f,
@@ -667,7 +670,7 @@ private fun LiveScoreRow(score: LiveCheckScore) {
 
 @Composable
 fun CaptureReviewScreen(
-    bitmap: Bitmap,
+    bitmap: Bitmap?,
     blurScore: Float,
     brightnessScore: Float,
     glareScore: Float,
@@ -676,7 +679,8 @@ fun CaptureReviewScreen(
 ) {
     var secondsLeft by remember { mutableIntStateOf(5) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(bitmap) {
+        if (bitmap == null) return@LaunchedEffect
         while (secondsLeft > 0) {
             delay(1000L)
             secondsLeft -= 1
@@ -710,34 +714,38 @@ fun CaptureReviewScreen(
                         }
                     }
             ) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationX = offset.x,
-                            translationY = offset.y
-                        )
-                )
-                // Reset-zoom affordance -- only visible once actually zoomed,
-                // since double-tap-to-reset is easy to miss otherwise.
-                if (scale > 1f) {
-                    IconButton(
-                        onClick = { scale = 1f; offset = Offset.Zero },
+                if(bitmap == null) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(72.dp).align(Alignment.Center), strokeWidth = 4.dp)
+                } else {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(12.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ZoomOut,
-                            contentDescription = "Reset zoom",
-                            tint = Color.White
-                        )
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            )
+                    )
+                    // Reset-zoom affordance -- only visible once actually zoomed,
+                    // since double-tap-to-reset is easy to miss otherwise.
+                    if (scale > 1f) {
+                        IconButton(
+                            onClick = { scale = 1f; offset = Offset.Zero },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ZoomOut,
+                                contentDescription = "Reset zoom",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }
