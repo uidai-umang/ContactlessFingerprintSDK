@@ -57,8 +57,8 @@ fun CaptureState.toOverlayVisualState(): OverlayVisualState = when (this) {
 
 private val OVAL_WIDTH = 200.dp
 private val OVAL_HEIGHT = 280.dp
-private val THICK_STROKE = 8.dp
-private val THIN_STROKE = 2.dp
+private val THICK_STROKE = 6.dp
+private val THIN_STROKE = 4.dp
 private const val DASH_LENGTH = 150f
 private const val DASH_GAP = 60f
 
