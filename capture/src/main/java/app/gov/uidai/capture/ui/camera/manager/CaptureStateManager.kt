@@ -186,6 +186,7 @@ class CaptureStateManager @Inject constructor() {
         errors: List<Error>,
     ) {
         isStage2Passed.set(passed)
+        stage2Errors.clear()
         stage2Errors.addAll(errors)
         updateCaptureState()
     }

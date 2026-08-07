@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -560,8 +561,19 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
     val isSuccess = captureState is CaptureState.Success
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // NEW — pull the real title/description from the reported Error,
+    // instead of hardcoded generic text. Falls back to the old generic
+    // strings only if captureState isn't Failed (i.e. the Success case).
+    val titleText = when (captureState) {
+        is CaptureState.Failed -> stringResource(captureState.error.titleRes)
+        else -> "Capture Successful"
+    }
+    val descriptionText = (captureState as? CaptureState.Failed)?.let {
+        stringResource(it.error.descriptionRes)
+    }
+
     ModalBottomSheet(
-        onDismissRequest = {if(isSuccess){}else {onGoBack()}},   // swipe-down/scrim-tap behaves same as tapping Go Back/Done
+        onDismissRequest = { if (isSuccess) {} else { onGoBack() } },
         sheetState = sheetState,
         containerColor = Color.White,
         contentColor = Color(0xFF1A56A0),
@@ -570,13 +582,9 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(
-                    2.dp,
-                    Color(0xFF1A56A0),
-                    RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                )
+                .border(2.dp, Color(0xFF1A56A0), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                 .padding(20.dp)
-                .padding(bottom = 24.dp),   // extra bottom padding — sheets sit above system nav bar
+                .padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
@@ -587,11 +595,21 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = if (isSuccess) "Capture Successful" else "Capture Failed",
+                text = titleText,
                 color = Color(0xFF1A56A0),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
+            // NEW — description line, only shown for failures where one exists
+            descriptionText?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = it,
+                    color = Color(0xFF1A56A0).copy(alpha = 0.75f),
+                    fontSize = 13.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -606,7 +624,7 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
                     ) { Text("Retake") }
                 }
                 Button(
-                    onClick = {if(isSuccess){}else {onGoBack()}},
+                    onClick = { if (isSuccess) {} else { onGoBack() } },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A56A0))
                 ) { Text(if (isSuccess) "Done" else "Go Back") }

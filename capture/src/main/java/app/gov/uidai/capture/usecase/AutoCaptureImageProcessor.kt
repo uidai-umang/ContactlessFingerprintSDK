@@ -2,8 +2,12 @@ package app.gov.uidai.capture.usecase
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.util.Log
 import android.util.Size
+import app.gov.uidai.capture.R
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
 import app.gov.uidai.capture.domain.config.GlareConfig
@@ -27,6 +31,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
@@ -281,14 +286,36 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             // already correctly scored on the final crop; only blur had this gap.
             // Final re-score is ALSO now dual — DenseNet AND Laplacian, both
             // must pass on the actually-delivered bytes, same as the ranking step.
+            //
+            // NEW — finger presence (MediaPipe) is re-checked on the delivered
+            // image too, same "final authoritative check" principle as blur.
+            // mediapipeFinger crops internally via its own getCutoutRect callback,
+            // so it needs the FULL (uncropped) bytes, not croppedByteArray --
+            // reuses fullByteArray already computed above rather than decoding again.
+            //
+            // NEW — blur (dense+laplacian) and finger checks now run in PARALLEL
+            // via async, instead of sequential .run() calls, since neither
+            // depends on the other's result. Uses blurExecutor -- already sized
+            // for concurrent model inference in this class.
+            listener.onStage2ProcessingStageUpdate(ProcessingStage.FINGER_DETECTION)
             val finalScoreProvider = ImageDataProvider(
                 croppedByteArray,
                 croppedByteArraySize.width,
                 croppedByteArraySize.height,
                 bestFrame.rotationDegrees
             )
-            val finalDenseNetResult = blurCheck.run(finalScoreProvider)
-            val finalLaplacianResult = stage2LaplacianCheck.run(finalScoreProvider)
+            val finalFingerCheckProvider = ImageDataProvider(
+                fullByteArray,
+                fullByteArraySize.width,
+                fullByteArraySize.height,
+                bestFrame.rotationDegrees
+            )
+            val (finalDenseNetResult, finalLaplacianResult, finalFingerResult) = withContext(blurExecutor.asCoroutineDispatcher()) {
+                val denseNetDeferred = async { blurCheck.run(finalScoreProvider) }
+                val laplacianDeferred = async { stage2LaplacianCheck.run(finalScoreProvider) }
+                val fingerDeferred = async { mediapipeFinger.run(finalFingerCheckProvider) }
+                Triple(denseNetDeferred.await(), laplacianDeferred.await(), fingerDeferred.await())
+            }
             val finalBlurConfidence = finalDenseNetResult.confidence
             Log.i(
                 TAG,
@@ -298,12 +325,18 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 TAG,
                 "BLUR_INPUT_SIZE -- crop before resize: ${croppedByteArraySize.width}x${croppedByteArraySize.height}"
             )
+            Log.i(
+                TAG,
+                "FINAL_FINGER_RESCORE -- passed=${finalFingerResult.passed} confidence=${finalFingerResult.confidence} (this IS the delivered image)"
+            )
+            finalFingerCheckProvider.clearCache()
             // Final authoritative check — the delivered image itself must clear
-            // BOTH thresholds, not just whichever candidate won the earlier ranking.
+            // BOTH blur thresholds, not just whichever candidate won the earlier
+            // ranking, AND still show a detectable finger.
             if (finalBlurConfidence < blurThreshold || !finalLaplacianResult.passed) {
                 Log.w(
                     TAG,
-                    "STAGE2_REJECT -- Final delivered crop failed dual re-check: denseNet=$finalBlurConfidence laplacianPassed=${finalLaplacianResult.passed} (ranking-stage had suggested denseNet=${blurResults[blurSortedIndices.first()].denseNet.confidence})"
+                    "STAGE2_REJECT -- Final delivered crop failed dual blur re-check: denseNet=$finalBlurConfidence laplacianPassed=${finalLaplacianResult.passed} (ranking-stage had suggested denseNet=${blurResults[blurSortedIndices.first()].denseNet.confidence})"
                 )
                 finalScoreProvider.clearCache()
                 listener.onStage2Result(
@@ -312,8 +345,31 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 )
                 return
             }
-            val finalBrightnessResult = stage1Methods[BRIGHTNESS_CHECK]!!.run(finalScoreProvider)
-            val finalGlareResult = stage1Methods[GLARE_CHECK]!!.run(finalScoreProvider)
+            if (!finalFingerResult.passed) {
+                Log.w(
+                    TAG,
+                    "STAGE2_REJECT -- Final delivered crop failed finger-presence re-check: confidence=${finalFingerResult.confidence}"
+                )
+                finalScoreProvider.clearCache()
+                listener.onStage2Result(
+                    passed = false,
+                    errors = listOf(Error.New(
+                        titleRes = R.string.error_title_finger,
+                        descriptionRes = R.string.error_desc_finger,
+                        imageRes = R.drawable.ic_android_black_24dp,
+                        processingStage = ProcessingStage.FINGER_DETECTION
+                    ))
+                )
+                return
+            }
+            // Brightness/glare are non-gating (informational scores on the
+            // delivered image only) -- also run in parallel rather than
+            // sequentially, since neither depends on the other.
+            val (finalBrightnessResult, finalGlareResult) = coroutineScope {
+                val brightnessDeferred = async { stage1Methods[BRIGHTNESS_CHECK]!!.run(finalScoreProvider) }
+                val glareDeferred = async { stage1Methods[GLARE_CHECK]!!.run(finalScoreProvider) }
+                brightnessDeferred.await() to glareDeferred.await()
+            }
             finalScoreProvider.clearCache()
             val segmentedFrame = SegmentedFrame(
                 processingId = processingId,
@@ -338,7 +394,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             Log.e(TAG, "Error in Stage 2 processing", e)
             listener.onStage2Result(
                 passed = false,
-                listOf()
+                listOf(Error.SomethingWentWrong)
             )
         }
     }
@@ -350,12 +406,12 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
         glare: Float
     ): Bitmap {
         val overlay = source.copy(source.config ?: Bitmap.Config.ARGB_8888, true)
-        val canvas = android.graphics.Canvas(overlay)
-        val paint = android.graphics.Paint().apply {
-            color = android.graphics.Color.YELLOW
+        val canvas = Canvas(overlay)
+        val paint = Paint().apply {
+            color = Color.YELLOW
             textSize = overlay.width * 0.045f
             isAntiAlias = true
-            setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
+            setShadowLayer(4f, 2f, 2f, Color.BLACK)
         }
         val lineHeight = paint.textSize * 1.3f
         var y = lineHeight

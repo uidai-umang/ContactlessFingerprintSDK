@@ -107,4 +107,7 @@
     <string name="section_purpose_rights">Purpose &amp; your rights</string>
     <string name="section_capture_guidelines">Capture guidelines</string>
     <string name="consent_text_updated">The resident has been informed of the purpose, data collected, and their right to decline. Both parties agree to proceed.</string>
+
+    <string name="error_title_finger">Finger Not Detected</string>
+    <string name="error_desc_finger">We couldn\'t clearly detect your finger in the captured image. Please try again with your finger centered in the frame.</string>
 </resources>
