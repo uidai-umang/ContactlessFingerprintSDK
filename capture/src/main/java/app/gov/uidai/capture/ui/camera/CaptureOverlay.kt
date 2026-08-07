@@ -3,6 +3,8 @@ package app.gov.uidai.capture.ui.camera
 import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.RectF
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -111,6 +113,10 @@ fun CaptureOverlay(
         label = "spinnerRotation"
     )
 
+    if (state == OverlayVisualState.AUTO_CAPTURE_SUCCESS) {
+        Log.d("SPINNER_DEBUG", "start=$spinnerStart end=$spinnerEnd rotation=$rotation @ ${SystemClock.uptimeMillis()}")
+    }
+
     LaunchedEffect(state) {
         launch {
             color.animateTo(
@@ -184,16 +190,16 @@ fun CaptureOverlay(
             drawPath(path = composePath, color = Color.Transparent, blendMode = BlendMode.Clear)
 
             // Base line — solid or dashed depending on animated dashGap
-            val effect = if(dashGap.value > 0.1f) {
-                PathEffect.dashPathEffect(floatArrayOf(DASH_LENGTH, dashGap.value))
-            } else null
-
-            drawPath(
-                path = composePath,
-                color = color.value,
-                style = Stroke(width = strokeWidth.value, pathEffect = effect)
-            )
-
+            if (!state.hasThinBase) {
+                val effect = if (dashGap.value > 0.1f) {
+                    PathEffect.dashPathEffect(floatArrayOf(DASH_LENGTH, dashGap.value))
+                } else null
+                drawPath(
+                    path = composePath,
+                    color = color.value,
+                    style = Stroke(width = strokeWidth.value, pathEffect = effect)
+                )
+            }
             if(lineAlpha.value > 0f) {
                 val measure = PathMeasure(path, false)
                 val length = measure.length
