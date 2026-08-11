@@ -327,7 +327,8 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             )
             Log.i(
                 TAG,
-                "FINAL_FINGER_RESCORE -- passed=${finalFingerResult.passed} confidence=${finalFingerResult.confidence} (this IS the delivered image)"
+                "FINAL_FINGER_RESCORE -- passed=${finalFingerResult.passed} confidence=${finalFingerResult.confidence} " +
+                        "status=${(finalFingerResult as? ProcessingResult.Failed)?.status} (this IS the delivered image)"
             )
             finalFingerCheckProvider.clearCache()
             // Final authoritative check — the delivered image itself must clear
