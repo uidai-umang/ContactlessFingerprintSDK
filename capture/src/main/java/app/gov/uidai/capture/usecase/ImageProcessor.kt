@@ -474,6 +474,7 @@ abstract class ImageProcessor(
     fun getFinalFrame(): SegmentedFrame = synchronized(finalBuffer) { finalBuffer.first() }
 
     open fun reset() {
+        isCaptured.set(true)
         latestRawFrame0.set(null); latestRawFrame1.set(null); latestRawFrame2.set(null)
         latestRawFrame3.set(null); latestRawFrame4.set(null)
         synchronized(finalBuffer) { finalBuffer.clear() }
@@ -481,10 +482,10 @@ abstract class ImageProcessor(
         _capturedFrameFlow.update { null }
         isStage1Passed.set(false)
         stage1PassedTime.set(null)
-        isCaptured.set(false)
         bestStage1Frame.set(null)
         blurRunner.reset()
         fingerRunner.reset()
+        isCaptured.set(false)
     }
 
     open fun close() {
