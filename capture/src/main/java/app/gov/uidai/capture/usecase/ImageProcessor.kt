@@ -475,8 +475,11 @@ abstract class ImageProcessor(
 
     open fun reset() {
         isCaptured.set(true)
-        latestRawFrame0.set(null); latestRawFrame1.set(null); latestRawFrame2.set(null)
-        latestRawFrame3.set(null); latestRawFrame4.set(null)
+        latestRawFrame0.get()?.clearCroppedCache(); latestRawFrame0.set(null)
+        latestRawFrame1.get()?.clearCroppedCache(); latestRawFrame1.set(null)
+        latestRawFrame2.get()?.clearCroppedCache(); latestRawFrame2.set(null)
+        latestRawFrame3.get()?.clearCroppedCache(); latestRawFrame3.set(null)
+        latestRawFrame4.get()?.clearCroppedCache(); latestRawFrame4.set(null)
         synchronized(finalBuffer) { finalBuffer.clear() }
         synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
         _capturedFrameFlow.update { null }
@@ -492,6 +495,14 @@ abstract class ImageProcessor(
         stage1Job?.cancel(); fingerCheckJob?.cancel(); mediapipeCheckJob?.cancel(); blurCheckJob?.cancel()
         accumulatorJob?.cancel(); stage2Job?.cancel()
         stage1Dispatcher.close()
+
+        latestRawFrame0.get()?.clearCroppedCache()
+        latestRawFrame1.get()?.clearCroppedCache()
+        latestRawFrame2.get()?.clearCroppedCache()
+        latestRawFrame3.get()?.clearCroppedCache()
+        latestRawFrame4.get()?.clearCroppedCache()
+        synchronized(capturedFrameBuffer) { capturedFrameBuffer.forEach { it.clearCroppedCache() } }
+        bestStage1Frame.get()?.frame?.clearCroppedCache()
     }
 
     interface Provider {

@@ -17,6 +17,9 @@ data class CameraFrame(
     val timestamp: Long,
     val rotationDegrees: Int
 ) {
+
+    @Volatile private var cachedCrop: Pair<ByteArray, Size>? = null
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -42,9 +45,16 @@ data class CameraFrame(
         requiresCropping: Boolean,
         cutoutRect: RectF
     ): Pair<ByteArray, Size> {
-        if (requiresCropping) {
-            return byteArray.cropNV21(width, height, cutoutRect.toRect())
+        if (!requiresCropping) {
+            return byteArray to Size(width, height)
         }
-        return byteArray to Size(width, height)
+        cachedCrop?.let { return it }
+        val cropped = byteArray.cropNV21(width, height, cutoutRect.toRect())
+        cachedCrop = cropped
+        return cropped
+    }
+
+    fun clearCroppedCache() {
+        cachedCrop = null
     }
 }
