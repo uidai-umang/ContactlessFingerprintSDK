@@ -3,9 +3,9 @@ package app.gov.uidai.capture.ui.camera
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Point
-import android.graphics.PointF
 import android.graphics.RectF
 import android.net.Uri
+import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import android.view.Surface
@@ -47,7 +47,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -84,7 +83,6 @@ import app.gov.uidai.capture.ui.camera.model.CaptureState
 import app.gov.uidai.capture.ui.camera.model.Error
 import app.gov.uidai.capture.ui.camera.model.Stage2ResultValue
 import app.gov.uidai.capture.ui.camera.model.Warning
-import app.gov.uidai.capture.ui.theme.Colors
 import app.gov.uidai.capture.usecase.ImageProcessor
 import app.gov.uidai.capture.usecase.ProcessingSettings
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
@@ -100,7 +98,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.sample
-import java.nio.file.WatchEvent
 
 data class CaptureResult(
     val resultCode: Int,
@@ -244,6 +241,19 @@ fun CameraScreen(
 
     fun finish(result: CaptureResult) = onFinish(result)
 
+    fun restartCapture() {
+        imageProcessor?.close()
+        val newProcessor = imageProcessorFactory.create(
+            coroutineScope = coroutineScope,
+            provider = imageProcessorProvider,
+            controller = imageProcessorController,
+            listener = imageProcessorListener
+        )
+        imageProcessor = newProcessor
+        cameraController.setOnImageAvailableListener(newProcessor)
+        cameraController.retakeCapture()
+    }
+
     BackHandler { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
 
     LaunchedEffect(captureState) {
@@ -316,13 +326,18 @@ fun CameraScreen(
                             val cutoutRect = imageProcessorProvider.getCutoutRectInImageCoordinates(
                                 imageSize, imageProcessorProvider.totalRotation
                             )
-                            val tapPointInCroppedImage = CameraUtils.convertScreenTapToCroppedImageCoordinates(
-                                tapX = tapOffset.x, tapY = tapOffset.y,
-                                viewFinderSize = previewViewSize, imageSize = imageSize,
-                                totalRotation = imageProcessorProvider.totalRotation,
-                                cutoutRectInFullImage = cutoutRect
+                            val tapPointInCroppedImage =
+                                CameraUtils.convertScreenTapToCroppedImageCoordinates(
+                                    tapX = tapOffset.x, tapY = tapOffset.y,
+                                    viewFinderSize = previewViewSize, imageSize = imageSize,
+                                    totalRotation = imageProcessorProvider.totalRotation,
+                                    cutoutRectInFullImage = cutoutRect
+                                )
+                            cameraController.handleTapToFocus(
+                                tapPointInCroppedImage,
+                                cutoutRect,
+                                imageSize
                             )
-                            cameraController.handleTapToFocus(tapPointInCroppedImage, cutoutRect, imageSize)
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -457,12 +472,12 @@ fun CameraScreen(
                     pendingCaptureResult?.let { finish(it) }
                 },
                 onReject = {
+                    Log.w("RETRY_LOOP", "onReject fired @ ${SystemClock.uptimeMillis()}")
                     showReviewScreen = false
                     reviewBitmap = null
                     pendingCaptureResult = null
                     viewModel.reset()
-                    imageProcessor?.reset()
-                    cameraController.retakeCapture()
+                    restartCapture()
                 }
             )
         }
@@ -470,10 +485,16 @@ fun CameraScreen(
         // Bottom sheet — shown for Failed only, as Success is now handled by CaptureReviewScreen
         val sheetState = captureState
         if (sheetState is CaptureState.Failed) {
-            Box(modifier = Modifier.fillMaxSize().align(Alignment.BottomCenter)) {
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .align(Alignment.BottomCenter)) {
                 BottomSheetResult(
                     captureState = sheetState,
-                    onRetake = { viewModel.reset(); imageProcessor?.reset(); cameraController.retakeCapture() },
+                    onRetake = {
+                        Log.w("RETRY_LOOP", "onRetry fired @ ${SystemClock.uptimeMillis()}")
+                        viewModel.reset()
+                        restartCapture()
+                    },
                     onGoBack = { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
                 )
             }
@@ -543,7 +564,11 @@ fun BottomCameraController(
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onTorchClick) {
-                Icon(Icons.Default.FlashOn, "Torch", tint = if (isTorchOn) Color(0xFFEAB308) else Color.White.copy(alpha = 0.7f))
+                Icon(
+                    Icons.Default.FlashOn,
+                    "Torch",
+                    tint = if (isTorchOn) Color(0xFFEAB308) else Color.White.copy(alpha = 0.7f)
+                )
             }
         }
         Text(
@@ -573,7 +598,12 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
     }
 
     ModalBottomSheet(
-        onDismissRequest = { if (isSuccess) {} else { onGoBack() } },
+        onDismissRequest = {
+            if (isSuccess) {
+            } else {
+                onGoBack()
+            }
+        },
         sheetState = sheetState,
         containerColor = Color.White,
         contentColor = Color(0xFF1A56A0),
@@ -582,7 +612,11 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(2.dp, Color(0xFF1A56A0), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .border(
+                    2.dp,
+                    Color(0xFF1A56A0),
+                    RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                )
                 .padding(20.dp)
                 .padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -624,7 +658,12 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
                     ) { Text("Retake") }
                 }
                 Button(
-                    onClick = { if (isSuccess) {} else { onGoBack() } },
+                    onClick = {
+                        if (isSuccess) {
+                        } else {
+                            onGoBack()
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A56A0))
                 ) { Text(if (isSuccess) "Done" else "Go Back") }
@@ -712,7 +751,9 @@ fun CaptureReviewScreen(
     val minScale = 1f
     val maxScale = 5f
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Black)) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -732,8 +773,14 @@ fun CaptureReviewScreen(
                         }
                     }
             ) {
-                if(bitmap == null) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(72.dp).align(Alignment.Center), strokeWidth = 4.dp)
+                if (bitmap == null) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .align(Alignment.Center),
+                        strokeWidth = 4.dp
+                    )
                 } else {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
@@ -773,11 +820,28 @@ fun CaptureReviewScreen(
                     .background(Color(0xFF1A1A1A))
                     .padding(20.dp)
             ) {
-                Text("Review Capture", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Review Capture",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Blur: %.2f".format(blurScore), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-                Text("Brightness: %.2f".format(brightnessScore), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-                Text("Glare: %.2f".format(glareScore), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                Text(
+                    "Blur: %.2f".format(blurScore),
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 12.sp
+                )
+                Text(
+                    "Brightness: %.2f".format(brightnessScore),
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 12.sp
+                )
+                Text(
+                    "Glare: %.2f".format(glareScore),
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 12.sp
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
