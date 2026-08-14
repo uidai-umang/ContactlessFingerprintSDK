@@ -158,14 +158,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 return
             }
             // ----------------------------------------------------------------------
-            // SEGMENTATION DISABLED (Testing)
-            //
-            // Temporarily bypassing segmentation to evaluate AutoCapture speed and
-            // overall capture experience. The current flow only requires selecting
-            // the best quality frame, cropping it using the capture cutout and
-            // returning it as the final image. Segmentation can be re-enabled later
-            // if required for finger-boundary validation.
-            // ----------------------------------------------------------------------
+            // SEGMENTATION DISABLED
             /*
             listener.onStage2ProcessingStageUpdate(ProcessingStage.SEGMENTATION)
             val blurSortedIndices = blurResults.indices.sortedByDescending {
@@ -243,6 +236,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             }
             segmentationProvider.clearCache()
             */
+
             // Only rank among candidates where BOTH checks passed
             val blurSortedIndices = blurResults.indices
                 .filter { blurResults[it].bothPassed }
@@ -275,28 +269,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
                 controller.saveBitmap(croppedBitmap, "FinalOutput")
             }
-            // Compute real quality scores for the DELIVERED image — this is the
-            // ground truth sent to the backend as metadata. Blur is now RE-SCORED
-            // directly on croppedByteArray (the exact bytes that get saved and
-            // sent), instead of reusing the earlier ranking-stage score computed
-            // on a separately-decoded candidate. That earlier version could
-            // disagree with the delivered image's real sharpness — this is what
-            // let visibly blurry images through with a high reported blur_score
-            // (e.g. 0.969 on a genuinely blurry capture). Brightness/glare were
-            // already correctly scored on the final crop; only blur had this gap.
-            // Final re-score is ALSO now dual — DenseNet AND Laplacian, both
-            // must pass on the actually-delivered bytes, same as the ranking step.
-            //
-            // NEW — finger presence (MediaPipe) is re-checked on the delivered
-            // image too, same "final authoritative check" principle as blur.
-            // mediapipeFinger crops internally via its own getCutoutRect callback,
-            // so it needs the FULL (uncropped) bytes, not croppedByteArray --
-            // reuses fullByteArray already computed above rather than decoding again.
-            //
-            // NEW — blur (dense+laplacian) and finger checks now run in PARALLEL
-            // via async, instead of sequential .run() calls, since neither
-            // depends on the other's result. Uses blurExecutor -- already sized
-            // for concurrent model inference in this class.
+
             listener.onStage2ProcessingStageUpdate(ProcessingStage.FINGER_DETECTION)
             val finalScoreProvider = ImageDataProvider(
                 croppedByteArray,
