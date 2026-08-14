@@ -2,7 +2,6 @@ package app.gov.uidai.capture.usecase
 
 import android.util.Log
 import android.util.Size
-import androidx.lifecycle.LifecycleCoroutineScope
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessConfig
 import app.gov.uidai.capture.domain.config.BrightnessSettings
@@ -11,7 +10,6 @@ import app.gov.uidai.capture.domain.config.GlareSettings
 import app.gov.uidai.capture.domain.method.brightness.BrightnessCheckStage2
 import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.ImageDataProvider
-import app.gov.uidai.capture.domain.model.ProcessingResult
 import app.gov.uidai.capture.domain.model.ProcessingStage
 import app.gov.uidai.capture.domain.model.SegmentedFrame
 import app.gov.uidai.capture.pref.PreferenceStore
@@ -20,13 +18,13 @@ import app.gov.uidai.capture.ui.camera.model.Stage2ResultValue
 import app.gov.uidai.capture.usecase.factory.BlurCheckFactory
 import app.gov.uidai.capture.usecase.factory.FingerCheckFactory
 import app.gov.uidai.capture.usecase.factory.SegmentationFactory
-import app.gov.uidai.capture.utils.extension.crop
 import app.gov.uidai.capture.utils.extension.rotate
 import app.gov.uidai.capture.utils.extension.toBitmap
 import app.gov.uidai.capture.utils.logExecutionTime
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runInterruptible
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -37,7 +35,7 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
     blurCheckFactory: BlurCheckFactory,
     brightnessConfig: BrightnessConfig,
     glareConfig: GlareConfig,
-    @Assisted coroutineScope: LifecycleCoroutineScope,
+    @Assisted coroutineScope: CoroutineScope,
     @Assisted provider: Provider,
     @Assisted controller: Controller,
     @Assisted listener: Listener
@@ -57,7 +55,7 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
     @AssistedFactory
     interface Factory {
         fun create(
-            coroutineScope: LifecycleCoroutineScope,
+            coroutineScope: CoroutineScope,
             provider: Provider,
             controller: Controller,
             listener: Listener
@@ -101,7 +99,10 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
             // ----------------------------------------------------------------------
 
             Log.d("FLOW_TRACE", "Building segmentation crop input")
-            val (segCroppedByteArray, segCroppedByteArraySize) = logExecutionTime(TAG, "ManualStage2.SegmentationCropPrep") {
+            val (segCroppedByteArray, segCroppedByteArraySize) = logExecutionTime(
+                TAG,
+                "ManualStage2.SegmentationCropPrep"
+            ) {
                 cameraFrame.getByteArray(
                     requiresCropping = preferenceStore.get(ProcessingSettings.CROPPED_INPUT_TO_SEGMENTATION_MODEL),
                     cutoutRect = provider.getCutoutRectInImageCoordinates(
@@ -134,7 +135,10 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
             Log.d("FLOW_TRACE", "Building bitmaps directly from cutout crop (no segmentation)")
 
             // fullBitmap — the entire uncropped frame
-            val (fullByteArray, fullByteArraySize) = logExecutionTime(TAG, "ManualStage2.FullBitmapCropPrep") {
+            val (fullByteArray, fullByteArraySize) = logExecutionTime(
+                TAG,
+                "ManualStage2.FullBitmapCropPrep"
+            ) {
                 cameraFrame.getByteArray(
                     requiresCropping = false,
                     cutoutRect = provider.getCutoutRectInImageCoordinates(
@@ -149,7 +153,10 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
 
             // croppedBitmap — plain cutout-rectangle crop, this is what actually
             // gets sent as the final image now
-            val (croppedByteArray, croppedByteArraySize) = logExecutionTime(TAG, "ManualStage2.CroppedBitmapCropPrep") {
+            val (croppedByteArray, croppedByteArraySize) = logExecutionTime(
+                TAG,
+                "ManualStage2.CroppedBitmapCropPrep"
+            ) {
                 cameraFrame.getByteArray(
                     requiresCropping = true,
                     cutoutRect = provider.getCutoutRectInImageCoordinates(
@@ -173,7 +180,10 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
 
             // Step 2: Quality validation on the same cropped image that will be sent
             Log.d("FLOW_TRACE", "Building finalImageProvider for quality re-validation")
-            val (segCroppedByteArray2, segCroppedByteArray2Size) = logExecutionTime(TAG, "ManualStage2.FinalImageProviderCropPrep") {
+            val (segCroppedByteArray2, segCroppedByteArray2Size) = logExecutionTime(
+                TAG,
+                "ManualStage2.FinalImageProviderCropPrep"
+            ) {
                 cameraFrame.getByteArray(
                     requiresCropping = true,
                     cutoutRect = provider.getCutoutRectInImageCoordinates(
@@ -256,7 +266,10 @@ class ManualCaptureImageProcessor @AssistedInject constructor(
                 passed = false, listOf()
             )
         } finally {
-            Log.d(TAG, "Execution time -- ManualStage2.TOTAL: ${System.currentTimeMillis() - stage2StartTime}ms")
+            Log.d(
+                TAG,
+                "Execution time -- ManualStage2.TOTAL: ${System.currentTimeMillis() - stage2StartTime}ms"
+            )
             Log.d("FLOW_TRACE", "processStage2() finished")
         }
     }

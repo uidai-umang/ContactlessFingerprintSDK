@@ -13,10 +13,13 @@ class ManualFocusAtFingerDistance(
 ) : FocusManager(provider) {
     companion object {
         private val TAG = ManualFocusAtFingerDistance::class.simpleName
-        const val FOCUS_TRIGGER_INTERVAL = 1000L
+        const val FOCUS_TRIGGER_INTERVAL = 500L
     }
 
+    private var lockCount = 0
+
     private val lastFocusTriggerTimeAtomic = AtomicLong(SystemClock.uptimeMillis())
+
 
     override fun lock(paramProvider: FocusLockParamProvider) {
         val requestBuilder = provider.captureRequestBuilder
@@ -36,14 +39,27 @@ class ManualFocusAtFingerDistance(
         // CONTROL_AF_TRIGGER is used here), so checking for that state made this
         // debounce dead code — it never actually fired. Rate-limit on elapsed
         // time alone, matching what FOCUS_TRIGGER_INTERVAL's name intends.
-        if ((SystemClock.uptimeMillis() - lastFocusTriggerTimeAtomic.get()) < FOCUS_TRIGGER_INTERVAL) {
+
+        val now = SystemClock.uptimeMillis()
+        val elapsedSinceLastLock = now - lastFocusTriggerTimeAtomic.get()
+
+        if (elapsedSinceLastLock < FOCUS_TRIGGER_INTERVAL) {
             Log.w(TAG, "FOCUS -- Focus triggered within ${FOCUS_TRIGGER_INTERVAL}ms, Skipping...")
             return
         }
 
-        lastFocusTriggerTimeAtomic.set(SystemClock.uptimeMillis())
+        lastFocusTriggerTimeAtomic.set(now)
+        lockCount++
 
-        val focusDistance = 1f / paramProvider.getFingerDistance().coerceIn(0.05f, 1f)
+        val rawFingerDistance = paramProvider.getFingerDistance()
+        val clampedDistance = rawFingerDistance.coerceIn(0.05f, 1f)
+        val focusDistance = 1f / clampedDistance
+
+        // NEW — this is what checks #1 and #2 both need
+        Log.i(TAG, "FOCUS_TUNE -- elapsedSinceLastLock=${elapsedSinceLastLock}ms " +
+                "rawDistance=$rawFingerDistance clamped=$clampedDistance " +
+                "focusDistanceDiopters=$focusDistance")
+
 
         requestBuilder.apply {
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
@@ -59,6 +75,7 @@ class ManualFocusAtFingerDistance(
 
     override fun unlock() {
         // Pass
+        lockCount = 0
     }
 
     override fun setOptimalMode() {
@@ -72,5 +89,6 @@ class ManualFocusAtFingerDistance(
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
             set(CaptureRequest.LENS_FOCUS_DISTANCE, minFocusDistance)
         }
+        lockCount = 0
     }
 }

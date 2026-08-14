@@ -5,5 +5,6 @@ enum class FocusType {
     FocusTriggerOnFinger,
     MacroFocusTriggerOnFinger,
     ManualFocusAtFingerDistance,
-    ManualFocusAtFixedDistance
+    ManualFocusAtFixedDistance,
+    HybridFingerDistanceFocus
 }

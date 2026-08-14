@@ -4,6 +4,7 @@ import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.config.BrightnessSettings
 import app.gov.uidai.capture.domain.config.FingerSettings
 import app.gov.uidai.capture.domain.config.GlareSettings
+import app.gov.uidai.capture.domain.config.LaplacianBlurSettings
 import app.gov.uidai.capture.domain.config.SegmentationSettings
 import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.ui.camera.config.CameraSettings
@@ -69,4 +70,9 @@ object SettingsModule {
     @IntoSet
     fun provideLiveCheck(preferenceStore: PreferenceStore): SettingProvider =
         SettingProvider(preferenceStore, LiveCheckSettings)
+
+    @Provides
+    @IntoSet
+    fun provideLaplacianBlurSettings(preferenceStore: PreferenceStore): SettingProvider =
+        SettingProvider(preferenceStore, LaplacianBlurSettings)
 }

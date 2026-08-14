@@ -22,6 +22,7 @@ import android.media.ImageReader
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import android.util.SizeF
@@ -40,6 +41,7 @@ import app.gov.uidai.capture.utils.extension.getFPSRange
 import dagger.hilt.android.qualifiers.ApplicationContext
 import app.gov.uidai.capture.R
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
 class CameraController @Inject constructor(
@@ -54,6 +56,12 @@ class CameraController @Inject constructor(
         private const val IMAGE_FORMAT = ImageFormat.YUV_420_888
         private const val DESIRED_UPPER_FPS = 24
     }
+
+    var currentSurface: Surface? = null
+    private var isCameraInitialized = false
+
+
+    private val frameCounter = AtomicLong(0)
 
     private var _uiInfoProvider: UIInfoProvider? = null
     private val uiInfoProvider
@@ -204,10 +212,27 @@ class CameraController @Inject constructor(
             request: CaptureRequest,
             result: TotalCaptureResult
         ) {
+            Log.d(TAG, "FRAME_COUNT -- ${frameCounter.incrementAndGet()}")
+            Log.d(TAG, "FRAME_TICK -- ${SystemClock.uptimeMillis()}")
             val afState = result.get(CaptureResult.CONTROL_AF_STATE)
             processAFState(afState)
             val focusDistance = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
             processFocusDistance(focusDistance)
+            Log.d(TAG, "FRAME_DEBUG -- onCaptureCompleted fired")
+
+            Log.d(
+                TAG,
+                """
+                ======== Capture Result ========
+                AE Mode          : ${result.get(CaptureResult.CONTROL_AE_MODE)}
+                AE State         : ${result.get(CaptureResult.CONTROL_AE_STATE)}
+                Exposure Time    : ${result.get(CaptureResult.SENSOR_EXPOSURE_TIME)}
+                ISO              : ${result.get(CaptureResult.SENSOR_SENSITIVITY)}
+                Frame Duration   : ${result.get(CaptureResult.SENSOR_FRAME_DURATION)}
+                Focus Distance   : ${result.get(CaptureResult.LENS_FOCUS_DISTANCE)}
+                ===============================
+                """.trimIndent()
+            )
         }
     }
 
@@ -216,6 +241,12 @@ class CameraController @Inject constructor(
     }
 
     fun initializeCamera() {
+        if (isCameraInitialized) {
+            Log.w(TAG, "initializeCamera() called again while already initialized — ignoring")
+            return
+        }
+        isCameraInitialized = true
+
         // Creates list of Surfaces where the camera will output frames
         val targets =
             listOf(uiInfoProvider.viewFinderSurface, imageReader.surface)
@@ -270,6 +301,11 @@ class CameraController @Inject constructor(
         targets: List<Surface>,
         handler: Handler? = null
     ) {
+        Log.d(TAG, "AE_RANGE -- Device supports exposure time: " +
+                "${characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)}")
+        Log.d(TAG, "AE_RANGE -- Device supports ISO: " +
+                "${characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)}")
+
         val sessionConfig = SessionConfiguration(
             SessionConfiguration.SESSION_REGULAR,
             targets.map {
@@ -350,8 +386,14 @@ class CameraController @Inject constructor(
                         }
                     }
 
+                    val request = captureRequestBuilder.build()
+
+                    for (key in request.keys) {
+                        Log.d(TAG, "${key.name} = ${request.get(key)}")
+                    }
+
                     session.setRepeatingRequest(
-                        captureRequestBuilder.build(),
+                        request,
                         captureCallback,
                         handler
                     )
@@ -367,6 +409,7 @@ class CameraController @Inject constructor(
     }
 
     fun setOnImageAvailableListener(listener: ImageReader.OnImageAvailableListener?) {
+        Log.d(TAG, "SET_LISTENER -- listener=$listener, imageReader=$imageReader")
         imageReader.setOnImageAvailableListener(listener, imageReaderHandler)
     }
 
@@ -520,6 +563,8 @@ class CameraController @Inject constructor(
             sensorActiveArraySize = getSensorActiveArraySize()
         )
 
+        focusManager.updateFocusState(FocusState.TRIGGERING)
+
         captureRequestBuilder.apply {
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
             set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL)
@@ -536,8 +581,10 @@ class CameraController @Inject constructor(
         // fix, every tap permanently strands the camera in AF_MODE_AUTO.
     }
 
+
     fun closeCamera() {
         Log.i(TAG, "closeCamera()")
+        isCameraInitialized = false
         captureSession.close()
         cameraDevice?.close()
         sessionExecutor.shutdown()

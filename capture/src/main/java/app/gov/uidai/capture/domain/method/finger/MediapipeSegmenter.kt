@@ -284,7 +284,7 @@ class MediapipeSegmenter(
         return boundingBox to isResultValid
     }
 
-    fun getBitmapMask(
+    private fun getBitmapMask(
         byteBuffer: ByteBuffer,
         outputWidth: Int,
         outputHeight: Int

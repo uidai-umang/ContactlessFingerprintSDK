@@ -1,6 +1,8 @@
 package app.gov.uidai.capture.utils
 
 import android.content.Context
+import android.graphics.PointF
+import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -21,9 +23,60 @@ object CameraUtils {
     fun getCameraId(cameraManager: CameraManager, facing: Int): String? {
         val cameraIds = cameraManager.cameraIdList.filter {
             val characteristics = cameraManager.getCameraCharacteristics(it)
+
+            val caps = characteristics.get(
+                CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
+            )
+            Log.d(TAG, "Camera $it capabilities = ${caps?.joinToString()}")
+
+            Log.d(
+                TAG,
+                "AE Modes = ${
+                    characteristics.get(
+                        CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES
+                    )?.joinToString()
+                }"
+            )
+
+            Log.d(
+                TAG,
+                "Hardware Level = ${
+                    characteristics.get(
+                        CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL
+                    )
+                }"
+            )
+
+            Log.d(
+                TAG,
+                "Capabilities = ${
+                    characteristics.get(
+                        CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
+                    )?.joinToString()
+                }"
+            )
+            Log.d(
+                TAG,
+                "AE Modes = ${
+                    characteristics.get(
+                        CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES
+                    )?.joinToString()
+                }"
+            )
+            Log.d(
+                TAG,
+                "Focal Lengths = ${
+                    characteristics.get(
+                        CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
+                    )?.joinToString()
+                }"
+            )
+
+
             val lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING)
             lensFacing == facing
         }
+        listAllCameraFocalInfo(cameraManager)
         Log.i(TAG, "Camera Ids: $cameraIds")
         return cameraIds.firstOrNull()
     }
@@ -244,5 +297,30 @@ object CameraUtils {
 
     fun diopterToDistance(diopter: Float): Float {
         return if (diopter > 0) 1.0f / diopter else Float.POSITIVE_INFINITY
+    }
+
+    fun convertScreenTapToCroppedImageCoordinates(
+        tapX: Float, tapY: Float,
+        viewFinderSize: Size, imageSize: Size, totalRotation: Int,
+        cutoutRectInFullImage: RectF
+    ): PointF {
+        val rotatedImageSize = when (totalRotation) {
+            90, 270 -> Size(imageSize.height, imageSize.width)
+            else -> imageSize
+        }
+        val scaleX = rotatedImageSize.width.toFloat() / viewFinderSize.width
+        val scaleY = rotatedImageSize.height.toFloat() / viewFinderSize.height
+        val xInRotated = tapX * scaleX
+        val yInRotated = tapY * scaleY
+        val pointInFullImage = when (totalRotation) {
+            90 -> PointF(yInRotated, rotatedImageSize.width.toFloat() - xInRotated)
+            180 -> PointF(rotatedImageSize.width.toFloat() - xInRotated, rotatedImageSize.height.toFloat() - yInRotated)
+            270 -> PointF(rotatedImageSize.height.toFloat() - yInRotated, xInRotated)
+            else -> PointF(xInRotated, yInRotated)
+        }
+        return PointF(
+            pointInFullImage.x - cutoutRectInFullImage.left,
+            pointInFullImage.y - cutoutRectInFullImage.top
+        )
     }
 }

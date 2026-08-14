@@ -64,6 +64,16 @@ class MediapipeSegmenterMethod(
                         else -> it.RESULT_FINGER_OK
                     }
                 }
+
+                android.util.Log.i(
+                    "FingerAreaCheck",
+                    "frameArea=$frameArea fingerArea=$fingerArea areaRatio=$areaRatio " +
+                            "minFingerArea=${fingerConfig.minFingerArea} " +
+                            "goodAreaMin=${fingerConfig.goodAreaMin} " +
+                            "goodAreaMax=${fingerConfig.goodAreaMax} " +
+                            "maxFingerArea=${fingerConfig.maxFingerArea} " +
+                            "-> status=$status"
+                )
             }
 
             val confidence = if (status == FingerResultStatus.RESULT_FINGER_NOT_DETECTED) 0f else 1f
