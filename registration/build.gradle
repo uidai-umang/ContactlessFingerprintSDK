@@ -35,9 +35,18 @@ android {
     }
 
 }
+// registration/build.gradle
+configurations.all {
+    resolutionStrategy {
+        force "androidx.compose.foundation:foundation:1.7.6"   // matches compose-bom 2024.12.01
+        force "androidx.compose.foundation:foundation-android:1.7.6"
+    }
+}
 
 dependencies {
     implementation(project(":capture"))
+    implementation(project(":core"))
+    implementation(project(":utility"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.hilt.common)

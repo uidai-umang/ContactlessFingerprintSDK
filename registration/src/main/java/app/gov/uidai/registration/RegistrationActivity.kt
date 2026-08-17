@@ -37,7 +37,7 @@ import jakarta.inject.Inject
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class RegistrationActivity : ComponentActivity() {
     private val sharedViewModel: SharedViewModel by viewModels()
 
     @Inject
@@ -77,12 +77,12 @@ class MainActivity : ComponentActivity() {
                 val androidId =
                     Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
                 val result = deviceUseCase.registerDeviceIfNeeded(
-                    context = this@MainActivity,
+                    context = this@RegistrationActivity,
                     operatorId = "00000000-0000-0000-0000-000000000001",
                     androidId = androidId
                 )
                 if (result is ApiResult.Success) {
-                    DeviceRegistrationGate.markRegistered(this@MainActivity)
+                    DeviceRegistrationGate.markRegistered(this@RegistrationActivity)
                 }
             }
         }
