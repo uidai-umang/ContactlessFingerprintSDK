@@ -15,10 +15,6 @@ class ContactlessFingerSDKApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        // Explicit init, not relying on auto-init timing -- Hilt's
-        // constructor injection for RegistrationActivity (which needs
-        // FirebaseRemoteConfig) can run before Firebase's own
-        // ContentProvider-based auto-init completes, per the crash trace.
         FirebaseApp.initializeApp(this)
     }
 
