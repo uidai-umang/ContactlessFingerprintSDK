@@ -84,4 +84,8 @@ dependencies {
 
     debugImplementation(libs.chucker.debug)
     releaseImplementation(libs.chucker.release)
+
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.remote.config)
 }

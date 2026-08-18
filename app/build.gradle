@@ -38,6 +38,7 @@ dependencies {
 
     implementation project(':core')
     implementation(project(":registration"))
+    implementation libs.firebase.common.ktx
 
     // Dagger Hilt
     implementation libs.hilt.android
@@ -58,4 +59,8 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.common.ktx)
 }
