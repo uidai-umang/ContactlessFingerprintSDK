@@ -16,10 +16,8 @@ class FirebaseMaintenanceStatusProvider @Inject constructor(
 ) : MaintenanceStatusProvider {
 
     companion object {
-        // TODO -- confirm this matches the exact key name set up in
-        // Firebase Remote Config console.
-        private const val KEY_MAINTENANCE_MODE = "maintenance_mode"
-        private const val MIN_FETCH_INTERVAL_SECONDS = 300L // 5 min, avoid hammering on every launch
+        private const val KEY_UNDER_MAINTENANCE = "under_maintenance"
+        private const val MIN_FETCH_INTERVAL_SECONDS = 300L
     }
 
     override suspend fun isUnderMaintenance(): Boolean {
@@ -29,13 +27,8 @@ class FirebaseMaintenanceStatusProvider @Inject constructor(
             }
             remoteConfig.setConfigSettingsAsync(settings).await()
             remoteConfig.fetchAndActivate().await()
-            remoteConfig.getBoolean(KEY_MAINTENANCE_MODE)
+            remoteConfig.getBoolean(KEY_UNDER_MAINTENANCE)
         } catch (e: Exception) {
-            // Fetch failure (no network, Remote Config unreachable) should
-            // NOT block the app -- fail open, not closed. A maintenance
-            // check that itself requires network shouldn't be the thing
-            // that locks residents out when Remote Config is briefly
-            // unreachable but everything else works fine.
             false
         }
     }
