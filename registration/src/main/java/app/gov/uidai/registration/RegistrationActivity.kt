@@ -11,7 +11,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
@@ -22,7 +26,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.gov.uidai.registration.connectivity.ConnectivityObserver
+import app.gov.uidai.registration.connectivity.ui.NoInternetScreen
+import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
 import app.gov.uidai.registration.data.remote.network.ApiResult
+import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.theme.AttendanceAppTheme
 import app.gov.uidai.registration.ui.theme.md_theme_scrim
@@ -42,6 +50,12 @@ class RegistrationActivity : ComponentActivity() {
 
     @Inject
     lateinit var deviceUseCase: DeviceUseCase
+
+    @Inject
+    lateinit var connectivityObserver: ConnectivityObserver
+
+    @Inject
+    lateinit var maintenanceStatusProvider: MaintenanceStatusProvider
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -89,31 +103,56 @@ class RegistrationActivity : ComponentActivity() {
 
         setContent {
             AttendanceAppTheme {
-                val navController = rememberNavController()
-                val sharedUiState by sharedViewModel.uiState.collectAsStateWithLifecycle()
+                val isConnected by connectivityObserver.isConnected.collectAsStateWithLifecycle(
+                    initialValue = true
+                )
+                var isUnderMaintenance by remember { mutableStateOf<Boolean?>(null) }
 
-                NavHost(navController = navController, startDestination = Routes.UidEntry.route) {
-                    composable(Routes.UidEntry.route) {
-                        UidEntryRoute(
-                            sharedUiState = sharedUiState,
-                            onClearSharedMessage = sharedViewModel::clearError,
-                            onNavigateToRegistration = { uidHash ->
-                                navController.navigate(Routes.Registration.createRoute(uidHash))
-                            }
-                        )
-                    }
-                    composable(
-                        route = Routes.Registration.route,
-                        arguments = listOf(navArgument(Routes.ARG_UID_HASH) { type = NavType.StringType })
-                    ) { backStackEntry ->
-                        val uidHash = backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
-                        RegistrationRoute(
-                            uidHash = uidHash,
-                            sharedUiState = sharedUiState,
-                            onNavigateUp = { navController.navigateUp() }
-                        )
+                LaunchedEffect(isConnected) {
+                    if (isConnected) {
+                        isUnderMaintenance = maintenanceStatusProvider.isUnderMaintenance()
                     }
                 }
+
+                when {
+                    !isConnected -> NoInternetScreen(onRetry = {})
+                    isUnderMaintenance == true -> UnderMaintenanceScreen()
+                    isUnderMaintenance == null -> {}
+                    else -> {
+                        val navController = rememberNavController()
+                        val sharedUiState by sharedViewModel.uiState.collectAsStateWithLifecycle()
+
+                        NavHost(
+                            navController = navController,
+                            startDestination = Routes.UidEntry.route
+                        ) {
+                            composable(Routes.UidEntry.route) {
+                                UidEntryRoute(
+                                    sharedUiState = sharedUiState,
+                                    onClearSharedMessage = sharedViewModel::clearError,
+                                    onNavigateToRegistration = { uidHash ->
+                                        navController.navigate(Routes.Registration.createRoute(uidHash))
+                                    }
+                                )
+                            }
+                            composable(
+                                route = Routes.Registration.route,
+                                arguments = listOf(navArgument(Routes.ARG_UID_HASH) {
+                                    type = NavType.StringType
+                                })
+                            ) { backStackEntry ->
+                                val uidHash =
+                                    backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
+                                RegistrationRoute(
+                                    uidHash = uidHash,
+                                    sharedUiState = sharedUiState,
+                                    onNavigateUp = { navController.navigateUp() }
+                                )
+                            }
+                        }
+                    }
+                }
+
             }
         }
     }
