@@ -77,7 +77,6 @@ abstract class ImageProcessor(
     protected val controller: Controller,
     protected val listener: Listener
 ) : ImageReader.OnImageAvailableListener {
-
     companion object {
         private val TAG = ImageProcessor::class.java.simpleName
         private const val REQUIRED_SUCCESSFUL_IMAGES = 1
@@ -126,18 +125,14 @@ abstract class ImageProcessor(
         )
     }
 
-    // ---------------- Check runners ---------------- //
     private val glareCheck = GlareCheck(glareConfig)
     private val brightnessCheckMethod = BrightnessCheck(brightnessConfig)
-
     protected val stage1Methods: Map<String, ImageProcessingMethod<*>> = mapOf(
         GLARE_CHECK to glareCheck,
         BRIGHTNESS_CHECK to brightnessCheckMethod
     )
-
     private val glareRunner = GlareCheckRunner(glareCheck)
     private val brightnessRunner = BrightnessCheckRunner(brightnessCheckMethod)
-
     private val blurRunner: BlurCheckRunner by lazy {
         BlurCheckRunner(
             liveBlur = liveBlur,
@@ -177,9 +172,6 @@ abstract class ImageProcessor(
     private val isCaptured = AtomicBoolean(false)
     protected val isStage1Passed = AtomicBoolean(false)
 
-    // Best-frame tracking is genuinely cross-cutting (needs blur's
-    // confidence AND finger's pass state), stays here rather than in
-    // either runner.
     private data class BestFrameCandidate(val frame: CameraFrame, val stage1BlurConfidence: Float)
     private val bestStage1Frame = AtomicReference<BestFrameCandidate?>(null)
 
@@ -193,11 +185,19 @@ abstract class ImageProcessor(
     }
 
     private val stage1PassedTime = AtomicReference<Long?>(null)
-
     abstract val DELAY_IN_ACCUMULATION_OF_FRAMES: Long
     abstract val isReadyForAccumulation: Boolean
 
-    private val stage1Dispatcher = Executors.newFixedThreadPool(3).asCoroutineDispatcher()
+    // NEW -- dedicated pool for the five continuously-running loops below,
+    // isolated from Dispatchers.Default's shared, CPU-core-sized pool.
+    // These loops run for the ENTIRE lifetime of the capture screen, doing
+    // real CPU-bound work (TFLite, Chaquopy, MediaPipe) every ~33ms --
+    // leaving them on Dispatchers.Default meant they permanently competed
+    // with everything else (including main-thread scheduling) for that
+    // shared, small pool.
+    private val stage1LoopsDispatcher = Executors.newFixedThreadPool(5) { r ->
+        Thread(r, "Stage1LoopThread").apply { priority = Thread.NORM_PRIORITY }
+    }.asCoroutineDispatcher()
 
     init {
         startProcessingLoop()
@@ -220,8 +220,9 @@ abstract class ImageProcessor(
     }
 
     private fun startProcessingLoop() {
-        stage1Job = coroutineScope.launch(Dispatchers.Default) {
+        stage1Job = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
+                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame0.getAndSet(null)
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get() && isStage1Processing.compareAndSet(false, true)) {
@@ -232,24 +233,30 @@ abstract class ImageProcessor(
                         isStage1Processing.set(false)
                     }
                 }
+                val workDuration = SystemClock.uptimeMillis() - loopTickStart
+                Log.d("FREEZE_DEBUG", "STAGE1_LOOP tick @ $loopTickStart workDuration=${workDuration}ms")
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
         // HSV -- fast, primary, ticks every frame.
-        fingerCheckJob = coroutineScope.launch(Dispatchers.Default) {
+        fingerCheckJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
+                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame3.getAndSet(null)
                 val startTime = System.currentTimeMillis()
                 if (frame != null) fingerRunner.runHsv(frame, isCaptured.get())
+                val workDuration = SystemClock.uptimeMillis() - loopTickStart
+                Log.d("FREEZE_DEBUG", "FINGER_LOOP tick @ $loopTickStart workDuration=${workDuration}ms")
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
         // Mediapipe -- independent, slower, own cadence. Only ever surfaces
         // when it PASSES, or when it fails and HSV agrees -- see FingerCheckRunner.
-        mediapipeCheckJob = coroutineScope.launch(Dispatchers.Default) {
+        mediapipeCheckJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
+                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame4.getAndSet(null)
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get() && isMediapipeProcessing.compareAndSet(false, true)) {
@@ -259,23 +266,29 @@ abstract class ImageProcessor(
                         isMediapipeProcessing.set(false)
                     }
                 }
+                val workDuration = SystemClock.uptimeMillis() - loopTickStart
+                Log.d("FREEZE_DEBUG", "MEDIAPIPE_LOOP tick @ $loopTickStart workDuration=${workDuration}ms")
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
-        blurCheckJob = coroutineScope.launch(Dispatchers.Default) {
+        blurCheckJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
+                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame2.getAndSet(null)
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get()) {
                     logExecutionTime(TAG, "Blur") { blurRunner.run(frame) }
                 }
+                val workDuration = SystemClock.uptimeMillis() - loopTickStart
+                Log.d("FREEZE_DEBUG", "BLUR_LOOP tick @ $loopTickStart workDuration=${workDuration}ms")
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
-        accumulatorJob = coroutineScope.launch(Dispatchers.Default) {
+        accumulatorJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
+                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame1.getAndSet(null)
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get() && isReadyForAccumulation &&
@@ -288,10 +301,14 @@ abstract class ImageProcessor(
                         isAccumulatingFrames.set(false)
                     }
                 }
+                val workDuration = SystemClock.uptimeMillis() - loopTickStart
+                Log.d("FREEZE_DEBUG", "ACCUM_LOOP tick @ $loopTickStart workDuration=${workDuration}ms")
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
+        // stage2Job stays on Dispatchers.Default -- event-driven
+        // (collectLatest), not a busy-polling loop like the five above.
         stage2Job = coroutineScope.launch(Dispatchers.Default) {
             capturedFrameFlow.collectLatest {
                 if (it != null && getFinalBufferSize() < REQUIRED_SUCCESSFUL_IMAGES &&
@@ -314,26 +331,21 @@ abstract class ImageProcessor(
             if (System.currentTimeMillis() - frame.timestamp > 500) return@coroutineScope
             val cutoutRect = provider.getCutoutRectInImageCoordinates(Size(frame.width, frame.height), frame.rotationDegrees)
             if (!CutoutRectUtils.isValid(cutoutRect)) return@coroutineScope
-
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(requiresCropping = true, cutoutRect = cutoutRect)
             val imageDataProvider = ImageDataProvider(croppedByteArray, croppedByteArraySize.width, croppedByteArraySize.height, frame.rotationDegrees)
-
             if (preferenceStore.get(ProcessingSettings.SAVE_STAGE1_IMAGE)) {
                 controller.saveBitmap(imageDataProvider.getAsBitmap(), "Stage1Img")
             }
             if (preferenceStore.get(ProcessingSettings.SAVE_STAGE1_UPRIGHT_IMAGE)) {
                 controller.saveBitmap(imageDataProvider.getAsUprightBitmap(), "Stage1UpImg")
             }
-
-            val glareDeferred = async(stage1Dispatcher) { glareRunner.run(imageDataProvider) }
-            val brightnessDeferred = async(stage1Dispatcher) { brightnessRunner.run(imageDataProvider) }
+            val glareDeferred = async(stage1LoopsDispatcher) { glareRunner.run(imageDataProvider) }
+            val brightnessDeferred = async(stage1LoopsDispatcher) { brightnessRunner.run(imageDataProvider) }
             val glare = glareDeferred.await()
             val brightness = brightnessDeferred.await()
             imageDataProvider.clearCache()
-
             val warnings = mutableListOf<Warning>()
             val passedProcessingStages = mutableListOf<ProcessingStage>()
-
             when (glare) {
                 is ProcessingResult.Passed -> passedProcessingStages.add(ProcessingStage.GLARE)
                 is ProcessingResult.Failed -> warnings.add(glare.cause.toUiFailureCause().toWarning())
@@ -342,9 +354,7 @@ abstract class ImageProcessor(
                 is ProcessingResult.Passed -> passedProcessingStages.add(ProcessingStage.BRIGHTNESS)
                 is ProcessingResult.Failed -> warnings.add(brightness.cause.toUiFailureCause().toWarning())
             }
-
             if (blurRunner.isPassed) passedProcessingStages.add(ProcessingStage.BLUR) else warnings.add(Warning.Blur)
-
             val currentFingerResult = fingerRunner.result
             currentFingerResult?.let {
                 when (it) {
@@ -352,10 +362,8 @@ abstract class ImageProcessor(
                     is ProcessingResult.Failed -> warnings.add(it.cause.toUiFailureCause().toWarning())
                 }
             } ?: warnings.add(Warning.NoFinger)
-
             if (!provider.isFocusLockedForCapture) warnings.add(Warning.FocusNotLocked)
             else passedProcessingStages.add(ProcessingStage.NA)
-
             val isStage1PassedGate = if (strategyConfig.useRollingConfidence) {
                 blurRunner.isConfident() && fingerRunner.isConfident() &&
                         glareRunner.isConfident() && brightnessRunner.isConfident() &&
@@ -365,7 +373,6 @@ abstract class ImageProcessor(
                         fingerRunner.passed && provider.isFocusLockedForCapture
             }
             isStage1Passed.set(isStage1PassedGate)
-
             if (isStage1PassedGate) {
                 stage1PassedTime.compareAndSet(null, SystemClock.uptimeMillis())
             } else {
@@ -373,7 +380,6 @@ abstract class ImageProcessor(
                 stage1PassedTime.set(null)
                 synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
             }
-
             val liveScores = LiveQualityScores(
                 blur = LiveCheckScore(
                     label = "Blur",
@@ -416,7 +422,6 @@ abstract class ImageProcessor(
             if (System.currentTimeMillis() - frame.timestamp > 500) return
             val timePassed = stage1PassedTime.get()?.let { SystemClock.uptimeMillis() - it } ?: 0L
             if (timePassed < DELAY_IN_ACCUMULATION_OF_FRAMES) return
-
             synchronized(capturedFrameBuffer) {
                 capturedFrameBuffer.add(frame)
                 if (capturedFrameBuffer.size >= preferenceStore.get(ProcessingSettings.IMAGE_COUNT_FOR_STAGE2)) {
@@ -439,6 +444,7 @@ abstract class ImageProcessor(
     abstract suspend fun processStage2(candidateBatch: List<CameraFrame>)
 
     override fun onImageAvailable(reader: ImageReader) {
+        Log.d("FREEZE_DEBUG", "onImageAvailable TICK @ ${SystemClock.uptimeMillis()}")
         if (isCollectingImage.compareAndSet(false, true)) {
             try {
                 val image = reader.acquireLatestImage() ?: return
@@ -494,8 +500,7 @@ abstract class ImageProcessor(
     open fun close() {
         stage1Job?.cancel(); fingerCheckJob?.cancel(); mediapipeCheckJob?.cancel(); blurCheckJob?.cancel()
         accumulatorJob?.cancel(); stage2Job?.cancel()
-        stage1Dispatcher.close()
-
+        stage1LoopsDispatcher.close()
         latestRawFrame0.get()?.clearCroppedCache()
         latestRawFrame1.get()?.clearCroppedCache()
         latestRawFrame2.get()?.clearCroppedCache()

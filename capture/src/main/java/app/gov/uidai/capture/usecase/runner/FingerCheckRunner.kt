@@ -54,32 +54,36 @@ class FingerCheckRunner(
         if (isCaptured) return
         try {
             val cutoutRect = provider.getCutoutRectInImageCoordinates(Size(frame.width, frame.height), frame.rotationDegrees)
-            if (!CutoutRectUtils.isValid(cutoutRect)) return
-
+            if (!CutoutRectUtils.isValid(cutoutRect)) {
+                Log.w(TAG_HSV, "INVALID cutoutRect -- skipping this frame entirely")
+                return
+            }
             val (byteArray, byteArraySize) = frame.getByteArray(requiresCropping = true, cutoutRect = cutoutRect)
             val imageDataProvider = ImageDataProvider(byteArray, byteArraySize.width, byteArraySize.height, frame.rotationDegrees)
-
             if (preferenceStore.get(ProcessingSettings.SAVE_FINGER_CHECK_INPUT)) {
                 coroutineScope.launch { controller.saveBitmap(imageDataProvider.getAsBitmap(), "FingerCheckInput") }
             }
 
+            val callStart = android.os.SystemClock.uptimeMillis()
             val result = liveFinger.run(imageDataProvider)
+            val callDuration = android.os.SystemClock.uptimeMillis() - callStart
+            Log.d(TAG_HSV, "CALL_DURATION=${callDuration}ms")
+
             imageDataProvider.clearCache()
             hsvResult.set(result)
-
             if (result.passed) {
-                // HSV success always applies -- no deferring needed for a pass.
                 apply(result, cutoutRect, frame, isCaptured)
                 confidence.record(true)
-                Log.d(TAG_HSV, "passed=true confidence=${result.confidence}")
+                Log.d(TAG_HSV, "passed=true confidence=${result.confidence} RAW_DATA=${(result as? ProcessingResult.Passed)?.data}")
             } else {
-                // HSV failed -- only let it overwrite the combined result if
-                // Mediapipe isn't currently holding a success.
                 val mediapipeCurrentlyPassed = mediapipeResult.get()?.passed == true
+                // Log the failure detail regardless of whether it gets applied,
+                // so we can see WHY it's rejecting even when suppressed.
+                val failedData = (result as? ProcessingResult.Failed)?.data
+                Log.d(TAG_HSV, "passed=false confidence=${result.confidence} FAIL_DATA=$failedData")
                 if (!mediapipeCurrentlyPassed) {
                     apply(result, cutoutRect, frame, isCaptured)
                     confidence.record(false)
-                    Log.d(TAG_HSV, "passed=false confidence=${result.confidence}")
                 } else {
                     Log.d(TAG_HSV, "failed but Mediapipe holds success -- deferring, not overwriting")
                 }
@@ -93,26 +97,29 @@ class FingerCheckRunner(
         if (isCaptured) return
         try {
             val cutoutRect = provider.getCutoutRectInImageCoordinates(Size(frame.width, frame.height), frame.rotationDegrees)
-            if (!CutoutRectUtils.isValid(cutoutRect)) return
-
+            if (!CutoutRectUtils.isValid(cutoutRect)) {
+                Log.w(TAG_MP, "INVALID cutoutRect -- skipping this frame entirely")
+                return
+            }
             val (byteArray, byteArraySize) = frame.getByteArray(requiresCropping = false, cutoutRect = cutoutRect)
             val imageDataProvider = ImageDataProvider(byteArray, byteArraySize.width, byteArraySize.height, frame.rotationDegrees)
 
+            val callStart = android.os.SystemClock.uptimeMillis()
             val result = mediapipeFinger.run(imageDataProvider)
+            val callDuration = android.os.SystemClock.uptimeMillis() - callStart
+            Log.d(TAG_MP, "CALL_DURATION=${callDuration}ms")
+
             imageDataProvider.clearCache()
             mediapipeResult.set(result)
-
             if (result.passed) {
-                // Mediapipe success always applies -- symmetric with HSV's pass.
                 apply(result, cutoutRect, frame, isCaptured)
                 confidence.record(true)
-                Log.d(TAG_MP, "passed=true confidence=${result.confidence}")
+                Log.d(TAG_MP, "passed=true confidence=${result.confidence} RAW_DATA=${(result as? ProcessingResult.Passed)?.data}")
             } else {
-                // Mediapipe failed -- only surfaced if HSV ALSO currently
-                // fails. Symmetric deferral: neither side's failure beats
-                // the other's success.
                 val hsvCurrentlyPassed = hsvResult.get()?.passed == true
                 val hsvCurrentlyFailed = hsvResult.get()?.passed == false
+                val failedData = (result as? ProcessingResult.Failed)?.data
+                Log.d(TAG_MP, "passed=false confidence=${result.confidence} FAIL_DATA=$failedData")
                 if (!hsvCurrentlyPassed && hsvCurrentlyFailed) {
                     apply(result, cutoutRect, frame, isCaptured)
                     confidence.record(false)
