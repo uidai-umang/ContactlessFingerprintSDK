@@ -1,5 +1,6 @@
 package app.gov.uidai.capture.ui.camera
 
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Point
@@ -10,6 +11,8 @@ import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -117,9 +120,11 @@ fun CameraScreen(
     imageProcessorFactory: ImageProcessorFactory,
     preferenceStore: PreferenceStore,
     onFinish: (CaptureResult) -> Unit,
+    onPopBackStack : () -> Unit,
     viewModel: CameraViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val coroutineScope = rememberCoroutineScope()
     val captureState by viewModel.captureState.collectAsStateWithLifecycle()
     val captureUIState by viewModel.captureUIState.collectAsStateWithLifecycle()
@@ -146,6 +151,37 @@ fun CameraScreen(
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
+
+    // NEW -- permission request flow for the camera permission
+    var showPermanentlyDeniedDialog by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+        if (!isGranted) {
+            val canShowRationale = activity?.let {
+                androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(
+                    it, android.Manifest.permission.CAMERA
+                )
+            } ?: true
+            if (!canShowRationale) {
+                showPermanentlyDeniedDialog = true
+            } else {
+                // Simply popping back on denial, per requirement -- no
+                // forced re-request loop here since Activity-level
+                // checkAndRequestPermissions already handles first-ask.
+                onPopBackStack()
+            }
+        }
+    }
+
+    LaunchedEffect(hasCameraPermission) {
+        if (!hasCameraPermission) {
+            permissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
+    }
+
 
     val uiInfoProvider = remember {
         object : CameraController.UIInfoProvider {
@@ -498,6 +534,39 @@ fun CameraScreen(
                     onGoBack = { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
                 )
             }
+        }
+
+        if (showPermanentlyDeniedDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { /* must choose */ },
+                title = { Text("Camera Permission Required") },
+                text = {
+                    Text(
+                        "Camera access has been denied. Please enable it in " +
+                                "Settings to continue using the fingerprint capture SDK."
+                    )
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        showPermanentlyDeniedDialog = false
+                        val intent = android.content.Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.fromParts("package", context.packageName, null)
+                        )
+                        context.startActivity(intent)
+                    }) {
+                        Text("Open Settings")
+                    }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        showPermanentlyDeniedDialog = false
+                        onPopBackStack()
+                    }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }
