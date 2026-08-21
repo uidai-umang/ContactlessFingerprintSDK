@@ -33,7 +33,7 @@ class BlurCheckRunner(
     }
 
     private val confidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
-    private val blurGate = BlurGate(targetThreshold = 370f, fallbackThreshold = 330f, maxWaitMs = 3_000L)
+    private val blurGate = BlurGate(targetThreshold = 350f, fallbackThreshold = 300f, maxWaitMs = 3_000L)
 
     @Volatile var isPassed: Boolean = false
         private set
