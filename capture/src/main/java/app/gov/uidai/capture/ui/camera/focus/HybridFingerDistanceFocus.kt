@@ -1,8 +1,11 @@
 package app.gov.uidai.capture.ui.camera.focus
 
+import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.TotalCaptureResult
 import android.os.SystemClock
 import app.gov.uidai.capture.ui.camera.provider.CameraContextProvider
 import app.gov.uidai.capture.ui.camera.provider.FocusLockParamProvider
@@ -63,9 +66,30 @@ class HybridFingerDistanceFocus(
                 ?.let { set(CaptureRequest.CONTROL_AF_REGIONS, arrayOf(it)) }
             set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START)
         }
+
+        val request = provider.captureRequestBuilder.build()
+
         provider.captureSession.capture(
-            provider.captureRequestBuilder.build(),
-            provider.captureCallback,
+            request,
+            object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession,
+                    req: CaptureRequest,
+                    result: TotalCaptureResult
+                ) {
+                    val afState = result.get(CaptureResult.CONTROL_AF_STATE)
+                    when (afState) {
+                        CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED -> {
+                            setNeedFocusTrigger(false)
+                            updateFocusState(FocusState.LOCKED)
+                        }
+                        else -> {
+                            setNeedFocusTrigger(true)
+                            updateFocusState(FocusState.UNLOCKED)
+                        }
+                    }
+                }
+            },
             provider.cameraPreviewHandler
         )
     }
