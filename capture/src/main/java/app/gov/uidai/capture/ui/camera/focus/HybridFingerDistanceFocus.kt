@@ -6,6 +6,7 @@ import android.hardware.camera2.CaptureRequest
 import android.os.SystemClock
 import app.gov.uidai.capture.ui.camera.provider.CameraContextProvider
 import app.gov.uidai.capture.ui.camera.provider.FocusLockParamProvider
+import com.ctc.wstx.shaded.msv_core.datatype.xsd.FloatType
 import java.util.concurrent.atomic.AtomicLong
 
 class HybridFingerDistanceFocus(
@@ -16,6 +17,8 @@ class HybridFingerDistanceFocus(
         const val MANUAL_UPDATE_INTERVAL = 500L
         const val HARDWARE_CORRECTION_INTERVAL = 3000L  // real AF trigger every 3s
         private const val SMOOTHING_ALPHA = 0.3f
+
+        private const val simulatedMinFocusDiopters = Float.MAX_VALUE
     }
 
     private var smoothedDistance: Float? = null
@@ -44,7 +47,7 @@ class HybridFingerDistanceFocus(
 
         provider.captureRequestBuilder.apply {
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
-            set(CaptureRequest.LENS_FOCUS_DISTANCE, 1f / smoothed)
+            set(CaptureRequest.LENS_FOCUS_DISTANCE, (1f / smoothed).coerceAtMost(simulatedMinFocusDiopters))
         }
         provider.captureSession.setRepeatingRequest(
             provider.captureRequestBuilder.build(),
@@ -77,15 +80,13 @@ class HybridFingerDistanceFocus(
 
     override fun setOptimalMode() {
         val requestBuilder = provider.captureRequestBuilder
-
         val characteristics = provider.characteristics
-
         val minFocusDistance =
-            characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
-
+            characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f
+        val effectiveDiopters = minFocusDistance.coerceAtMost(simulatedMinFocusDiopters)
         requestBuilder.apply {
             set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
-            set(CaptureRequest.LENS_FOCUS_DISTANCE, minFocusDistance)
+            set(CaptureRequest.LENS_FOCUS_DISTANCE, effectiveDiopters)
         }
     }
 }

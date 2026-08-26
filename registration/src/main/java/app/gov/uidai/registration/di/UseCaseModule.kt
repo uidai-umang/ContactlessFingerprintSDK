@@ -3,10 +3,12 @@ package app.gov.uidai.registration.di
 import android.content.Context
 import app.gov.uidai.registration.data.dao.PendingCaptureDao
 import app.gov.uidai.registration.repository.ClfRepository
+import app.gov.uidai.registration.repository.DashboardRepository
 import app.gov.uidai.registration.repository.FingerprintRepository
 import app.gov.uidai.registration.repository.UserRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
 import app.gov.uidai.registration.usecase.CaptureUseCase
+import app.gov.uidai.registration.usecase.DashboardUseCase
 import app.gov.uidai.registration.usecase.DeviceUseCase
 import app.gov.uidai.registration.usecase.FingerSDKManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
@@ -16,6 +18,7 @@ import app.gov.uidai.registration.usecase.UserUseCase
 import app.gov.uidai.registration.usecase.impl.CaptureFileStorage
 import app.gov.uidai.registration.usecase.impl.CaptureQueueManagerImpl
 import app.gov.uidai.registration.usecase.impl.CaptureUseCaseImpl
+import app.gov.uidai.registration.usecase.impl.DashboardUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.DeviceUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.FingerSDKManagerImpl
 import app.gov.uidai.registration.usecase.impl.ResidentUseCaseImpl
@@ -106,5 +109,13 @@ object UseCaseModule {
         clfRepository: ClfRepository
     ): DeviceUseCase = DeviceUseCaseImpl(
         clfRepository = clfRepository
+    )
+
+    @Provides
+    @Singleton
+    fun provideDashboardUseCase(
+        dashboardRepository: DashboardRepository
+    ): DashboardUseCase = DashboardUseCaseImpl(
+        dashboardRepository = dashboardRepository
     )
 }

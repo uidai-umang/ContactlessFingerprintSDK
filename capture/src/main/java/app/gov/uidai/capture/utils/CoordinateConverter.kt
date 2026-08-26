@@ -145,3 +145,39 @@ fun calculateFingerDistance(
 
     return distanceM
 }
+
+/**
+ * Inverse of calculateFingerDistance() above: given the closest distance
+ * the lens can actually focus at (diopters -- either the real hardware
+ * LENS_INFO_MINIMUM_FOCUS_DISTANCE, or a simulated cap), returns the
+ * largest fraction of the frame WIDTH a finger can ever occupy while still
+ * being in focus.
+ *
+ * If your cutout/goodArea geometry demands a bigger fraction than this
+ * returns, the device physically cannot deliver a focused capture at that
+ * geometry -- no amount of AF or blur-gate tuning fixes that; only a
+ * smaller cutout (or a different camera) can.
+ */
+fun calculateMaxFingerFillRatio(
+    sensorPhysicalSize: SizeF,
+    focalLengthMM: Float,
+    averageFingerWidthMM: Float,
+    minFocusDistanceDiopters: Float
+): Float {
+    val sensorWidthMM = sensorPhysicalSize.width
+    if (sensorWidthMM <= 0f || minFocusDistanceDiopters <= 0f) return 0f
+
+    // Same "2 *" constant as calculateFingerDistance() -- kept identical
+    // so this stays the exact algebraic inverse of that function, not a
+    // second, subtly different formula.
+    val fillRatio = 2 * focalLengthMM * averageFingerWidthMM * minFocusDistanceDiopters /
+            (sensorWidthMM * 1000)
+
+    Log.d(
+        TAG,
+        "MAX_FINGER_FILL -- at ${minFocusDistanceDiopters}D, finger can fill " +
+                "at most ${fillRatio * 100}% of frame width"
+    )
+
+    return fillRatio
+}

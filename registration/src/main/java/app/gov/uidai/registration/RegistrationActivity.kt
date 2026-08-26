@@ -31,6 +31,7 @@ import app.gov.uidai.registration.connectivity.ui.NoInternetScreen
 import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
 import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
+import app.gov.uidai.registration.ui.dashboard.DashboardRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.theme.AttendanceAppTheme
 import app.gov.uidai.registration.ui.theme.md_theme_scrim
@@ -147,6 +148,23 @@ class RegistrationActivity : ComponentActivity() {
                                     uidHash = uidHash,
                                     sharedUiState = sharedUiState,
                                     onNavigateUp = { navController.navigateUp() }
+                                )
+                            }
+                            // Not yet reachable from any screen in this module — no
+                            // operator menu/entry point exists. Wire a navigation call
+                            // to Routes.Dashboard.createRoute(operatorId) once one does.
+                            composable(
+                                route = Routes.Dashboard.route,
+                                arguments = listOf(navArgument(Routes.ARG_OPERATOR_ID) {
+                                    type = NavType.StringType
+                                })
+                            ) { backStackEntry ->
+                                val operatorId =
+                                    backStackEntry.arguments?.getString(Routes.ARG_OPERATOR_ID).orEmpty()
+                                DashboardRoute(
+                                    operatorId = operatorId,
+                                    onNavigateUp = { navController.navigateUp() },
+                                    onNewCollection = { navController.navigate(Routes.UidEntry.route) }
                                 )
                             }
                         }
