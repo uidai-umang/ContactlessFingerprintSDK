@@ -1,8 +1,16 @@
 package app.gov.uidai.registration.ui.dashboard
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -15,11 +23,18 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.registration.model.DashboardTab
@@ -30,6 +45,13 @@ import app.gov.uidai.registration.ui.dashboard.components.QuotaTicker
 import app.gov.uidai.registration.ui.dashboard.screens.DiversityTab
 import app.gov.uidai.registration.ui.dashboard.screens.FingersTab
 import app.gov.uidai.registration.ui.dashboard.screens.OverviewTab
+import app.gov.uidai.registration.ui.theme.dash_avatar_bg
+import app.gov.uidai.registration.ui.theme.dash_avatar_border
+import app.gov.uidai.registration.ui.theme.dash_avatar_text
+import app.gov.uidai.registration.ui.theme.dash_navy
+import app.gov.uidai.registration.ui.theme.dash_screen_bg
+import app.gov.uidai.registration.ui.theme.dash_tab_active
+import app.gov.uidai.registration.ui.theme.dash_tab_inactive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,26 +98,49 @@ fun DashboardRoute(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(titleForTab(uiState.selectedTab)) },
+                title = { Text(titleForTab(uiState.selectedTab), fontWeight = FontWeight.Bold, color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back", tint = Color.White)
                     }
-                }
+                },
+                actions = { OperatorAvatar(operatorId) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = dash_navy)
             )
         },
         bottomBar = { BottomActionBar(onNewCollection = onNewCollection) },
+        containerColor = dash_screen_bg,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             QuotaTicker(alerts = uiState.alerts)
 
-            TabRow(selectedTabIndex = uiState.selectedTab.ordinal) {
+            TabRow(
+                selectedTabIndex = uiState.selectedTab.ordinal,
+                containerColor = Color.White,
+                indicator = { tabPositions ->
+                    val position = tabPositions[uiState.selectedTab.ordinal]
+                    Box(
+                        modifier = Modifier
+                            .offset(x = position.left)
+                            .width(position.width)
+                            .height(2.5.dp)
+                            .background(dash_tab_active)
+                    )
+                }
+            ) {
                 DashboardTab.entries.forEach { tab ->
                     Tab(
                         selected = uiState.selectedTab == tab,
                         onClick = { viewModel.onTabSelected(tab) },
-                        text = { Text(titleForTab(tab)) }
+                        selectedContentColor = dash_tab_active,
+                        unselectedContentColor = dash_tab_inactive,
+                        text = {
+                            Text(
+                                text = titleForTab(tab),
+                                fontWeight = if (uiState.selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
                     )
                 }
             }
@@ -114,6 +159,29 @@ fun DashboardRoute(
             )
         }
     }
+}
+
+@Composable
+private fun OperatorAvatar(operatorId: String) {
+    val initials = remember(operatorId) { operatorInitials(operatorId) }
+    Box(
+        modifier = Modifier
+            .padding(end = 12.dp)
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(dash_avatar_bg)
+            .border(1.5.dp, dash_avatar_border, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = initials, color = dash_avatar_text, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+    }
+}
+
+// No operator-name field exists on this screen yet (only the id), so the chip
+// shows the first two alphanumeric characters of the operator id as a stand-in.
+private fun operatorInitials(operatorId: String): String {
+    val alnum = operatorId.filter { it.isLetterOrDigit() }
+    return if (alnum.length >= 2) alnum.take(2).uppercase() else "OP"
 }
 
 @Composable

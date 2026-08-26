@@ -1,7 +1,9 @@
 package app.gov.uidai.registration.ui.dashboard.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -15,10 +17,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.gov.uidai.registration.model.dashboard.DashboardOverviewResponse
+import app.gov.uidai.registration.ui.dashboard.components.TileColors
 import app.gov.uidai.registration.ui.theme.Spacer
+import app.gov.uidai.registration.ui.theme.dash_age1_bg
+import app.gov.uidai.registration.ui.theme.dash_age1_border
+import app.gov.uidai.registration.ui.theme.dash_age1_text
+import app.gov.uidai.registration.ui.theme.dash_age2_bg
+import app.gov.uidai.registration.ui.theme.dash_age2_border
+import app.gov.uidai.registration.ui.theme.dash_age2_text
+import app.gov.uidai.registration.ui.theme.dash_age3_bg
+import app.gov.uidai.registration.ui.theme.dash_age3_border
+import app.gov.uidai.registration.ui.theme.dash_age3_text
+import app.gov.uidai.registration.ui.theme.dash_age4_bg
+import app.gov.uidai.registration.ui.theme.dash_age4_border
+import app.gov.uidai.registration.ui.theme.dash_age4_text
+import app.gov.uidai.registration.ui.theme.dash_card_border
+import app.gov.uidai.registration.ui.theme.dash_female_bg
+import app.gov.uidai.registration.ui.theme.dash_female_border
+import app.gov.uidai.registration.ui.theme.dash_female_text
+import app.gov.uidai.registration.ui.theme.dash_hero_gradient_end
+import app.gov.uidai.registration.ui.theme.dash_hero_gradient_start
+import app.gov.uidai.registration.ui.theme.dash_male_bg
+import app.gov.uidai.registration.ui.theme.dash_male_border
+import app.gov.uidai.registration.ui.theme.dash_male_text
+import app.gov.uidai.registration.ui.theme.dash_other_bg
+import app.gov.uidai.registration.ui.theme.dash_other_border
+import app.gov.uidai.registration.ui.theme.dash_other_text
+import app.gov.uidai.registration.ui.theme.dash_sec_title
 
 @Composable
 fun OverviewTab(
@@ -43,33 +74,51 @@ fun OverviewTab(
 
         HeroCard(overview)
 
-        DashboardCard(title = "Gender") {
+        DashboardCard(title = "By gender") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                listOf("MALE", "FEMALE", "OTHER").forEach { key ->
-                    CountTile(
-                        label = key.lowercase().replaceFirstChar { it.uppercase() },
-                        count = overview.byGender[key] ?: 0,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                CountTile(
+                    label = "Male",
+                    count = overview.byGender["MALE"] ?: 0,
+                    colors = TileColors(dash_male_bg, dash_male_border, dash_male_text),
+                    modifier = Modifier.weight(1f)
+                )
+                CountTile(
+                    label = "Female",
+                    count = overview.byGender["FEMALE"] ?: 0,
+                    colors = TileColors(dash_female_bg, dash_female_border, dash_female_text),
+                    modifier = Modifier.weight(1f)
+                )
+                CountTile(
+                    label = "Other",
+                    count = overview.byGender["OTHER"] ?: 0,
+                    colors = TileColors(dash_other_bg, dash_other_border, dash_other_text),
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
-        DashboardCard(title = "Age group") {
+        DashboardCard(title = "By age group") {
+            val ageTiles = listOf(
+                Triple("5-17", "5-17", TileColors(dash_age1_bg, dash_age1_border, dash_age1_text)),
+                Triple("18-40", "18-40", TileColors(dash_age2_bg, dash_age2_border, dash_age2_text)),
+                Triple("41-60", "41-60", TileColors(dash_age3_bg, dash_age3_border, dash_age3_text)),
+                Triple("60+", "60+", TileColors(dash_age4_bg, dash_age4_border, dash_age4_text))
+            )
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                val rows = listOf(listOf("5-17", "18-40"), listOf("41-60", "60+"))
-                rows.forEach { row ->
+                ageTiles.chunked(2).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        row.forEach { key ->
+                        row.forEach { (key, label, colors) ->
                             CountTile(
-                                label = key,
+                                label = label,
                                 count = overview.byAgeGroup[key] ?: 0,
+                                colors = colors,
+                                fontSize = 26.sp,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -86,37 +135,53 @@ private fun HeroCard(overview: DashboardOverviewResponse) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
+            .background(Brush.linearGradient(listOf(dash_hero_gradient_start, dash_hero_gradient_end)))
             .padding(20.dp)
     ) {
         Text(
-            text = "${overview.totalCaptured}",
-            style = MaterialTheme.typography.headlineMedium,
+            text = "MY TOTAL CAPTURED",
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+            color = Color.White.copy(alpha = 0.5f)
+        )
+        Spacer(6.dp)
+        Text(
+            text = "${overview.totalCaptured}",
+            fontSize = 48.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
         )
         Text(
             text = "residents enrolled",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+            fontSize = 13.sp,
+            color = Color.White.copy(alpha = 0.55f)
         )
         Spacer(16.dp)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.1f))
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            Text(
-                text = "Captured today",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                text = "${overview.capturedToday}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Captured today",
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.55f)
+                )
+                Text(
+                    text = "${overview.capturedToday}",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
         }
     }
 }
@@ -130,40 +195,57 @@ fun DashboardCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White)
+            .border(1.dp, dash_card_border, RoundedCornerShape(14.dp))
             .padding(16.dp)
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        SectionTitle(title)
         Spacer(12.dp)
         content()
     }
 }
 
 @Composable
-private fun CountTile(label: String, count: Int, modifier: Modifier = Modifier) {
+fun SectionTitle(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.sp,
+        color = dash_sec_title
+    )
+}
+
+@Composable
+private fun CountTile(
+    label: String,
+    count: Int,
+    colors: TileColors,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 28.sp
+) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(colors.background)
+            .border(1.dp, colors.border, RoundedCornerShape(10.dp))
             .padding(vertical = 14.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "$count",
-            style = MaterialTheme.typography.titleLarge,
+            fontSize = fontSize,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = colors.text
         )
+        Spacer(4.dp)
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = label.uppercase(),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.text
         )
     }
 }

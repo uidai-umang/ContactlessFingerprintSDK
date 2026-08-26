@@ -125,7 +125,7 @@ class RegistrationActivity : ComponentActivity() {
 
                         NavHost(
                             navController = navController,
-                            startDestination = Routes.UidEntry.route
+                            startDestination = Routes.Dashboard.createRoute("00000000-0000-0000-0000-000000000001")
                         ) {
                             composable(Routes.UidEntry.route) {
                                 UidEntryRoute(
