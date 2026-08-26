@@ -1,15 +1,18 @@
 package app.gov.uidai.registration.ui.dashboard
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -120,10 +123,14 @@ fun DashboardRoute(
                 containerColor = Color.White,
                 indicator = { tabPositions ->
                     val position = tabPositions[uiState.selectedTab.ordinal]
+                    val indicatorOffset by animateDpAsState(targetValue = position.left, label = "tabIndicatorOffset")
+                    val indicatorWidth by animateDpAsState(targetValue = position.width, label = "tabIndicatorWidth")
                     Box(
                         modifier = Modifier
-                            .offset(x = position.left)
-                            .width(position.width)
+                            .fillMaxWidth()
+                            .wrapContentSize(Alignment.BottomStart)
+                            .offset(x = indicatorOffset)
+                            .width(indicatorWidth)
                             .height(2.5.dp)
                             .background(dash_tab_active)
                     )
