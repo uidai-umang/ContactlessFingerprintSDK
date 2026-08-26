@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import app.gov.uidai.capture.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.dash_tab_active
 import app.gov.uidai.registration.ui.theme.AppButton
 
 @Composable
@@ -18,6 +21,7 @@ fun BottomActionBar(onNewCollection: () -> Unit, modifier: Modifier = Modifier) 
         icon = Icons.Default.Add,
         iconDescription = "New collection",
         onClick = onNewCollection,
+        colors = ButtonDefaults.buttonColors(dash_tab_active),
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
