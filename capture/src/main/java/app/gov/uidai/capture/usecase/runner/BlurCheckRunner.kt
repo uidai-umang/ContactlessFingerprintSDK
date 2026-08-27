@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.util.Log
 import android.util.Size
 import app.gov.uidai.capture.domain.config.BlurSettings
+import app.gov.uidai.capture.domain.method.blur.LaplacianBlurMethod
 import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ImageProcessingMethod
@@ -33,7 +34,22 @@ class BlurCheckRunner(
     }
 
     private val confidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
-    private val blurGate = BlurGate(targetThreshold = 350f, fallbackThreshold = 300f, maxWaitMs = 3_000L)
+    private val blurGate: BlurGate by lazy {
+        if (liveBlur is LaplacianBlurMethod) {
+            BlurGate(targetThreshold = 350f, fallbackThreshold = 300f, maxWaitMs = 3_000L)
+        } else {
+            // DenseNet (or any non-Laplacian model) outputs a bounded 0-1
+            // confidence, not a raw variance -- BlurSettings.THRESHOLD (0.85
+            // default) is the correct scale here, matching the SAME check
+            // ImageProcessor.kt already uses elsewhere (acceptedMin/acceptedMax
+            // above). No natural "relax over time" concept applies to a
+            // bounded confidence score the way it does for open-ended raw
+            // variance, so target and fallback are the same value here --
+            // BlurGate's degrade-over-time behavior becomes a no-op, correctly.
+            val threshold = preferenceStore.get(BlurSettings.THRESHOLD)
+            BlurGate(targetThreshold = threshold, fallbackThreshold = threshold, maxWaitMs = 3_000L)
+        }
+    }
 
     @Volatile var isPassed: Boolean = false
         private set
