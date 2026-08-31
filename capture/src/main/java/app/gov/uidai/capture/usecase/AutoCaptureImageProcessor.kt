@@ -81,7 +81,10 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     }
 
     private val stage2BlurChecks: List<ImageProcessingMethod<Unit>> by lazy {
-        listOf(blurCheck)
+        listOf(
+            blurCheck
+//        ,stage2LaplacianCheck
+        )
     }
 
     /**
@@ -324,6 +327,14 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 "FINAL_FINGER_RESCORE -- passed=${finalFingerResult.passed} confidence=${finalFingerResult.confidence} " +
                         "status=${(finalFingerResult as? ProcessingResult.Failed)?.status} (this IS the delivered image)"
             )
+            if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
+                val passLabel = if (finalFingerResult.passed) "PASS" else "FAIL"
+                val confFormatted = String.format("%.2f", finalFingerResult.confidence).removePrefix("0")
+                controller.saveBitmap(
+                    finalFingerCheckProvider.getAsUprightBitmap(),
+                    "FinalFingerCheckInput_$passLabel($confFormatted)"
+                )
+            }
             finalFingerCheckProvider.clearCache()
 
             // Final authoritative check -- the delivered image itself must
