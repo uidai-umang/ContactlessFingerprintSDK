@@ -4,6 +4,10 @@ sealed class Routes(val route: String) {
 
     data object UidEntry : Routes(PATH_UID_ENTRY)
 
+    data object CaptureMethod : Routes("$PATH_CAPTURE_METHOD/{$ARG_UID_HASH}") {
+        fun createRoute(uidHash: String) = "$PATH_CAPTURE_METHOD/$uidHash"
+    }
+
     data object Registration : Routes("$PATH_REGISTRATION/{$ARG_UID_HASH}") {
         fun createRoute(uidHash: String) = "$PATH_REGISTRATION/$uidHash"
     }
@@ -20,6 +24,7 @@ sealed class Routes(val route: String) {
 
     companion object {
         private const val PATH_UID_ENTRY = "uid_entry"
+        private const val PATH_CAPTURE_METHOD = "capture_method"
         private const val PATH_REGISTRATION = "registration"
         private const val PATH_USER_INFO = "user_info"
         private const val PATH_DASHBOARD = "dashboard"

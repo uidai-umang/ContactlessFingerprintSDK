@@ -36,7 +36,7 @@ class BlurCheckRunner(
     private val confidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
     private val blurGate: BlurGate by lazy {
         if (liveBlur is LaplacianBlurMethod) {
-            BlurGate(targetThreshold = 350f, fallbackThreshold = 300f, maxWaitMs = 3_000L)
+            BlurGate(targetThreshold = 300f, fallbackThreshold = 250f, maxWaitMs = 3_000L)
         } else {
             // DenseNet (or any non-Laplacian model) outputs a bounded 0-1
             // confidence, not a raw variance -- BlurSettings.THRESHOLD (0.85

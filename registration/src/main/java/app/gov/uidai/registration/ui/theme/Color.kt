@@ -145,3 +145,35 @@ val dash_alt_slots_text = Color(0xFF16A34A)
 // Modal back button
 val dash_modal_back_border = Color(0xFFC8D5E8)
 val dash_modal_back_text = Color(0xFF4A5568)
+
+// ── "Choose capture method" screen tokens (matches mockup exactly) ──
+val capture_method_bg = Color(0xFFF5F0EC)
+val capture_method_border = Color(0xFFD8D0C8)
+val capture_method_primary = Color(0xFF1A56A0)
+val capture_method_primary_container = Color(0xFFEBF3FD)
+val capture_method_icon_chip_bg = Color(0xFFEDE8E3)
+val capture_method_text_primary = Color(0xFF1A1A1A)
+val capture_method_text_muted = Color(0xFF4A4540)
+
+val capture_method_strip_border = Color(0xFFC3D9F5)
+val capture_method_strip_bg = Color(0xFFD6E8F8)
+val capture_method_info_footer_text = Color(0xFF083459)
+
+val capture_method_locked_border = Color(0xFFEDE8E3)
+val capture_method_locked_bg = Color(0xFFFAFAFA)
+val capture_method_locked_text = Color(0xFF8A7F78)
+
+val capture_method_active = Color(0xFF16A34A)
+val capture_method_active_container = Color(0xFFF0FDF4)
+val capture_method_progress_border = Color(0xFFBBF7D0)
+val capture_method_progress_bg = Color(0xFFDCFCE7)
+val capture_method_progress_track_bg = Color(0xFFBBF7D0)
+
+val capture_method_warning_bg = Color(0xFFFEF3C7)
+val capture_method_warning_border = Color(0xFFFCD34D)
+val capture_method_warning_text = Color(0xFF92400E)
+
+val capture_method_disabled_bg = Color(0xFFD8D0C8)
+val capture_method_disabled_text = Color(0xFF8A7F78)
+
+val capture_method_nav_back_circle = Color(0x12000000) // rgba(0,0,0,.07)

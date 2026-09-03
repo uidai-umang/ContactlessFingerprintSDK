@@ -33,6 +33,7 @@ import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
+import app.gov.uidai.registration.ui.registration.method.CaptureMethodRoute
 import app.gov.uidai.registration.ui.theme.AttendanceAppTheme
 import app.gov.uidai.registration.ui.theme.md_theme_scrim
 import app.gov.uidai.registration.ui.theme.md_theme_surface
@@ -57,6 +58,8 @@ class RegistrationActivity : ComponentActivity() {
 
     @Inject
     lateinit var maintenanceStatusProvider: MaintenanceStatusProvider
+
+    private val dummyOperatorId = "00000000-0000-0000-0000-000000000001"
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -93,7 +96,7 @@ class RegistrationActivity : ComponentActivity() {
                     Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
                 val result = deviceUseCase.registerDeviceIfNeeded(
                     context = this@RegistrationActivity,
-                    operatorId = "00000000-0000-0000-0000-000000000001",
+                    operatorId = dummyOperatorId,
                     androidId = androidId
                 )
                 if (result is ApiResult.Success) {
@@ -125,13 +128,28 @@ class RegistrationActivity : ComponentActivity() {
 
                         NavHost(
                             navController = navController,
-                            startDestination = Routes.Dashboard.createRoute("00000000-0000-0000-0000-000000000001")
+                            startDestination = Routes.Dashboard.createRoute(dummyOperatorId)
                         ) {
                             composable(Routes.UidEntry.route) {
                                 UidEntryRoute(
                                     sharedUiState = sharedUiState,
                                     onClearSharedMessage = sharedViewModel::clearError,
                                     onNavigateToRegistration = { uidHash ->
+                                        navController.navigate(Routes.CaptureMethod.createRoute(uidHash))
+                                    }
+                                )
+                            }
+                            composable(
+                                route = Routes.CaptureMethod.route,
+                                arguments = listOf(navArgument(Routes.ARG_UID_HASH) {
+                                    type = NavType.StringType
+                                })
+                            ) { backStackEntry ->
+                                val uidHash =
+                                    backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
+                                CaptureMethodRoute(
+                                    onNavigateUp = { navController.navigateUp() },
+                                    onContinue = {
                                         navController.navigate(Routes.Registration.createRoute(uidHash))
                                     }
                                 )
