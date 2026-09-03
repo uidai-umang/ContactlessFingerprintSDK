@@ -1,6 +1,5 @@
 package app.gov.uidai.registration.ui.registration.method
 
-import androidx.annotation.XmlRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -70,7 +68,7 @@ import app.gov.uidai.registration.ui.theme.capture_method_text_primary
 import app.gov.uidai.registration.ui.theme.capture_method_warning_bg
 import app.gov.uidai.registration.ui.theme.capture_method_warning_border
 import app.gov.uidai.registration.ui.theme.capture_method_warning_text
-import app.gov.uidai.registration.ui.theme.md_theme_onSecondaryContainer
+import app.gov.uidai.registration.ui.theme.md_theme_onTertiary
 
 @Composable
 fun CaptureMethodRoute(
@@ -106,7 +104,9 @@ fun CaptureMethodScreen(
         null -> false
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(capture_method_bg)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .background(capture_method_bg)) {
         CaptureMethodTopBar(onBack = onBack)
 
         Column(
@@ -242,11 +242,16 @@ private fun SlapCaptureCard(
             .clickable(enabled = !isLocked, onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(iconChipBg),
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconChipBg),
                 contentAlignment = Alignment.Center
             ) {
                 Text("\uD83D\uDD90", fontSize = 20.sp)
@@ -282,9 +287,9 @@ private fun SlapCaptureCard(
             }
         }
 
-        if(!isLocked) HorizontalDivider(color = dividerColor, thickness = 1.dp)
+        if (!isLocked) HorizontalDivider(color = dividerColor, thickness = 1.dp)
 
-        if(!isSelected && !isLocked) {
+        if (!isSelected && !isLocked) {
             SlabSubOptionNeutralState()
         }
 
@@ -301,8 +306,13 @@ private fun SlapCaptureCard(
 
 @Composable
 private fun SlabSubOptionNeutralState() {
-    Row(modifier = Modifier.fillMaxWidth().background(color = md_theme_onSecondaryContainer).padding(14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color = md_theme_onTertiary)
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
 
         Text(
             text = "\uD83D\uDC48 Left slap"
@@ -329,7 +339,7 @@ private fun SlapSubOptionsRow(
 ) {
     Column(
         modifier = Modifier.background(capture_method_strip_bg)
-    ){
+    ) {
         Text(
             text = "SELECT GROUPS TO CAPTURE",
             fontSize = 11.sp,
@@ -406,7 +416,11 @@ private fun SubOptionChip(
     ) {
         Text(if (isCompleted) "✓" else emoji, fontSize = 16.sp)
         Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
-        Text(if (isCompleted) "Done" else subtitle, fontSize = 9.sp, color = contentColor.copy(alpha = 0.85f))
+        Text(
+            if (isCompleted) "Done" else subtitle,
+            fontSize = 9.sp,
+            color = contentColor.copy(alpha = 0.85f)
+        )
     }
 }
 
@@ -452,11 +466,16 @@ private fun SequentialCaptureCard(
             .clickable(enabled = !isLocked, onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(iconChipBg),
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconChipBg),
                 contentAlignment = Alignment.Center
             ) {
                 Text("☝️", fontSize = 20.sp)
@@ -603,7 +622,10 @@ private fun RadioIndicator(
         contentAlignment = Alignment.Center
     ) {
         if (isSelected) {
-            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.White))
+            Box(modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(Color.White))
         }
     }
 }
@@ -625,7 +647,9 @@ private fun CaptureMethodBottomBar(
         Button(
             onClick = onContinue,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
             shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = capture_method_primary,
