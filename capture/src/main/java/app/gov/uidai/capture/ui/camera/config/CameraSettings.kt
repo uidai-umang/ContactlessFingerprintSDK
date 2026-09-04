@@ -52,6 +52,13 @@ object CameraSettings : PreferenceGroup {
         9.5f
     )
 
+    val AVERAGE_HAND_WIDTH_MM = PreferenceParam(
+        "camera.average_hand_width",
+        "Average Hand Width — 4 fingers (mm)",
+        PreferenceType.FLOAT,
+        85f // adult hand width across index-to-little finger, held flat, in mm
+    )
+
     val MANUAL_AE_SETTINGS = PreferenceParam(
         "camera.MANUAL_AE_SETTINGS",
         "Manual AE Settings",

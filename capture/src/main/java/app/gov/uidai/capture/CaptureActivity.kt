@@ -37,6 +37,7 @@ import app.gov.uidai.capture.ui.CaptureRoutes
 import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.camera.CameraScreen
 import app.gov.uidai.capture.ui.camera.CaptureResult
+import app.gov.uidai.capture.ui.camera.slap.SlapCaptureRoute
 import app.gov.uidai.capture.ui.guideline.GuidelineScreen
 import app.gov.uidai.capture.ui.settings.DebugSettingsScreen
 import app.gov.uidai.capture.pref.PreferenceStore
@@ -190,7 +191,17 @@ class CaptureActivity : ComponentActivity() {
     @Composable
     private fun CaptureNavHost() {
         val navController = rememberNavController()
-        NavHost(navController = navController, startDestination = CaptureRoutes.Guideline.createRoute(txnId)) {
+        // Slap fingerType values ("Left"/"Right") skip the single-finger
+        // Guideline screen entirely -- there's no slap variant of it in
+        // scope, and SlapCaptureRoute's own hand label already gives the
+        // operator the context Guideline would have.
+        val isSlapCapture = fingerType == "Left" || fingerType == "Right"
+        val startDestination = if (isSlapCapture) {
+            CaptureRoutes.SlapCamera.createRoute(txnId, fingerType)
+        } else {
+            CaptureRoutes.Guideline.createRoute(txnId)
+        }
+        NavHost(navController = navController, startDestination = startDestination) {
             composable(
                 route = CaptureRoutes.Guideline.route,
                 arguments = listOf(navArgument(CaptureRoutes.ARG_TXN_ID) { type = NavType.StringType })
@@ -217,6 +228,17 @@ class CaptureActivity : ComponentActivity() {
                     cameraController = cameraController,
                     imageProcessorFactory = imageProcessorFactory,
                     preferenceStore = preferenceStore,
+                    onPopBackStack = { navController.popBackStack() },
+                    onFinish = { result -> handleCaptureResult(result) }
+                )
+            }
+            composable(
+                route = CaptureRoutes.SlapCamera.route,
+                arguments = listOf(navArgument(CaptureRoutes.ARG_TXN_ID) { type = NavType.StringType })
+            ) { backStackEntry ->
+                val handType = backStackEntry.arguments?.getString(CaptureRoutes.ARG_HAND_TYPE).orEmpty()
+                SlapCaptureRoute(
+                    handType = handType,
                     onPopBackStack = { navController.popBackStack() },
                     onFinish = { result -> handleCaptureResult(result) }
                 )

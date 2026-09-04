@@ -76,6 +76,9 @@ class CameraController @Inject constructor(
     private val averageFingerWidthMM
         get() = preferenceStore.get(CameraSettings.AVERAGE_FINGER_WIDTH_MM)
 
+    private val averageHandWidthMM
+        get() = preferenceStore.get(CameraSettings.AVERAGE_HAND_WIDTH_MM)
+
     private val isManualAE
         get() = preferenceStore.get(CameraSettings.MANUAL_AE_SETTINGS)
 
@@ -579,6 +582,40 @@ class CameraController @Inject constructor(
         // AF mode gets restored to whatever the active strategy actually uses
         // once focus locks — see the processAFState fix below. Without that
         // fix, every tap permanently strands the camera in AF_MODE_AUTO.
+    }
+
+    fun triggerHandFocusLock(handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) {
+        val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
+        val sensorPhysical = getSensorPhysicalSize()
+        val sensorWidthMMForUprightWidthAxis =
+            if (axesSwapped) sensorPhysical.height else sensorPhysical.width
+
+        val paramProvider = object : FocusLockParamProvider {
+            override fun getMeteringRectangle(): MeteringRectangle? {
+                // Full sensor active array -- see note above on why we don't
+                // attempt a precise region for the upright hand box here.
+                val active = getSensorActiveArraySize()
+                return MeteringRectangle(active, MeteringRectangle.METERING_WEIGHT_MAX)
+            }
+
+            override fun getFingerDistance(): Float {
+                val perceivedWidthPixels = handBoxUpright.width()
+                val imageWidthPixels = uprightImageSize.width.toFloat()
+                if (perceivedWidthPixels <= 0) return 0f
+
+                val distanceM = 2 * (getFocalLengthInMM() * averageHandWidthMM * imageWidthPixels) /
+                        (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis) / 1000
+
+                Log.d(TAG, "HAND DISTANCE -- ${distanceM}m")
+                return distanceM
+            }
+
+            override fun getManualDistance(): Float {
+                return preferenceStore.get(CameraSettings.MANUAL_FOCUS_DISTANCE)
+            }
+        }
+
+        focusManager.lock(paramProvider = paramProvider)
     }
 
 

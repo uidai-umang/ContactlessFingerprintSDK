@@ -73,7 +73,8 @@ import app.gov.uidai.registration.ui.theme.md_theme_onTertiary
 @Composable
 fun CaptureMethodRoute(
     onNavigateUp: () -> Unit,
-    onContinue: () -> Unit,
+    onContinueSequential: () -> Unit,
+    onContinueSlap: (SlapSubOption) -> Unit,
     viewModel: CaptureMethodViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -84,7 +85,15 @@ fun CaptureMethodRoute(
         onSelectSlapSubOption = viewModel::selectSlapSubOption,
         onContinue = {
             viewModel.onContinue()
-            onContinue()
+            val selectedSlapSubOption = uiState.selectedSlapSubOption
+            when {
+                // Locked state is always mid-sequential-session.
+                uiState.isLocked -> onContinueSequential()
+                uiState.selectedMethod == CaptureMethod.SEQUENTIAL -> onContinueSequential()
+                uiState.selectedMethod == CaptureMethod.SLAP && selectedSlapSubOption != null ->
+                    onContinueSlap(selectedSlapSubOption)
+                else -> {} // Continue is disabled until one of the above is true.
+            }
         },
         onBack = onNavigateUp
     )
@@ -99,7 +108,10 @@ fun CaptureMethodScreen(
     onBack: () -> Unit
 ) {
     val isMethodReadyToContinue = when (uiState.selectedMethod) {
-        CaptureMethod.SLAP -> uiState.selectedSlapSubOption != null
+        // Thumbs stays selectable (visual feedback) but doesn't unlock
+        // Continue -- Thumbs capture isn't built, only Left/Right slap.
+        CaptureMethod.SLAP -> uiState.selectedSlapSubOption == SlapSubOption.LEFT_SLAP ||
+                uiState.selectedSlapSubOption == SlapSubOption.RIGHT_SLAP
         CaptureMethod.SEQUENTIAL -> true
         null -> false
     }

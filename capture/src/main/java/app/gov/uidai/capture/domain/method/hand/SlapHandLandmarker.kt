@@ -1,0 +1,141 @@
+package app.gov.uidai.capture.domain.method.hand
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.PointF
+import android.graphics.RectF
+import android.util.Log
+import app.gov.uidai.capture.domain.model.SlapFrameResult
+import app.gov.uidai.capture.utils.logExecutionTime
+import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Native MediaPipe Tasks wrapper for hand-landmark detection -- mirrors
+ * MediapipeSegmenter.kt's setup/init pattern (BaseOptions + model-asset
+ * path under assets/ + Delegate.CPU + RunningMode), but for HandLandmarker
+ * instead of ImageSegmenter.
+ *
+ * Replaces the earlier Python/Chaquopy `mediapipe` bridge, which crashed
+ * with ModuleNotFoundError -- the mediapipe pip package was never actually
+ * installed via Chaquopy (only numpy/pillow/opencv-python-headless were in
+ * the pip block) and isn't reliably installable that way at all, being a
+ * heavy native/Bazel-built package. This is Google's officially-supported
+ * native Android path for the same model family.
+ */
+class SlapHandLandmarker @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    companion object {
+        private val TAG = SlapHandLandmarker::class.simpleName
+        private const val MODEL_ASSET_PATH = "hand_landmarker.task"
+        private val FINGERTIP_LANDMARK_INDICES = listOf(4, 8, 12, 16, 20)
+        private val EMPTY_RESULT = SlapFrameResult(handDetected = false, areaRatio = 0f, fingertips = emptyList(), box = null)
+    }
+
+    // Single-shot IMAGE mode, not LIVE_STREAM's async callback mode --
+    // SlapCaptureListener already throttles frames itself (~10fps), so a
+    // synchronous detect() call per already-throttled frame is simplest.
+    private val handLandmarker: HandLandmarker? by lazy { setupHandLandmarker() }
+
+    private fun setupHandLandmarker(): HandLandmarker? {
+        return try {
+            val baseOptions = BaseOptions.builder()
+                .setDelegate(Delegate.CPU)
+                .setModelAssetPath(MODEL_ASSET_PATH)
+                .build()
+            val options = HandLandmarker.HandLandmarkerOptions.builder()
+                .setBaseOptions(baseOptions)
+                .setRunningMode(RunningMode.IMAGE)
+                .setNumHands(1)
+                .setMinHandDetectionConfidence(0.5f)
+                .setMinHandPresenceConfidence(0.5f)
+                .setMinTrackingConfidence(0.5f)
+                .build()
+            HandLandmarker.createFromOptions(context, options)
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "HandLandmarker failed to load model with error: " + e.message)
+            null
+        } catch (e: RuntimeException) {
+            // Occurs if the model doesn't support the requested delegate.
+            Log.e(TAG, "HandLandmarker failed to load model with error: " + e.message)
+            null
+        }
+    }
+
+    /**
+     * expectedHandType: 'Left' or 'Right' -- matches HandLandmarker's own
+     * handedness category name. No mirroring inversion applied: this app's
+     * default camera facing is the BACK camera (CameraSettings.CAMERA_FACING
+     * default = LENS_FACING_BACK, see CameraController.kt), whose raw
+     * frames are not mirrored, so MediaPipe's handedness label is reliable
+     * as-is -- same assumption the earlier Python-based HandDetector made.
+     */
+    fun detectHand(bitmap: Bitmap, expectedHandType: String): SlapFrameResult {
+        val landmarker = handLandmarker ?: return EMPTY_RESULT
+
+        val mpImage = logExecutionTime(TAG, "BitmapImageBuilder") {
+            BitmapImageBuilder(bitmap).build()
+        }
+
+        val result = try {
+            logExecutionTime(TAG, "HandLandmarker Inference Time") {
+                landmarker.detect(mpImage)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "HandLandmarker.detect() failed", e)
+            return EMPTY_RESULT
+        } ?: return EMPTY_RESULT
+
+        val handednesses = result.handednesses()
+        val landmarksPerHand = result.landmarks()
+
+        val matchingIndex = handednesses.indexOfFirst { categories ->
+            categories.firstOrNull()?.categoryName() == expectedHandType
+        }
+        if (matchingIndex == -1 || matchingIndex >= landmarksPerHand.size) {
+            return EMPTY_RESULT
+        }
+
+        val landmarks = landmarksPerHand[matchingIndex]
+        val width = bitmap.width
+        val height = bitmap.height
+
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
+        landmarks.forEach { landmark ->
+            val px = landmark.x() * width
+            val py = landmark.y() * height
+            minX = min(minX, px)
+            minY = min(minY, py)
+            maxX = max(maxX, px)
+            maxY = max(maxY, py)
+        }
+        val box = RectF(minX, minY, maxX, maxY)
+
+        val frameArea = max(1f, (width * height).toFloat())
+        val boxArea = max(0f, box.width()) * max(0f, box.height())
+        val areaRatio = boxArea / frameArea
+
+        val fingertips = FINGERTIP_LANDMARK_INDICES.map { index ->
+            val landmark = landmarks[index]
+            PointF(landmark.x() * width, landmark.y() * height)
+        }
+
+        return SlapFrameResult(
+            handDetected = true,
+            areaRatio = areaRatio,
+            fingertips = fingertips,
+            box = box
+        )
+    }
+}

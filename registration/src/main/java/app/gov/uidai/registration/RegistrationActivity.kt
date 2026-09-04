@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -39,6 +42,7 @@ import app.gov.uidai.registration.ui.theme.md_theme_scrim
 import app.gov.uidai.registration.ui.theme.md_theme_surface
 import app.gov.uidai.registration.ui.uidentry.UidEntryRoute
 import app.gov.uidai.registration.usecase.DeviceUseCase
+import app.gov.uidai.registration.usecase.SlapCaptureLauncher
 import app.gov.uidai.registration.utils.Routes
 import app.gov.uidai.registration.utils.device.DeviceRegistrationGate
 import app.gov.uidai.registration.utils.worker.CaptureWorkScheduler
@@ -147,10 +151,31 @@ class RegistrationActivity : ComponentActivity() {
                             ) { backStackEntry ->
                                 val uidHash =
                                     backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
+                                val context = LocalContext.current
+                                // Result handling here is intentionally minimal (log only) --
+                                // wiring the returned whole-hand image into a session/backend
+                                // flow is future work, same TODO boundary CaptureMethodViewModel
+                                // already stops at for isLocked/fingersAlreadyCaptured.
+                                val slapCaptureLauncher = rememberLauncherForActivityResult(
+                                    ActivityResultContracts.StartActivityForResult()
+                                ) { result ->
+                                    Log.d(
+                                        "SlapCapture",
+                                        "Slap capture activity result: resultCode=${result.resultCode}"
+                                    )
+                                }
                                 CaptureMethodRoute(
                                     onNavigateUp = { navController.navigateUp() },
-                                    onContinue = {
+                                    onContinueSequential = {
                                         navController.navigate(Routes.Registration.createRoute(uidHash))
+                                    },
+                                    onContinueSlap = { slapSubOption ->
+                                        val intent = SlapCaptureLauncher.createIntent(
+                                            context = context,
+                                            purpose = "register",
+                                            slapSubOption = slapSubOption
+                                        )
+                                        slapCaptureLauncher.launch(intent)
                                     }
                                 )
                             }
