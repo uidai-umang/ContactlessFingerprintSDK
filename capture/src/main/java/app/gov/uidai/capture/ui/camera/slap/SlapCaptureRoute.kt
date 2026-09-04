@@ -118,6 +118,7 @@ fun SlapCaptureRoute(
     LaunchedEffect(capturedBitmap) {
         val bitmap = capturedBitmap ?: return@LaunchedEffect
         val encoded = bitmap.toBase64()
+        android.widget.Toast.makeText(context, "Capture completed", android.widget.Toast.LENGTH_SHORT).show()
         onFinish(
             CaptureResult(
                 resultCode = ResultCode.CAPTURE_SUCCESS,
@@ -236,8 +237,8 @@ fun SlapCaptureRoute(
             SlapBottomBar(
                 buttonState = when {
                     liveState.isReady -> SlapButtonState.READY
-                    liveState.statusMessage == "Hold steady" -> SlapButtonState.CHECKING
-                    else -> SlapButtonState.IDLE
+                    !liveState.handDetected -> SlapButtonState.IDLE
+                    else -> SlapButtonState.CHECKING
                 },
                 statusMessage = liveState.statusMessage,
                 isTorchOn = isTorchOn,
@@ -290,7 +291,7 @@ private fun SlapBottomBar(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().background(PageBackground).padding(20.dp),
+        modifier = Modifier.fillMaxWidth().background(PageBackground).padding(20.dp).windowInsetsPadding(WindowInsets.systemBars),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(

@@ -17,32 +17,22 @@ import javax.inject.Inject
 import kotlin.math.max
 import kotlin.math.min
 
-/**
- * Native MediaPipe Tasks wrapper for hand-landmark detection -- mirrors
- * MediapipeSegmenter.kt's setup/init pattern (BaseOptions + model-asset
- * path under assets/ + Delegate.CPU + RunningMode), but for HandLandmarker
- * instead of ImageSegmenter.
- *
- * Replaces the earlier Python/Chaquopy `mediapipe` bridge, which crashed
- * with ModuleNotFoundError -- the mediapipe pip package was never actually
- * installed via Chaquopy (only numpy/pillow/opencv-python-headless were in
- * the pip block) and isn't reliably installable that way at all, being a
- * heavy native/Bazel-built package. This is Google's officially-supported
- * native Android path for the same model family.
- */
 class SlapHandLandmarker @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
         private val TAG = SlapHandLandmarker::class.simpleName
         private const val MODEL_ASSET_PATH = "hand_landmarker.task"
-        private val FINGERTIP_LANDMARK_INDICES = listOf(4, 8, 12, 16, 20)
+        private val FINGERTIP_LANDMARK_INDICES = listOf(8, 12, 16, 20)
         private val EMPTY_RESULT = SlapFrameResult(handDetected = false, areaRatio = 0f, fingertips = emptyList(), box = null)
     }
 
-    // Single-shot IMAGE mode, not LIVE_STREAM's async callback mode --
-    // SlapCaptureListener already throttles frames itself (~10fps), so a
-    // synchronous detect() call per already-throttled frame is simplest.
+    private fun String.toMirroredHandType(): String = when (this) {
+        "Left" -> "Right"
+        "Right" -> "Left"
+        else -> this
+    }
+
     private val handLandmarker: HandLandmarker? by lazy { setupHandLandmarker() }
 
     private fun setupHandLandmarker(): HandLandmarker? {
@@ -64,22 +54,15 @@ class SlapHandLandmarker @Inject constructor(
             Log.e(TAG, "HandLandmarker failed to load model with error: " + e.message)
             null
         } catch (e: RuntimeException) {
-            // Occurs if the model doesn't support the requested delegate.
             Log.e(TAG, "HandLandmarker failed to load model with error: " + e.message)
             null
         }
     }
 
-    /**
-     * expectedHandType: 'Left' or 'Right' -- matches HandLandmarker's own
-     * handedness category name. No mirroring inversion applied: this app's
-     * default camera facing is the BACK camera (CameraSettings.CAMERA_FACING
-     * default = LENS_FACING_BACK, see CameraController.kt), whose raw
-     * frames are not mirrored, so MediaPipe's handedness label is reliable
-     * as-is -- same assumption the earlier Python-based HandDetector made.
-     */
     fun detectHand(bitmap: Bitmap, expectedHandType: String): SlapFrameResult {
         val landmarker = handLandmarker ?: return EMPTY_RESULT
+
+        val mirroredExpectedHandType = expectedHandType.toMirroredHandType()
 
         val mpImage = logExecutionTime(TAG, "BitmapImageBuilder") {
             BitmapImageBuilder(bitmap).build()
@@ -92,15 +75,22 @@ class SlapHandLandmarker @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "HandLandmarker.detect() failed", e)
             return EMPTY_RESULT
-        } ?: return EMPTY_RESULT
+        }
+
+        if(result == null) {
+            Log.d(TAG, "FailureState -- result $result")
+            return EMPTY_RESULT
+        }
 
         val handednesses = result.handednesses()
         val landmarksPerHand = result.landmarks()
 
         val matchingIndex = handednesses.indexOfFirst { categories ->
-            categories.firstOrNull()?.categoryName() == expectedHandType
+            categories.firstOrNull()?.categoryName() == mirroredExpectedHandType
         }
+
         if (matchingIndex == -1 || matchingIndex >= landmarksPerHand.size) {
+            Log.d(TAG, "FailureState -- matchingIndex= $matchingIndex")
             return EMPTY_RESULT
         }
 
