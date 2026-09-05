@@ -27,12 +27,6 @@ class SlapHandLandmarker @Inject constructor(
         private val EMPTY_RESULT = SlapFrameResult(handDetected = false, areaRatio = 0f, fingertips = emptyList(), box = null)
     }
 
-    private fun String.toMirroredHandType(): String = when (this) {
-        "Left" -> "Right"
-        "Right" -> "Left"
-        else -> this
-    }
-
     private val handLandmarker: HandLandmarker? by lazy { setupHandLandmarker() }
 
     private fun setupHandLandmarker(): HandLandmarker? {
@@ -59,10 +53,8 @@ class SlapHandLandmarker @Inject constructor(
         }
     }
 
-    fun detectHand(bitmap: Bitmap, expectedHandType: String): SlapFrameResult {
+    fun detectHand(bitmap: Bitmap): SlapFrameResult {
         val landmarker = handLandmarker ?: return EMPTY_RESULT
-
-        val mirroredExpectedHandType = expectedHandType.toMirroredHandType()
 
         val mpImage = logExecutionTime(TAG, "BitmapImageBuilder") {
             BitmapImageBuilder(bitmap).build()
@@ -75,26 +67,11 @@ class SlapHandLandmarker @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "HandLandmarker.detect() failed", e)
             return EMPTY_RESULT
-        }
+        } ?: return EMPTY_RESULT
 
-        if(result == null) {
-            Log.d(TAG, "FailureState -- result $result")
-            return EMPTY_RESULT
-        }
-
-        val handednesses = result.handednesses()
         val landmarksPerHand = result.landmarks()
+        val landmarks = landmarksPerHand.firstOrNull() ?: return EMPTY_RESULT
 
-        val matchingIndex = handednesses.indexOfFirst { categories ->
-            categories.firstOrNull()?.categoryName() == mirroredExpectedHandType
-        }
-
-        if (matchingIndex == -1 || matchingIndex >= landmarksPerHand.size) {
-            Log.d(TAG, "FailureState -- matchingIndex= $matchingIndex")
-            return EMPTY_RESULT
-        }
-
-        val landmarks = landmarksPerHand[matchingIndex]
         val width = bitmap.width
         val height = bitmap.height
 

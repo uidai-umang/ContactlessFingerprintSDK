@@ -10,6 +10,7 @@ import app.gov.uidai.capture.usecase.slap.SlapBlurChecker
 import app.gov.uidai.capture.usecase.slap.SlapCaptureListener
 import app.gov.uidai.capture.usecase.slap.SlapFrameAnalyzer
 import app.gov.uidai.capture.usecase.slap.SlapLiveState
+import app.gov.uidai.capture.usecase.slap.SlapMediaPipeAnalyzer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ import javax.inject.Inject
 class SlapCaptureViewModel @Inject constructor(
     val cameraController: CameraController,
     private val analyzer: SlapFrameAnalyzer,
+    private val mediaPipeAnalyzer: SlapMediaPipeAnalyzer,
     private val blurChecker: SlapBlurChecker,
     private val preferenceStore: PreferenceStore
 ) : ViewModel() {
@@ -53,6 +55,7 @@ class SlapCaptureViewModel @Inject constructor(
         val newListener = SlapCaptureListener(
             expectedHandType = expectedHandType,
             analyzer = analyzer,
+            mediaPipeAnalyzer = mediaPipeAnalyzer,
             blurChecker = blurChecker,
             coroutineScope = viewModelScope,
             getRotationDegrees = getRotationDegrees,

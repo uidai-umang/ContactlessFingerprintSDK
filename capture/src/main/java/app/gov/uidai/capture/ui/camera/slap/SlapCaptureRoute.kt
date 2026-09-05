@@ -66,6 +66,10 @@ private val IdleBorder = Color(0xFF253447)
 private val IdleFill = Color(0xFF151F2E)
 private val CheckingColor = Color(0xFFEAB308)
 private val ReadyColor = Color(0xFF16A34A)
+private val FingertipFarEdge = Color(0xFF1A56A0)
+private val FingertipFarFill = Color(0x331A56A0)
+private val FingertipReadyEdge = Color(0xFF16A34A)
+private val FingertipReadyFill = Color(0x3316A34A)
 
 private enum class SlapButtonState { IDLE, CHECKING, READY }
 
@@ -170,16 +174,15 @@ fun SlapCaptureRoute(
                         val scaleX = size.width / liveState.uprightFrameWidth.toFloat()
                         val scaleY = size.height / liveState.uprightFrameHeight.toFloat()
                         val squareSizePx = 18.dp.toPx()
-                        val markerColor = if (liveState.isReady) ReadyColor else CheckingColor
+                        val edgeColor = if (liveState.isReady) FingertipReadyEdge else FingertipFarEdge
+                        val fillColor = if (liveState.isReady) FingertipReadyFill else FingertipFarFill
                         liveState.fingertips.forEach { point ->
                             val cx = point.x * scaleX
                             val cy = point.y * scaleY
-                            drawRect(
-                                color = markerColor,
-                                topLeft = Offset(cx - squareSizePx / 2, cy - squareSizePx / 2),
-                                size = ComposeSize(squareSizePx, squareSizePx),
-                                style = Stroke(width = 2.dp.toPx())
-                            )
+                            val topLeft = Offset(cx - squareSizePx / 2, cy - squareSizePx / 2)
+                            val squareSize = ComposeSize(squareSizePx, squareSizePx)
+                            drawRect(color = fillColor, topLeft = topLeft, size = squareSize)
+                            drawRect(color = edgeColor, topLeft = topLeft, size = squareSize, style = Stroke(width = 2.dp.toPx()))
                         }
                     }
                 }

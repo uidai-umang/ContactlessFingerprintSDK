@@ -18,6 +18,7 @@ import app.gov.uidai.capture.utils.extension.toByteArray
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -27,6 +28,7 @@ data class SlapLiveState(
     val handDetected: Boolean = false,
     val areaRatio: Float = 0f,
     val fingertips: List<PointF> = emptyList(),
+    val mediaPipeHandDetected: Boolean = false,
     val uprightFrameWidth: Int = 0,
     val uprightFrameHeight: Int = 0,
     val isReady: Boolean = false,
@@ -36,6 +38,7 @@ data class SlapLiveState(
 class SlapCaptureListener(
     private val expectedHandType: String,
     private val analyzer: SlapFrameAnalyzer,
+    private val mediaPipeAnalyzer: SlapMediaPipeAnalyzer,
     private val blurChecker: SlapBlurChecker,
     private val coroutineScope: CoroutineScope,
     private val getRotationDegrees: () -> Int,
@@ -45,6 +48,7 @@ class SlapCaptureListener(
     companion object {
         private val TAG = SlapCaptureListener::class.simpleName
         private const val THROTTLE_MS = 100L
+        private const val MEDIAPIPE_THROTTLE_MS = 250L
         private const val AREA_RATIO_THRESHOLD = 0.30f
         private const val REQUIRED_CONSECUTIVE_PASSES = 2
         private const val CROP_PADDING_PERCENT = 0.08f
@@ -54,6 +58,9 @@ class SlapCaptureListener(
     private val lastProcessedAt = AtomicLong(0L)
     private val isProcessing = AtomicBoolean(false)
     private val isCaptured = AtomicBoolean(false)
+
+    private val lastMediaPipeProcessedAt = AtomicLong(0L)
+    private val isMediaPipeProcessing = AtomicBoolean(false)
 
     @Volatile
     private var consecutivePasses = 0
@@ -80,14 +87,19 @@ class SlapCaptureListener(
             return
         }
 
+        val rotationDegrees = getRotationDegrees()
         val now = SystemClock.uptimeMillis()
-        if (now - lastProcessedAt.get() < THROTTLE_MS || !isProcessing.compareAndSet(false, true)) {
+
+        val primaryEligible = now - lastProcessedAt.get() >= THROTTLE_MS && isProcessing.compareAndSet(false, true)
+
+        val mediaPipeEligible = now - lastMediaPipeProcessedAt.get() >= MEDIAPIPE_THROTTLE_MS &&
+                isMediaPipeProcessing.compareAndSet(false, true)
+
+        if (!primaryEligible && !mediaPipeEligible) {
             image.close()
             return
         }
-        lastProcessedAt.set(now)
 
-        val rotationDegrees = getRotationDegrees()
         val frame = try {
             image.use {
                 CameraFrame(
@@ -102,19 +114,38 @@ class SlapCaptureListener(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build CameraFrame", e)
-            isProcessing.set(false)
+            if (primaryEligible) isProcessing.set(false)
+            if (mediaPipeEligible) isMediaPipeProcessing.set(false)
             return
         }
 
-        coroutineScope.launch {
-            try {
-                processFrame(frame, rotationDegrees)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "processFrame failed unexpectedly", e)
-            } finally {
-                isProcessing.set(false)
+        if (primaryEligible) {
+            lastProcessedAt.set(now)
+            coroutineScope.launch {
+                try {
+                    processFrame(frame, rotationDegrees)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "processFrame failed unexpectedly", e)
+                } finally {
+                    isProcessing.set(false)
+                }
+            }
+        }
+
+        if (mediaPipeEligible) {
+            lastMediaPipeProcessedAt.set(now)
+            coroutineScope.launch {
+                try {
+                    processMediaPipeFrame(frame, rotationDegrees)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "processMediaPipeFrame failed unexpectedly", e)
+                } finally {
+                    isMediaPipeProcessing.set(false)
+                }
             }
         }
     }
@@ -124,7 +155,6 @@ class SlapCaptureListener(
 
         val uprightWidth = if (rotationDegrees == 90 || rotationDegrees == 270) frame.height else frame.width
         val uprightHeight = if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
-        val uprightFingertips = result.fingertips
 
         val areaOk = result.areaRatio >= AREA_RATIO_THRESHOLD
         val framePassed = result.handDetected && areaOk
@@ -153,21 +183,45 @@ class SlapCaptureListener(
             }
         }
 
-        _liveState.value = SlapLiveState(
-            frameId = frame.processingId,
-            handDetected = result.handDetected,
-            areaRatio = result.areaRatio,
-            fingertips = uprightFingertips,
-            uprightFrameWidth = uprightWidth,
-            uprightFrameHeight = uprightHeight,
-            isReady = framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES,
-            statusMessage = statusMessage
-        )
+        _liveState.update {
+            it.copy(
+                frameId = frame.processingId,
+                handDetected = result.handDetected,
+                areaRatio = result.areaRatio,
+                uprightFrameWidth = uprightWidth,
+                uprightFrameHeight = uprightHeight,
+                isReady = framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES,
+                statusMessage = statusMessage
+            )
+        }
 
         if (framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES &&
             isCaptured.compareAndSet(false, true)
         ) {
             attemptCapture(frame, result)
+        }
+    }
+
+    private suspend fun processMediaPipeFrame(frame: CameraFrame, rotationDegrees: Int) {
+        val result = mediaPipeAnalyzer.analyze(frame)
+
+        result.box?.let { box ->
+            val uprightWidth = if (rotationDegrees == 90 || rotationDegrees == 270) frame.height else frame.width
+            val uprightHeight = if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
+            try {
+                triggerFocus(box, Size(uprightWidth, uprightHeight), rotationDegrees)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "triggerFocus (mediapipe) failed -- continuing without it", e)
+            }
+        }
+
+        _liveState.update {
+            it.copy(
+                fingertips = result.fingertips,
+                mediaPipeHandDetected = result.handDetected
+            )
         }
     }
 
