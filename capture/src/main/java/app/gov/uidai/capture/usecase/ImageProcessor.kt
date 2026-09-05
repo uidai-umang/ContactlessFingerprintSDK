@@ -135,10 +135,12 @@ abstract class ImageProcessor(
     private val brightnessRunner = BrightnessCheckRunner(brightnessCheckMethod)
     private val blurRunner: BlurCheckRunner by lazy {
         BlurCheckRunner(
-            liveBlur = liveBlur,
+            laplacianBlur = laplacianBlurCheck,
+            densenetBlur = blurCheck,
             provider = provider,
             controller = controller,
             preferenceStore = preferenceStore,
+            coroutineScope = coroutineScope,
             onBlurResult = ::onBlurResult
         )
     }

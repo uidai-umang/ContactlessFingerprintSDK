@@ -4,29 +4,27 @@ import android.annotation.SuppressLint
 import android.util.Log
 import android.util.Size
 import app.gov.uidai.capture.domain.config.BlurSettings
-import app.gov.uidai.capture.domain.method.blur.LaplacianBlurMethod
 import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ImageProcessingMethod
+import app.gov.uidai.capture.domain.model.ProcessingResult
 import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.usecase.CutoutRectUtils
 import app.gov.uidai.capture.usecase.ImageProcessor
 import app.gov.uidai.capture.usecase.ProcessingSettings
 import app.gov.uidai.capture.utils.BlurGate
 import app.gov.uidai.capture.utils.RollingConfidence
-import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.selects.select
 
-/**
- * Owns blur's live-loop guard, BlurGate threshold degradation, and rolling
- * confidence. onBlurResult lets ImageProcessor do the best-frame tracking
- * cross-check (needs finger's state too, which this class deliberately
- * doesn't know about -- kept in ImageProcessor as genuinely cross-cutting).
- */
 class BlurCheckRunner(
-    private val liveBlur: ImageProcessingMethod<Unit>,
+    private val laplacianBlur: ImageProcessingMethod<Unit>,
+    private val densenetBlur: ImageProcessingMethod<Unit>,
     private val provider: ImageProcessor.Provider,
     private val controller: ImageProcessor.Controller,
     private val preferenceStore: PreferenceStore,
+    private val coroutineScope: CoroutineScope,
     private val onBlurResult: (frame: CameraFrame, confidence: Float, passed: Boolean) -> Unit
 ) {
     companion object {
@@ -34,21 +32,11 @@ class BlurCheckRunner(
     }
 
     private val confidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
-    private val blurGate: BlurGate by lazy {
-        if (liveBlur is LaplacianBlurMethod) {
-            BlurGate(targetThreshold = 300f, fallbackThreshold = 250f, maxWaitMs = 3_000L)
-        } else {
-            // DenseNet (or any non-Laplacian model) outputs a bounded 0-1
-            // confidence, not a raw variance -- BlurSettings.THRESHOLD (0.85
-            // default) is the correct scale here, matching the SAME check
-            // ImageProcessor.kt already uses elsewhere (acceptedMin/acceptedMax
-            // above). No natural "relax over time" concept applies to a
-            // bounded confidence score the way it does for open-ended raw
-            // variance, so target and fallback are the same value here --
-            // BlurGate's degrade-over-time behavior becomes a no-op, correctly.
-            val threshold = preferenceStore.get(BlurSettings.THRESHOLD)
-            BlurGate(targetThreshold = threshold, fallbackThreshold = threshold, maxWaitMs = 3_000L)
-        }
+
+    private val laplacianGate = BlurGate(targetThreshold = 300f, fallbackThreshold = 250f, maxWaitMs = 3_000L)
+    private val densenetGate: BlurGate by lazy {
+        val threshold = preferenceStore.get(BlurSettings.THRESHOLD)
+        BlurGate(targetThreshold = threshold, fallbackThreshold = threshold, maxWaitMs = 3_000L)
     }
 
     @Volatile var isPassed: Boolean = false
@@ -56,53 +44,87 @@ class BlurCheckRunner(
     @Volatile var lastConfidence: Float = 0f
         private set
 
-    fun currentThreshold(): Float = blurGate.currentThreshold()
+    fun currentThreshold(): Float = laplacianGate.currentThreshold()
     fun isConfident(): Boolean = confidence.isConfident()
+
+    private data class NamedResult(val methodName: String, val result: ProcessingResult<Unit>, val passed: Boolean)
 
     @SuppressLint("DefaultLocale")
     suspend fun run(frame: CameraFrame) {
         try {
-            // Guard against the startup race: skip frames until the overlay's
-            // real screen position and preview's real measured size are both
-            // known. Before that, getCutoutRectInImageCoordinates() divides
-            // against zero-valued placeholders and produces NaN/Infinity.
             if (provider.previewSize.width == 0 || provider.previewSize.height == 0) return
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
                 Size(frame.width, frame.height), frame.rotationDegrees
             )
             if (!CutoutRectUtils.isValid(cutoutRect)) return
-
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(
                 requiresCropping = true, cutoutRect = cutoutRect
             )
-            Log.d(TAG, "BLUR_CRASH_CHECK -- cutoutRect=$cutoutRect frameSize=${frame.width}x${frame.height} croppedSize=${croppedByteArraySize.width}x${croppedByteArraySize.height} arrayLen=${croppedByteArray.size}")
-
             val imageDataProvider = ImageDataProvider(
                 croppedByteArray, croppedByteArraySize.width, croppedByteArraySize.height, frame.rotationDegrees
             )
-            val blurResult = runInterruptible { liveBlur.run(imageDataProvider) }
+
+            val laplacianDeferred = coroutineScope.async {
+                try {
+                    val r = laplacianBlur.run(imageDataProvider)
+                    NamedResult("Laplacian", r, r.confidence >= laplacianGate.currentThreshold())
+                } catch (e: Exception) {
+                    Log.e(TAG, "Laplacian check failed", e)
+                    null
+                }
+            }
+            val densenetDeferred = coroutineScope.async {
+                try {
+                    val r = densenetBlur.run(imageDataProvider)
+                    NamedResult("DenseNet", r, r.confidence >= densenetGate.currentThreshold())
+                } catch (e: Exception) {
+                    Log.e(TAG, "DenseNet check failed", e)
+                    null
+                }
+            }
+
+            val first = select<NamedResult?> {
+                laplacianDeferred.onAwait { it }
+                densenetDeferred.onAwait { it }
+            }
+
+            val winner = if (first?.passed == true) {
+                first
+            } else {
+                val second = if (laplacianDeferred.isCompleted) densenetDeferred.await() else laplacianDeferred.await()
+                when {
+                    second?.passed == true -> second
+                    first != null -> first
+                    else -> second
+                }
+            }
+
+            if (winner == null) {
+                Log.w(TAG, "Both Laplacian and DenseNet failed for this frame")
+                imageDataProvider.clearCache()
+                return
+            }
+
+            val (methodName, blurResult, passed) = winner
+            val gateForWinner = if (methodName == "Laplacian") laplacianGate else densenetGate
 
             if (preferenceStore.get(ProcessingSettings.SAVE_BLUR_INPUT)) {
                 val confFormatted = String.format("%.2f", blurResult.confidence).removePrefix("0")
-                controller.saveBitmap(imageDataProvider.getAsUprightBitmap(), "BlurInput($confFormatted)")
+                controller.saveBitmap(imageDataProvider.getAsUprightBitmap(), "BlurInput($methodName,$confFormatted)")
             }
             if (preferenceStore.get(ProcessingSettings.SAVE_SHARP_IMAGES) &&
-                blurResult.confidence >= preferenceStore.get(BlurSettings.THRESHOLD)
+                blurResult.confidence >= gateForWinner.currentThreshold()
             ) {
                 val confFormatted = String.format("%.2f", blurResult.confidence).removePrefix("0")
-                controller.saveBitmap(imageDataProvider.getAsUprightBitmap(), "SharpImage($confFormatted)")
+                controller.saveBitmap(imageDataProvider.getAsUprightBitmap(), "SharpImage($methodName,$confFormatted)")
             }
             imageDataProvider.clearCache()
 
+            Log.d(TAG, "Blur result via $methodName: passed=$passed confidence=${blurResult.confidence}")
+
             lastConfidence = blurResult.confidence
-            // BlurGate only supplies the threshold -- degrading from target to
-            // fallback after maxWaitMs. Pass/fail check and rolling confidence
-            // are the same mechanism as before, just checked against a
-            // threshold that can relax over time instead of a fixed constant.
-            val passed = blurResult.confidence >= blurGate.currentThreshold()
             isPassed = passed
             confidence.record(passed)
-
             onBlurResult(frame, blurResult.confidence, passed)
         } catch (e: Exception) {
             Log.e(TAG, "Error in Blur processing", e)
@@ -112,6 +134,7 @@ class BlurCheckRunner(
     fun reset() {
         isPassed = false
         lastConfidence = 0f
-        blurGate.reset()
+        laplacianGate.reset()
+        densenetGate.reset()
     }
 }
