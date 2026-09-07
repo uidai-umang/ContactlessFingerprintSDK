@@ -11,5 +11,7 @@ enum class FingerPosition {
     RIGHT_MIDDLE,
     RIGHT_RING,
     RIGHT_LITTLE,
+    LEFT_SLAP,
+    RIGHT_SLAP,
     UNKNOWN
 }
