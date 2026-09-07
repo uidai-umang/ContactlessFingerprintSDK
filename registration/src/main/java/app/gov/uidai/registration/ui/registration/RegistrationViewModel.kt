@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.gov.uidai.registration.data.dao.PendingCaptureDao
 import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.model.CLFingerprint
+import app.gov.uidai.registration.model.CaptureMode
 import app.gov.uidai.registration.model.FingerCaptureStatus
 import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.model.FingerType
@@ -31,6 +32,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+// Hoisted to Activity scope (see RegistrationActivity: `by viewModels()`,
+// passed into both CaptureMethodRoute and RegistrationRoute) instead of
+// being scoped to the Registration nav destination alone. Both the
+// sequential finger-list screen and the slap capture method screen need
+// the same resident/session/capture_mode state — one lookup, one source
+// of truth, no drift between the two flows' completeness/locking logic.
 @HiltViewModel
 class RegistrationViewModel @Inject constructor(
     private val userUseCase: UserUseCase,
@@ -61,6 +68,10 @@ class RegistrationViewModel @Inject constructor(
     }
 
     fun setUidHash(uidHash: String) {
+        // Same uidHash may be set again when navigating back into this
+        // shared instance from a sibling destination (e.g. CaptureMethod)
+        // -- avoid re-triggering a fresh lookup/session for no reason.
+        if (uidHash == currentUidHash && currentResidentId.isNotEmpty()) return
         currentUidHash = uidHash
         lookupResidentAndCreateSession()
     }
@@ -97,7 +108,7 @@ class RegistrationViewModel @Inject constructor(
                         FingerPosition.entries.find { it.name == entity.fingerType }
                     }
 
-                    // Merge: local pending takes priority over "not captured" —
+                    // Merge: local pending takes priority over "not captured" --
                     // operator already captured it, just hasn't synced yet
                     val uploadStatusMap = FingerPosition.entries
                         .filter { it != FingerPosition.UNKNOWN }
@@ -114,6 +125,7 @@ class RegistrationViewModel @Inject constructor(
                         it.copy(
                             isLookingUpResident = false,
                             residentPseudonymId = response.residentPseudonymId,
+                            captureMode = response.captureMode,
                             totalCaptured = response.totalCaptured,
                             isComplete = response.isComplete,
                             fingerUploadStatus = uploadStatusMap
@@ -220,6 +232,7 @@ class RegistrationViewModel @Inject constructor(
                 viewModelScope.launch {
                     uploadCapture(
                         fingerPosition = data.fingerPosition,
+                        captureMode = CaptureMode.SEQUENTIAL,
                         imageBytes = data.imageBytes,
                         blurScore = data.blurScore,
                         brightnessScore = data.brightnessScore,
@@ -244,8 +257,49 @@ class RegistrationViewModel @Inject constructor(
         }
     }
 
+    // Entry point for a completed slap capture (LEFT_SLAP / RIGHT_SLAP).
+    // Called from RegistrationActivity's slap ActivityResultLauncher callback
+    // once it's decoded the returned image + scores -- this ViewModel stays
+    // Context-free, same as the rest of the class.
+    fun uploadSlapResult(
+        handType: String,
+        imageBytes: ByteArray,
+        blurScore: Double = 0.0,
+        brightnessScore: Double = 0.0,
+        glareScore: Double = 0.0
+    ) {
+        val fingerPosition = when (handType) {
+            "Left" -> FingerPosition.LEFT_SLAP
+            "Right" -> FingerPosition.RIGHT_SLAP
+            else -> {
+                _uiState.update { it.copy(message = "Unknown slap hand type: $handType") }
+                return
+            }
+        }
+
+        _uiState.update {
+            it.copy(
+                fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
+                    set(fingerPosition, FingerCaptureStatus.UPLOADING)
+                }
+            )
+        }
+
+        viewModelScope.launch {
+            uploadCapture(
+                fingerPosition = fingerPosition,
+                captureMode = CaptureMode.SLAP,
+                imageBytes = imageBytes,
+                blurScore = blurScore,
+                brightnessScore = brightnessScore,
+                glareScore = glareScore
+            )
+        }
+    }
+
     private suspend fun uploadCapture(
         fingerPosition: FingerPosition,
+        captureMode: String,
         imageBytes: ByteArray,
         blurScore: Double = 0.0,
         brightnessScore: Double = 0.0,
@@ -259,6 +313,7 @@ class RegistrationViewModel @Inject constructor(
             sessionId = currentSessionId,
             residentPseudonymId = currentResidentId,
             operatorId = testOperatorId,
+            captureMode = captureMode,
             fingerType = fingerPosition.name,
             hand = hand,
             imageBytes = encrypted.encryptedImageBytes,
@@ -279,7 +334,7 @@ class RegistrationViewModel @Inject constructor(
                 val lastResponse = result.data.lastOrNull()
 
                 // Mark EVERY finger in the batch response as CAPTURED, not just the
-                // one that triggered this call — CaptureQueueManager may have bundled
+                // one that triggered this call -- CaptureQueueManager may have bundled
                 // previously-pending fingers into the same batch upload
                 val updatedStatusMap = _uiState.value.fingerUploadStatus.toMutableMap()
                 result.data.forEach { captureResponse ->
@@ -293,6 +348,7 @@ class RegistrationViewModel @Inject constructor(
 
                 _uiState.update { state ->
                     state.copy(
+                        captureMode = captureMode,
                         totalCaptured = lastResponse?.totalCaptured ?: state.totalCaptured,
                         isComplete = lastResponse?.isComplete ?: state.isComplete,
                         fingerUploadStatus = updatedStatusMap
