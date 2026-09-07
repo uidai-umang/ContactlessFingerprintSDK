@@ -41,6 +41,7 @@ object MultipartHelper {
             "session_id" to req.sessionId.toRequestBody(),
             "resident_pseudonym_id" to req.residentPseudonymId.toRequestBody(),
             "operator_id" to req.operatorId.toRequestBody(),
+            "capture_mode" to req.captureMode.toRequestBody(),
             "finger_type" to req.fingerType.toRequestBody(),
             "hand" to req.hand.toRequestBody(),
             "nfiq2_score" to req.nfiq2Score.toRequestBody(),
@@ -70,6 +71,7 @@ object MultipartHelper {
             parts["session_id_$index"] = req.sessionId.toRequestBody()
             parts["resident_pseudonym_id_$index"] = req.residentPseudonymId.toRequestBody()
             parts["operator_id_$index"] = req.operatorId.toRequestBody()
+            parts["capture_mode_$index"] = req.captureMode.toRequestBody()
             parts["finger_type_$index"] = req.fingerType.toRequestBody()
             parts["hand_$index"] = req.hand.toRequestBody()
             parts["nfiq2_score_$index"] = req.nfiq2Score.toRequestBody()
