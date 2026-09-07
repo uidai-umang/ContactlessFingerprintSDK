@@ -29,6 +29,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.registration.model.CaptureMethod
 import app.gov.uidai.registration.model.CaptureMethodUiState
 import app.gov.uidai.registration.model.SlapSubOption
+import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.theme.capture_method_active
 import app.gov.uidai.registration.ui.theme.capture_method_active_container
 import app.gov.uidai.registration.ui.theme.capture_method_bg
@@ -75,9 +77,19 @@ fun CaptureMethodRoute(
     onNavigateUp: () -> Unit,
     onContinueSequential: () -> Unit,
     onContinueSlap: (SlapSubOption) -> Unit,
+    registrationViewModel: RegistrationViewModel,
     viewModel: CaptureMethodViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val registrationUiState by registrationViewModel.uiState.collectAsStateWithLifecycle()
+
+
+    LaunchedEffect(registrationUiState.captureMode, registrationUiState.fingerUploadStatus) {
+        viewModel.updateFromRegistrationState(
+            registrationCaptureMode = registrationUiState.captureMode,
+            fingerUploadStatus = registrationUiState.fingerUploadStatus
+        )
+    }
 
     CaptureMethodScreen(
         uiState = uiState,
