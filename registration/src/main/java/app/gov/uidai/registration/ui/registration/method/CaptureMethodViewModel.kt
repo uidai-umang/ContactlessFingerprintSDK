@@ -3,6 +3,9 @@ package app.gov.uidai.registration.ui.registration.method
 import androidx.lifecycle.ViewModel
 import app.gov.uidai.registration.model.CaptureMethod
 import app.gov.uidai.registration.model.CaptureMethodUiState
+import app.gov.uidai.registration.model.CaptureMode
+import app.gov.uidai.registration.model.FingerCaptureStatus
+import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.model.SlapSubOption
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,16 +19,49 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
     private val _uiState = MutableStateFlow(CaptureMethodUiState())
     val uiState = _uiState.asStateFlow()
 
-    init {
-        // TODO: there's no existing session-scoped signal yet for "sequential
-        // capture already started" or "which slap sub-options are already
-        // captured" (RegistrationUiState/FingerCaptureStatus are scoped to the
-        // finger-list screen's own ViewModel instance, not shared here). Wire
-        // isLocked/fingersAlreadyCaptured/completedSlapSubOptions up once that
-        // signal exists — stubbed unlocked/empty for now since this task is
-        // UI/flow only.
-        _uiState.update {
-            it.copy(isLocked = false, fingersAlreadyCaptured = 0, completedSlapSubOptions = emptySet())
+    // Called reactively from CaptureMethodRoute whenever the shared
+    // RegistrationViewModel's uiState changes. registrationCaptureMode is ""
+    // until the resident's first capture sets it -- once set, it's permanent
+    // (mirrors the backend's capture_mode lock), so the operator can no
+    // longer switch method cards.
+    fun updateFromRegistrationState(
+        registrationCaptureMode: String,
+        fingerUploadStatus: Map<FingerPosition, FingerCaptureStatus>
+    ) {
+        val isLocked = registrationCaptureMode.isNotEmpty()
+
+        val fingersAlreadyCaptured = fingerUploadStatus
+            .filterKeys {
+                it != FingerPosition.LEFT_SLAP &&
+                        it != FingerPosition.RIGHT_SLAP &&
+                        it != FingerPosition.UNKNOWN
+            }
+            .count { it.value == FingerCaptureStatus.CAPTURED }
+
+        val completedSlapSubOptions = buildSet {
+            if (fingerUploadStatus[FingerPosition.LEFT_SLAP] == FingerCaptureStatus.CAPTURED) {
+                add(SlapSubOption.LEFT_SLAP)
+            }
+            if (fingerUploadStatus[FingerPosition.RIGHT_SLAP] == FingerCaptureStatus.CAPTURED) {
+                add(SlapSubOption.RIGHT_SLAP)
+            }
+        }
+
+        _uiState.update { current ->
+            current.copy(
+                isLocked = isLocked,
+                fingersAlreadyCaptured = fingersAlreadyCaptured,
+                completedSlapSubOptions = completedSlapSubOptions,
+                // Once locked, force the card selection to match the
+                // resident's actual mode -- the operator can't pick the
+                // other one anymore.
+                selectedMethod = when {
+                    !isLocked -> current.selectedMethod
+                    registrationCaptureMode == CaptureMode.SLAP -> CaptureMethod.SLAP
+                    registrationCaptureMode == CaptureMode.SEQUENTIAL -> CaptureMethod.SEQUENTIAL
+                    else -> current.selectedMethod
+                }
+            )
         }
     }
 
