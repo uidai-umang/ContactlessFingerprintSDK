@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class ResidentLookupResponse(
     @SerializedName("resident_pseudonym_id") val residentPseudonymId: String,
+    @SerializedName("capture_mode") val captureMode: String = "",
     @SerializedName("captured_fingers") val capturedFingers: List<String>,
     @SerializedName("pending_uploads") val pendingUploads: List<String>,
     @SerializedName("total_captured") val totalCaptured: Int,

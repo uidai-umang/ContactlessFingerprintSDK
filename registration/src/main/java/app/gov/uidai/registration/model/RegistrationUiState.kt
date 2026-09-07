@@ -31,11 +31,14 @@ data class RegistrationUiState(
         FingerPosition.RIGHT_RING to FingerCaptureStatus.NOT_CAPTURED,
         FingerPosition.LEFT_LITTLE to FingerCaptureStatus.NOT_CAPTURED,
         FingerPosition.RIGHT_LITTLE to FingerCaptureStatus.NOT_CAPTURED,
+        FingerPosition.LEFT_SLAP to FingerCaptureStatus.NOT_CAPTURED,
+        FingerPosition.RIGHT_SLAP to FingerCaptureStatus.NOT_CAPTURED,
     ),
     val message: String? = null,
     val residentPseudonymId: String = "",
     val sessionId: String = "",
     val isLookingUpResident: Boolean = false,
+    val captureMode: String = "", // "" until resident's first capture sets it — mirrors backend
     val totalCaptured: Int = 0,
     val isComplete: Boolean = false
 ) {

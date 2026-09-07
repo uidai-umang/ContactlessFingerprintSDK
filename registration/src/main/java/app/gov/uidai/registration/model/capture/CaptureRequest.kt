@@ -6,6 +6,7 @@ data class CaptureRequest(
     @SerializedName("session_id") val sessionId: String,
     @SerializedName("resident_pseudonym_id") val residentPseudonymId: String,
     @SerializedName("operator_id") val operatorId: String,
+    @SerializedName("capture_mode") val captureMode: String,
     @SerializedName("finger_type") val fingerType: String,
     @SerializedName("hand") val hand: String,
     @SerializedName("nfiq2_score") val nfiq2Score: Double = 0.0,
