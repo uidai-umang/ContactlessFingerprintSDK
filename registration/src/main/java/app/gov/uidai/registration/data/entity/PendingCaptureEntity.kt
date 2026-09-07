@@ -9,6 +9,7 @@ data class PendingCaptureEntity(
     val sessionId: String,
     val residentPseudonymId: String,
     val operatorId: String,
+    val captureMode: String,
     val fingerType: String,
     val hand: String,
     val imageFilePath: String,
