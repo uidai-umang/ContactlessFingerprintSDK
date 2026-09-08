@@ -66,6 +66,8 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
                 previousFingerUploadStatus[selectedPosition] in inFlightStates
         val isNowResolved = selectedPosition != null &&
                 fingerUploadStatus[selectedPosition] !in inFlightStates
+        val isNowInFlight = selectedPosition != null &&
+                fingerUploadStatus[selectedPosition] in inFlightStates
         // True only on the exact call where the selected option's upload
         // just finished (success or failure) -- not on any later
         // recomposition, since previousFingerUploadStatus updates every call.
@@ -91,6 +93,7 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
                 fingersAlreadyCaptured = fingersAlreadyCaptured,
                 completedSlapSubOptions = completedSlapSubOptions,
                 selectedSlapSubOption = nextSelectedSubOption,
+                isUploading = isNowInFlight,
                 // Once locked, force the card selection to match the
                 // resident's actual mode -- the operator can't pick the
                 // other one anymore.

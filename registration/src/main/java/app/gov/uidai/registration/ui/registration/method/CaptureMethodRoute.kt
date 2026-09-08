@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -40,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.registration.model.CaptureMethod
@@ -178,6 +181,10 @@ fun CaptureMethodScreen(
             isMethodReadyToContinue = isMethodReadyToContinue,
             onContinue = onContinue
         )
+    }
+
+    if (uiState.isUploading) {
+        UploadingDialog()
     }
 }
 
@@ -715,6 +722,30 @@ private fun CaptureMethodBottomBar(
                 },
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun UploadingDialog() {
+    Dialog(
+        onDismissRequest = { /* not dismissible while an upload is in flight */ },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.White)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(color = capture_method_primary)
+            Text(
+                text = "Uploading capture…",
+                fontSize = 13.sp,
+                color = capture_method_text_primary
             )
         }
     }

@@ -5,5 +5,6 @@ data class CaptureMethodUiState(
     val selectedSlapSubOption: SlapSubOption? = null,
     val completedSlapSubOptions: Set<SlapSubOption> = emptySet(),
     val isLocked: Boolean = false,
-    val fingersAlreadyCaptured: Int = 0
+    val fingersAlreadyCaptured: Int = 0,
+    val isUploading: Boolean = false
 )
