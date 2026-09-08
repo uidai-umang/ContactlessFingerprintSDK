@@ -180,7 +180,7 @@ class RegistrationActivity : ComponentActivity() {
                                         if (it == SlapSubOption.LEFT_SLAP) "Left" else "Right"
                                     }
                                     when (result.resultCode) {
-                                        ResultCode.CAPTURE_SUCCESS -> {
+                                        ResultCode.SDK_SUCCESS -> {
                                             val uri = result.data?.data
                                             val responseXml = result.data?.getStringExtra(JourneyConstant.RESPONSE)
                                             val base64String = uri?.let {
