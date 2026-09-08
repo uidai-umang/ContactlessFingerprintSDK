@@ -75,7 +75,6 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
 
     fun selectSlapSubOption(option: SlapSubOption) {
         val current = _uiState.value
-        if (current.isLocked) return
         if (current.selectedMethod != CaptureMethod.SLAP) return
         if (option in current.completedSlapSubOptions) return
         _uiState.update { it.copy(selectedSlapSubOption = option) }
