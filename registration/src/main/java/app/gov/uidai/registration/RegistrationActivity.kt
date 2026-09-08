@@ -54,6 +54,7 @@ import app.gov.uidai.registration.utils.device.DeviceRegistrationGate
 import app.gov.uidai.registration.utils.worker.CaptureWorkScheduler
 import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -183,24 +184,31 @@ class RegistrationActivity : ComponentActivity() {
                                         ResultCode.SDK_SUCCESS -> {
                                             val uri = result.data?.data
                                             val responseXml = result.data?.getStringExtra(JourneyConstant.RESPONSE)
-                                            val base64String = uri?.let {
-                                                context.contentResolver.openInputStream(it)?.bufferedReader()
-                                                    ?.use { reader -> reader.readText() }
+
+                                            if (handType != null) {
+                                                registrationViewModel.markSlapProcessing(handType)
                                             }
-                                            if (base64String != null && handType != null) {
-                                                val bitmap = base64String.toBitmap()
-                                                val jp2ByteArray = JP2Encoder(bitmap).encode()
-                                                val (blurScore, brightnessScore, glareScore) =
-                                                    parseSlapScoresFromResponseXml(responseXml)
-                                                registrationViewModel.uploadSlapResult(
-                                                    handType = handType,
-                                                    imageBytes = jp2ByteArray,
-                                                    blurScore = blurScore,
-                                                    brightnessScore = brightnessScore,
-                                                    glareScore = glareScore
-                                                )
-                                            } else {
-                                                Log.w("SlapCapture", "No image data in slap capture result")
+
+                                            lifecycleScope.launch(Dispatchers.Default) {
+                                                val base64String = uri?.let {
+                                                    context.contentResolver.openInputStream(it)?.bufferedReader()
+                                                        ?.use { reader -> reader.readText() }
+                                                }
+                                                if (base64String != null && handType != null) {
+                                                    val bitmap = base64String.toBitmap()
+                                                    val jp2ByteArray = JP2Encoder(bitmap).encode()
+                                                    val (blurScore, brightnessScore, glareScore) =
+                                                        parseSlapScoresFromResponseXml(responseXml)
+                                                    registrationViewModel.uploadSlapResult(
+                                                        handType = handType,
+                                                        imageBytes = jp2ByteArray,
+                                                        blurScore = blurScore,
+                                                        brightnessScore = brightnessScore,
+                                                        glareScore = glareScore
+                                                    )
+                                                } else {
+                                                    Log.w("SlapCapture", "No image data in slap capture result")
+                                                }
                                             }
                                         }
                                         else -> Log.d(

@@ -307,7 +307,9 @@ class RegistrationViewModel @Inject constructor(
     ) {
         val hand = if (fingerPosition.name.startsWith("LEFT")) "LEFT" else "RIGHT"
 
-        val encrypted = encryptionService.encryptImage(imageBytes)
+        val encrypted = withContext(Dispatchers.Default) {
+            encryptionService.encryptImage(imageBytes)
+        }
 
         val request = CaptureRequest(
             sessionId = currentSessionId,
@@ -476,6 +478,21 @@ class RegistrationViewModel @Inject constructor(
     ) {
         startFingerprintCapture(fingerPosition) {
             sdkManager.captureFingerprint(activityResultLauncher = launcher, purpose = "register", fingerPosition = fingerPosition)
+        }
+    }
+
+    fun markSlapProcessing(handType: String) {
+        val fingerPosition = when (handType) {
+            "Left" -> FingerPosition.LEFT_SLAP
+            "Right" -> FingerPosition.RIGHT_SLAP
+            else -> return
+        }
+        _uiState.update {
+            it.copy(
+                fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
+                    set(fingerPosition, FingerCaptureStatus.CAPTURING)
+                }
+            )
         }
     }
 
