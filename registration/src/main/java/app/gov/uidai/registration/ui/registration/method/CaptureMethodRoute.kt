@@ -83,7 +83,6 @@ fun CaptureMethodRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val registrationUiState by registrationViewModel.uiState.collectAsStateWithLifecycle()
 
-
     LaunchedEffect(registrationUiState.captureMode, registrationUiState.fingerUploadStatus) {
         viewModel.updateFromRegistrationState(
             registrationCaptureMode = registrationUiState.captureMode,
@@ -99,8 +98,6 @@ fun CaptureMethodRoute(
             viewModel.onContinue()
             val selectedSlapSubOption = uiState.selectedSlapSubOption
             when {
-                // Locked state is always mid-sequential-session.
-                uiState.isLocked -> onContinueSequential()
                 uiState.selectedMethod == CaptureMethod.SEQUENTIAL -> onContinueSequential()
                 uiState.selectedMethod == CaptureMethod.SLAP && selectedSlapSubOption != null ->
                     onContinueSlap(selectedSlapSubOption)
@@ -128,11 +125,17 @@ fun CaptureMethodScreen(
         null -> false
     }
 
+    // isLocked means "capture_mode is permanently set for this resident" --
+    // it says nothing about WHICH card that is. isActive (computed per card
+    // below) is what each card actually needs: "is MY method the one that's
+    // locked in" vs "is the OTHER method locked in, so I'm blocked."
+    val slapIsActive = uiState.isLocked && uiState.selectedMethod == CaptureMethod.SLAP
+    val sequentialIsActive = uiState.isLocked && uiState.selectedMethod == CaptureMethod.SEQUENTIAL
+
     Column(modifier = Modifier
         .fillMaxSize()
         .background(capture_method_bg)) {
         CaptureMethodTopBar(onBack = onBack)
-
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -150,28 +153,26 @@ fun CaptureMethodScreen(
                 color = capture_method_text_primary,
                 lineHeight = 20.sp
             )
-
             SlapCaptureCard(
                 isSelected = uiState.selectedMethod == CaptureMethod.SLAP,
                 isLocked = uiState.isLocked,
+                isActive = slapIsActive,
                 selectedSubOption = uiState.selectedSlapSubOption,
                 completedSubOptions = uiState.completedSlapSubOptions,
                 onClick = { onSelectMethod(CaptureMethod.SLAP) },
                 onSelectSubOption = onSelectSlapSubOption
             )
-
             SequentialCaptureCard(
                 isSelected = uiState.selectedMethod == CaptureMethod.SEQUENTIAL,
                 isLocked = uiState.isLocked,
+                isActive = sequentialIsActive,
                 fingersAlreadyCaptured = uiState.fingersAlreadyCaptured,
                 onClick = { onSelectMethod(CaptureMethod.SEQUENTIAL) }
             )
-
             if (uiState.isLocked) {
-                CaptureLockedWarningNote()
+                CaptureLockedWarningNote(activeMethod = uiState.selectedMethod)
             }
         }
-
         CaptureMethodBottomBar(
             isLocked = uiState.isLocked,
             isMethodReadyToContinue = isMethodReadyToContinue,
@@ -219,37 +220,47 @@ private fun CaptureMethodTopBar(onBack: () -> Unit) {
 private fun SlapCaptureCard(
     isSelected: Boolean,
     isLocked: Boolean,
+    isActive: Boolean,
     selectedSubOption: SlapSubOption?,
     completedSubOptions: Set<SlapSubOption>,
     onClick: () -> Unit,
     onSelectSubOption: (SlapSubOption) -> Unit
 ) {
+    // blocked = some OTHER method is locked in, so this card is unavailable.
+    // isActive = THIS card's method is the one locked in -- still fully
+    // usable, just can't be switched away from anymore.
+    val blocked = isLocked && !isActive
+
     val borderColor = when {
-        isLocked -> capture_method_locked_border
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
         isSelected -> capture_method_primary
         else -> capture_method_border
     }
     val bgColor = when {
-        isLocked -> capture_method_locked_bg
+        isActive -> capture_method_active_container
+        blocked -> capture_method_locked_bg
         isSelected -> capture_method_primary_container
         else -> Color.White
     }
     val iconChipBg = when {
-        isLocked -> capture_method_locked_border
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
         isSelected -> capture_method_primary
         else -> capture_method_icon_chip_bg
     }
     val textColor = when {
-        isLocked -> capture_method_locked_text
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_text
         isSelected -> capture_method_primary
         else -> capture_method_text_primary
     }
     val descColor = when {
-        isLocked -> capture_method_locked_text
+        isActive -> capture_method_active.copy(alpha = 0.85f)
+        blocked -> capture_method_locked_text
         isSelected -> capture_method_primary.copy(alpha = 0.8f)
         else -> capture_method_text_muted
     }
-
     val dividerColor = when {
         !isLocked && !isSelected -> capture_method_locked_border
         isSelected -> capture_method_primary.copy(alpha = 0.2f)
@@ -259,7 +270,7 @@ private fun SlapCaptureCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (isLocked) 0.5f else 1f)
+            .alpha(if (blocked) 0.5f else 1f)
             .clip(RoundedCornerShape(14.dp))
             .background(bgColor)
             .border(2.dp, borderColor, RoundedCornerShape(14.dp))
@@ -293,33 +304,35 @@ private fun SlapCaptureCard(
                         color = textColor,
                         modifier = Modifier.weight(1f)
                     )
-                    if (isLocked) {
-                        Text("🔒", fontSize = 16.sp)
-                    } else {
-                        RadioIndicator(isSelected = isSelected)
+                    when {
+                        blocked -> Text("🔒", fontSize = 16.sp)
+                        else -> RadioIndicator(
+                            isSelected = isSelected || isActive,
+                            fillColor = if (isActive) capture_method_active else capture_method_primary
+                        )
                     }
                 }
                 Text(
-                    text = if (isLocked) {
-                        "Not available — sequential capture already in progress."
-                    } else {
-                        "Capture all four fingers of each hand together using the palm overlay, then thumbs separately. Faster per resident."
+                    text = when {
+                        isActive -> "In progress — continuing slap capture for this resident."
+                        blocked -> "Not available — sequential capture already in progress."
+                        else -> "Capture all four fingers of each hand together using the palm overlay, then thumbs separately. Faster per resident."
                     },
                     fontSize = 12.sp,
                     color = descColor
                 )
             }
         }
-
-        if (!isLocked) HorizontalDivider(color = dividerColor, thickness = 1.dp)
-
-        if (!isSelected && !isLocked) {
+        if (!blocked) HorizontalDivider(color = dividerColor, thickness = 1.dp)
+        if (!isSelected && !blocked) {
             SlabSubOptionNeutralState()
         }
-
-        if (isSelected && !isLocked) {
+        // Sub-options stay interactive whenever this card isn't blocked --
+        // including while isActive/isLocked, so an in-progress slap resident
+        // can still pick "Right slap" after "Left slap" was already captured.
+        if (isSelected && !blocked) {
             SlapSubOptionsRow(
-                isInteractive = isSelected,
+                isInteractive = true,
                 selectedOption = selectedSubOption,
                 completedOptions = completedSubOptions,
                 onSelectOption = onSelectSubOption
@@ -337,22 +350,17 @@ private fun SlabSubOptionNeutralState() {
             .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-
         Text(
             text = "\uD83D\uDC48 Left slap"
         )
-
         Text(
             text = "\uD83D\uDC49 Right slap"
         )
-
         Text(
             text = "\uD83D\uDC4D Thumb"
         )
-
     }
 }
-
 
 @Composable
 private fun SlapSubOptionsRow(
@@ -409,7 +417,6 @@ private fun SubOptionChip(
     // Selectable once the Slap card itself is chosen — and only if this
     // particular sub-capture hasn't already been done this session.
     val isClickable = isInteractive && !isCompleted
-
     val bgColor = when {
         isSelected -> capture_method_primary
         isCompleted -> capture_method_locked_border
@@ -422,7 +429,6 @@ private fun SubOptionChip(
         isInteractive -> capture_method_primary
         else -> capture_method_text_muted
     }
-
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
@@ -452,31 +458,39 @@ private fun SubOptionChip(
 private fun SequentialCaptureCard(
     isSelected: Boolean,
     isLocked: Boolean,
+    isActive: Boolean,
     fingersAlreadyCaptured: Int,
     onClick: () -> Unit
 ) {
+    val blocked = isLocked && !isActive
+
     val borderColor = when {
-        isLocked -> capture_method_active
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
         isSelected -> capture_method_primary
         else -> capture_method_border
     }
     val bgColor = when {
-        isLocked -> capture_method_active_container
+        isActive -> capture_method_active_container
+        blocked -> capture_method_locked_bg
         isSelected -> capture_method_primary_container
         else -> Color.White
     }
     val iconChipBg = when {
-        isLocked -> capture_method_active
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
         isSelected -> capture_method_primary
         else -> capture_method_icon_chip_bg
     }
     val textColor = when {
-        isLocked -> capture_method_active
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_text
         isSelected -> capture_method_primary
         else -> capture_method_text_primary
     }
     val descColor = when {
-        isLocked -> capture_method_active.copy(alpha = 0.85f)
+        isActive -> capture_method_active.copy(alpha = 0.85f)
+        blocked -> capture_method_locked_text
         isSelected -> capture_method_primary.copy(alpha = 0.8f)
         else -> capture_method_text_muted
     }
@@ -484,6 +498,7 @@ private fun SequentialCaptureCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (blocked) 0.5f else 1f)
             .clip(RoundedCornerShape(14.dp))
             .background(bgColor)
             .border(2.dp, borderColor, RoundedCornerShape(14.dp))
@@ -517,26 +532,28 @@ private fun SequentialCaptureCard(
                         color = textColor,
                         modifier = Modifier.weight(1f)
                     )
-                    RadioIndicator(
-                        isSelected = isSelected || isLocked,
-                        fillColor = if (isLocked) capture_method_active else capture_method_primary
-                    )
+                    when {
+                        blocked -> Text("🔒", fontSize = 16.sp)
+                        else -> RadioIndicator(
+                            isSelected = isSelected || isActive,
+                            fillColor = if (isActive) capture_method_active else capture_method_primary
+                        )
+                    }
                 }
                 Text(
-                    text = if (isLocked) {
-                        "In progress — $fingersAlreadyCaptured fingers captured so far. Continue to add more."
-                    } else {
-                        "Capture one finger at a time in a guided sequence. Minimum 4 fingers required. Better for residents with difficulty using slap."
+                    text = when {
+                        isActive -> "In progress — $fingersAlreadyCaptured fingers captured so far. Continue to add more."
+                        blocked -> "Not available — slap capture already in progress."
+                        else -> "Capture one finger at a time in a guided sequence. Minimum 4 fingers required. Better for residents with difficulty using slap."
                     },
                     fontSize = 12.sp,
                     color = descColor
                 )
             }
         }
-
-        if (isLocked) {
+        if (isActive) {
             SessionProgressStrip(fingersAlreadyCaptured = fingersAlreadyCaptured)
-        } else if (isSelected) {
+        } else if (isSelected && !blocked) {
             SequentialFooterNote()
         }
     }
@@ -612,7 +629,15 @@ private fun SessionProgressStrip(fingersAlreadyCaptured: Int) {
 }
 
 @Composable
-private fun CaptureLockedWarningNote() {
+private fun CaptureLockedWarningNote(activeMethod: CaptureMethod?) {
+    val message = when (activeMethod) {
+        CaptureMethod.SLAP ->
+            "⚠ You cannot switch to sequential mode once slap capture has started. Please continue with the current session or finish and start a new collection."
+        CaptureMethod.SEQUENTIAL ->
+            "⚠ You cannot switch to slap mode once sequential capture has started. Please continue with the current session or finish and start a new collection."
+        null ->
+            "⚠ Capture method is locked for this session."
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -622,7 +647,7 @@ private fun CaptureLockedWarningNote() {
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Text(
-            text = "⚠ You cannot switch to slap mode once sequential capture has started. Please continue with the current session or finish and start a new collection.",
+            text = message,
             fontSize = 12.sp,
             color = capture_method_warning_text,
             lineHeight = 18.sp
@@ -660,7 +685,7 @@ private fun CaptureMethodBottomBar(
     isMethodReadyToContinue: Boolean,
     onContinue: () -> Unit
 ) {
-    val enabled = isLocked || isMethodReadyToContinue
+    val enabled = isMethodReadyToContinue
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -701,6 +726,7 @@ fun Preview() {
     SlapCaptureCard(
         isSelected = false,
         isLocked = false,
+        isActive = false,
         selectedSubOption = null,
         completedSubOptions = emptySet(),
         onClick = {},
