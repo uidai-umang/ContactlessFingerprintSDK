@@ -62,27 +62,19 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
         val selectedPosition = selected?.toFingerPositionOrNull()
 
         val inFlightStates = setOf(FingerCaptureStatus.UPLOADING, FingerCaptureStatus.CAPTURING)
-        val wasInFlight = selectedPosition != null &&
-                previousFingerUploadStatus[selectedPosition] in inFlightStates
-        val isNowResolved = selectedPosition != null &&
-                fingerUploadStatus[selectedPosition] !in inFlightStates
-        val isNowInFlight = selectedPosition != null &&
-                fingerUploadStatus[selectedPosition] in inFlightStates
-        // True only on the exact call where the selected option's upload
-        // just finished (success or failure) -- not on any later
-        // recomposition, since previousFingerUploadStatus updates every call.
-        val justResolved = wasInFlight && isNowResolved
+        val previousStatus = selectedPosition?.let { previousFingerUploadStatus[it] }
+        val currentStatus = selectedPosition?.let { fingerUploadStatus[it] }
+        val wasInFlight = previousStatus in inFlightStates
+        val isNowInFlight = currentStatus in inFlightStates
+        val justResolved = wasInFlight && !isNowInFlight
 
         val nextSelectedSubOption = when {
             !justResolved -> selected
             selected in completedSlapSubOptions -> {
-                // Success -- auto-advance to the next real, uncompleted
-                // sub-option. Thumbs is never auto-selected -- no capture
-                // path is built for it (see SlapCaptureLauncher).
                 listOf(SlapSubOption.LEFT_SLAP, SlapSubOption.RIGHT_SLAP)
                     .firstOrNull { it != selected && it !in completedSlapSubOptions }
             }
-            else -> null // Failure -- clear selection, let the operator re-pick.
+            else -> null
         }
 
         previousFingerUploadStatus = fingerUploadStatus
@@ -93,10 +85,7 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
                 fingersAlreadyCaptured = fingersAlreadyCaptured,
                 completedSlapSubOptions = completedSlapSubOptions,
                 selectedSlapSubOption = nextSelectedSubOption,
-                isUploading = isNowInFlight,
-                // Once locked, force the card selection to match the
-                // resident's actual mode -- the operator can't pick the
-                // other one anymore.
+                uploadStage = if (isNowInFlight) currentStatus else null,
                 selectedMethod = when {
                     !isLocked -> current.selectedMethod
                     registrationCaptureMode == CaptureMode.SLAP -> CaptureMethod.SLAP

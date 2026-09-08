@@ -47,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.registration.model.CaptureMethod
 import app.gov.uidai.registration.model.CaptureMethodUiState
+import app.gov.uidai.registration.model.FingerCaptureStatus
 import app.gov.uidai.registration.model.SlapSubOption
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.theme.capture_method_active
@@ -183,8 +184,8 @@ fun CaptureMethodScreen(
         )
     }
 
-    if (uiState.isUploading) {
-        UploadingDialog()
+    if (uiState.uploadStage != null) {
+        UploadingDialog(stage = uiState.uploadStage)
     }
 }
 
@@ -728,9 +729,14 @@ private fun CaptureMethodBottomBar(
 }
 
 @Composable
-private fun UploadingDialog() {
+private fun UploadingDialog(stage: FingerCaptureStatus) {
+    val message = when (stage) {
+        FingerCaptureStatus.CAPTURING -> "Processing capture…"
+        FingerCaptureStatus.UPLOADING -> "Uploading…"
+        else -> "Processing…"
+    }
     Dialog(
-        onDismissRequest = { /* not dismissible while an upload is in flight */ },
+        onDismissRequest = { },
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
         Column(
@@ -742,15 +748,10 @@ private fun UploadingDialog() {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CircularProgressIndicator(color = capture_method_primary)
-            Text(
-                text = "Uploading capture…",
-                fontSize = 13.sp,
-                color = capture_method_text_primary
-            )
+            Text(text = message, fontSize = 13.sp, color = capture_method_text_primary)
         }
     }
 }
-
 @Composable
 @Preview
 fun Preview() {
