@@ -95,6 +95,7 @@ import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
 import app.gov.uidai.capture.utils.KotlinUtils.headingTextFor
 import app.gov.uidai.capture.utils.extension.toBase64
 import `in`.gov.uidai.utility.constants.ResultCode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
@@ -785,12 +786,17 @@ private fun LiveScoreRow(score: LiveCheckScore) {
                 .clip(CircleShape)
                 .background(if (score.passed) Color(0xFF16A34A) else Color.Transparent)
         )
-        val valueText = if (score.acceptedMax == Float.MAX_VALUE) {
-            "%.2f (min: %.2f)".format(score.currentValue, score.acceptedMin)
+
+        if(score.showValues) {
+            val valueText = if (score.acceptedMax == Float.MAX_VALUE) {
+                "%.2f (min: %.2f)".format(score.currentValue, score.acceptedMin)
+            } else {
+                "%.2f (%.2f, %.2f)".format(score.currentValue, score.acceptedMin, score.acceptedMax)
+            }
+            Text(text = "${score.label}: $valueText", color = Color.White, fontSize = 10.sp)
         } else {
-            "%.2f (%.2f, %.2f)".format(score.currentValue, score.acceptedMin, score.acceptedMax)
+            Text(text = score.label, color = Color.White, fontSize = 10.sp)
         }
-        Text(text = "${score.label}: $valueText", color = Color.White, fontSize = 10.sp)
     }
 }
 
