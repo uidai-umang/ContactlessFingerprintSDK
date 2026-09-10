@@ -1,6 +1,7 @@
 package app.gov.uidai.capture.usecase.runner
 
 import android.annotation.SuppressLint
+import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import app.gov.uidai.capture.domain.config.BlurSettings
@@ -16,6 +17,8 @@ import app.gov.uidai.capture.utils.BlurGate
 import app.gov.uidai.capture.utils.RollingConfidence
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.selects.select
 
 class BlurCheckRunner(
@@ -33,7 +36,7 @@ class BlurCheckRunner(
 
     private val confidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
 
-    private val laplacianGate = BlurGate(targetThreshold = 300f, fallbackThreshold = 250f, maxWaitMs = 3_000L)
+    private val laplacianGate = BlurGate(targetThreshold = 250f, fallbackThreshold = 200f, maxWaitMs = 3_000L)
     private val densenetGate: BlurGate by lazy {
         val threshold = preferenceStore.get(BlurSettings.THRESHOLD)
         BlurGate(targetThreshold = threshold, fallbackThreshold = threshold, maxWaitMs = 3_000L)
@@ -64,38 +67,66 @@ class BlurCheckRunner(
                 croppedByteArray, croppedByteArraySize.width, croppedByteArraySize.height, frame.rotationDegrees
             )
 
-            val laplacianDeferred = coroutineScope.async {
-                try {
-                    val r = laplacianBlur.run(imageDataProvider)
-                    NamedResult("Laplacian", r, r.confidence >= laplacianGate.currentThreshold())
-                } catch (e: Exception) {
-                    Log.e(TAG, "Laplacian check failed", e)
-                    null
+            // Both checks race, and BOTH stay off the main thread.
+            //
+            // `kotlinx.coroutines.coroutineScope { }` here is the suspend
+            // BUILDER, not the injected `coroutineScope` field. That
+            // distinction is the entire bug that was here before: the field
+            // is rememberCoroutineScope() from Compose, and
+            // `someScope.async { }` uses THAT SCOPE's context (Main) rather
+            // than the calling coroutine's -- verified on-device,
+            // DENSENET_THREAD logged "main", so a ~1.5s TFLite inference ran
+            // on the UI thread every frame. The builder instead inherits
+            // THIS coroutine's dispatcher (stage1LoopsDispatcher via
+            // blurCheckJob), so neither child can reach Main.
+            //
+            // It also can't leak: the block won't return until both children
+            // complete or are cancelled. The old version's children were
+            // parented to the long-lived injected scope, so they outlived
+            // the tick and piled up -- ~30 concurrent DenseNet inferences
+            // at a 33ms tick rate against a ~1.5s inference.
+            val winner: NamedResult? = coroutineScope {
+                val lapDeferred = async {
+                    try {
+                        val t0 = SystemClock.uptimeMillis()
+                        val r = laplacianBlur.run(imageDataProvider)
+                        Log.d(TAG, "CALL_DURATION Laplacian=${SystemClock.uptimeMillis() - t0}ms confidence=${r.confidence} thread=${Thread.currentThread().name}")
+                        NamedResult("Laplacian", r, r.confidence >= laplacianGate.currentThreshold())
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Laplacian check failed", e)
+                        null
+                    }
                 }
-            }
-            val densenetDeferred = coroutineScope.async {
-                try {
-                    val r = densenetBlur.run(imageDataProvider)
-                    NamedResult("DenseNet", r, r.confidence >= densenetGate.currentThreshold())
-                } catch (e: Exception) {
-                    Log.e(TAG, "DenseNet check failed", e)
-                    null
+                val dnDeferred = async {
+                    try {
+                        val t0 = SystemClock.uptimeMillis()
+                        val r = runInterruptible {
+                            densenetBlur.run(imageDataProvider)
+                        }
+                        Log.d(TAG, "CALL_DURATION Densenet=${SystemClock.uptimeMillis() - t0}ms confidence=${r.confidence} thread=${Thread.currentThread().name}")
+                        NamedResult("DenseNet", r, r.confidence >= densenetGate.currentThreshold())
+                    } catch (e: Exception) {
+                        Log.e(TAG, "DenseNet check failed", e)
+                        null
+                    }
                 }
-            }
 
-            val first = select<NamedResult?> {
-                laplacianDeferred.onAwait { it }
-                densenetDeferred.onAwait { it }
-            }
+                val first = select {
+                    lapDeferred.onAwait { it }
+                    dnDeferred.onAwait { it }
+                }
 
-            val winner = if (first?.passed == true) {
-                first
-            } else {
-                val second = if (laplacianDeferred.isCompleted) densenetDeferred.await() else laplacianDeferred.await()
-                when {
-                    second?.passed == true -> second
-                    first != null -> first
-                    else -> second
+                if (first?.passed == true) {
+                    lapDeferred.cancel()
+                    dnDeferred.cancel()
+                    first
+                } else {
+                    val second = if (lapDeferred.isCompleted) dnDeferred.await() else lapDeferred.await()
+                    when {
+                        second?.passed == true -> second
+                        first != null -> first
+                        else -> second
+                    }
                 }
             }
 
@@ -130,7 +161,6 @@ class BlurCheckRunner(
             Log.e(TAG, "Error in Blur processing", e)
         }
     }
-
     fun reset() {
         isPassed = false
         lastConfidence = 0f
