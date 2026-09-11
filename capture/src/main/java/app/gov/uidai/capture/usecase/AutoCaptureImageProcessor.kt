@@ -34,6 +34,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import app.gov.uidai.capture.utils.extension.crop
+import app.gov.uidai.capture.utils.extension.rotate
+import app.gov.uidai.capture.utils.extension.toBitmap
 
 class AutoCaptureImageProcessor @AssistedInject constructor(
     segmentationFactory: SegmentationFactory,
@@ -120,16 +123,21 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     override suspend fun processStage2(candidateBatch: List<CameraFrame>) {
         val processingId = candidateBatch.first().processingId
         Log.d(TAG, "Processing Stage 2 for batch #$processingId")
+
         try {
             listener.onStage2ProcessingStageUpdate(ProcessingStage.BLUR)
+
             val imageDataProviders = candidateBatch.map { frame ->
                 val (byteArray, byteArraySize) = frame.getByteArray(
-                    requiresCropping = preferenceStore.get(ProcessingSettings.CROPPED_INPUT_TO_BLUR_MODEL),
+                    requiresCropping = preferenceStore.get(
+                        ProcessingSettings.CROPPED_INPUT_TO_BLUR_MODEL
+                    ),
                     cutoutRect = provider.getCutoutRectInImageCoordinates(
                         Size(frame.width, frame.height),
                         frame.rotationDegrees
                     )
                 )
+
                 ImageDataProvider(
                     byteArray,
                     byteArraySize.width,
@@ -138,37 +146,44 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 )
             }
 
-            // Step 1: run every configured Stage 2 blur check, on every
-            // candidate, in parallel. Which checks run is controlled
-            // ENTIRELY by stage2BlurChecks above -- nothing here knows or
-            // cares whether that list has one check or five.
             val blurResults = withContext(blurExecutor.asCoroutineDispatcher()) {
                 imageDataProviders.map { dataProvider ->
                     async {
-                        Stage2BlurResult(stage2BlurChecks.map { check -> check.run(dataProvider) })
+                        Stage2BlurResult(
+                            stage2BlurChecks.map { check ->
+                                check.run(dataProvider)
+                            }
+                        )
                     }
                 }.awaitAll()
             }
+
             val isBlurPassed = blurResults.any { it.allPassed }
 
             if (preferenceStore.get(ProcessingSettings.SAVE_BLUR_INPUT)) {
                 imageDataProviders.forEachIndexed { i, dataProvider ->
                     val conf = blurResults[i].primaryConfidence
-                    val confFormatted = String.format("%.2f", conf).removePrefix("0")
+                    val confFormatted =
+                        String.format("%.2f", conf).removePrefix("0")
+
                     controller.saveBitmap(
                         dataProvider.getAsUprightBitmap(),
                         "BlurInput($confFormatted)"
                     )
                 }
             }
+
             imageDataProviders.forEach { it.clearCache() }
 
             if (!isBlurPassed) {
                 Log.w(
                     TAG,
                     "STAGE2_REJECT -- Blur failed. Per-candidate: " +
-                            blurResults.mapIndexed { i, r -> "candidate$i=[${r.describe()}]" }.joinToString(" | ")
+                            blurResults.mapIndexed { i, r ->
+                                "candidate$i=[${r.describe()}]"
+                            }.joinToString(" | ")
                 )
+
                 listener.onStage2Result(
                     passed = false,
                     errors = listOf(Error.Blur)
@@ -177,75 +192,117 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             }
 
             // ----------------------------------------------------------------------
-            // SEGMENTATION DISABLED
-            /*
+            // SEGMENTATION
+            // ----------------------------------------------------------------------
+
             listener.onStage2ProcessingStageUpdate(ProcessingStage.SEGMENTATION)
-            val blurSortedIndices = blurResults.indices.sortedByDescending {
-                blurResults[it].confidence
-            }
-            // Step 2: Perform segmentation on the best frame
+
+            val blurSortedIndices = blurResults.indices
+                .filter { blurResults[it].allPassed }
+                .sortedByDescending {
+                    blurResults[it].primaryConfidence
+                }
+
             val bestFrame = candidateBatch[blurSortedIndices.first()]
-            val (segCroppedByteArray, segCroppedByteArraySize) = bestFrame.getByteArray(
-                requiresCropping = preferenceStore.get(ProcessingSettings.CROPPED_INPUT_TO_SEGMENTATION_MODEL),
-                cutoutRect = provider.getCutoutRectInImageCoordinates(
-                    Size(bestFrame.width, bestFrame.height),
-                    bestFrame.rotationDegrees
+
+            val (segCroppedByteArray, segCroppedByteArraySize) =
+                bestFrame.getByteArray(
+                    requiresCropping = preferenceStore.get(
+                        ProcessingSettings.CROPPED_INPUT_TO_SEGMENTATION_MODEL
+                    ),
+                    cutoutRect = provider.getCutoutRectInImageCoordinates(
+                        Size(bestFrame.width, bestFrame.height),
+                        bestFrame.rotationDegrees
+                    )
                 )
-            )
+
             val segmentationProvider = ImageDataProvider(
                 segCroppedByteArray,
                 segCroppedByteArraySize.width,
                 segCroppedByteArraySize.height,
                 bestFrame.rotationDegrees
             )
-            val segmentationResult = runInterruptible {
-                segmentationCheck.run(segmentationProvider)
-            }
+
+            val segmentationResult = segmentationCheck.run(
+                segmentationProvider
+            )
+
             if (preferenceStore.get(ProcessingSettings.SAVE_SEGMENTATION_INPUT)) {
                 controller.saveBitmap(
                     segmentationProvider.getAsUprightBitmap(),
                     "SegInput"
                 )
             }
+
             Log.d(TAG, "Segmentation Result: $segmentationResult")
+
             val segmentedFrame = when (segmentationResult) {
+
                 is ProcessingResult.Failed -> {
                     listener.onStage2Result(
                         passed = false,
-                        errors = listOf(segmentationResult.cause as Error)
+                        errors = listOf(
+                            segmentationResult.cause as Error
+                        )
                     )
                     return
                 }
+
                 is ProcessingResult.Passed -> {
+
                     val boundingBox = segmentationResult.data.box
-                    val finalBitmap = segmentationProvider.getAsUprightBitmap().crop(boundingBox)
-                    val (fullByteArray, fullByteArraySize) = bestFrame.getByteArray(
-                        requiresCropping = false,
-                        cutoutRect = provider.getCutoutRectInImageCoordinates(
-                            Size(bestFrame.width, bestFrame.height),
-                            bestFrame.rotationDegrees
+
+                    // IMPORTANT:
+                    // Crop the ORIGINAL bitmap using the segmentation bounding box.
+                    // This is what gives us the actual finger image containing
+                    // the fingerprint ridges.
+                    val finalBitmap = segmentationProvider
+                        .getAsUprightBitmap()
+                        .crop(boundingBox)
+
+                    val (fullByteArray, fullByteArraySize) =
+                        bestFrame.getByteArray(
+                            requiresCropping = false,
+                            cutoutRect = provider.getCutoutRectInImageCoordinates(
+                                Size(bestFrame.width, bestFrame.height),
+                                bestFrame.rotationDegrees
+                            )
                         )
-                    )
-                    val fullBitmap = fullByteArray.toBitmap(fullByteArraySize)
+
+                    val fullBitmap = fullByteArray
+                        .toBitmap(fullByteArraySize)
                         .rotate(bestFrame.rotationDegrees)
-                    val (croppedByteArray, croppedByteArraySize) = bestFrame.getByteArray(
-                        requiresCropping = true,
-                        cutoutRect = provider.getCutoutRectInImageCoordinates(
-                            Size(bestFrame.width, bestFrame.height),
-                            bestFrame.rotationDegrees
+
+                    val (croppedByteArray, croppedByteArraySize) =
+                        bestFrame.getByteArray(
+                            requiresCropping = true,
+                            cutoutRect = provider.getCutoutRectInImageCoordinates(
+                                Size(bestFrame.width, bestFrame.height),
+                                bestFrame.rotationDegrees
+                            )
                         )
-                    )
-                    val croppedBitmap = croppedByteArray.toBitmap(croppedByteArraySize)
+
+                    val croppedBitmap = croppedByteArray
+                        .toBitmap(croppedByteArraySize)
                         .rotate(bestFrame.rotationDegrees)
+
                     if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
-                        controller.saveBitmap(finalBitmap, "FinalOutput")
+                        controller.saveBitmap(
+                            finalBitmap,
+                            "FinalOutput"
+                        )
+
                         segmentationResult.data.mask?.let {
-                            controller.saveBitmap(it, "FinalOutputMask")
+                            controller.saveBitmap(
+                                it,
+                                "FinalOutputMask"
+                            )
                         }
                     }
+
                     SegmentedFrame(
                         processingId = processingId,
-                        finalBitmap = croppedBitmap,
+                        finalBitmap = finalBitmap,
                         fullBitmap = fullBitmap,
                         croppedBitmap = croppedBitmap,
                         timestamp = bestFrame.timestamp,
@@ -253,157 +310,191 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     )
                 }
             }
+
             segmentationProvider.clearCache()
-            */
 
-            // Only rank among candidates where EVERY configured check passed.
-            val blurSortedIndices = blurResults.indices
-                .filter { blurResults[it].allPassed }
-                .sortedByDescending { blurResults[it].primaryConfidence }
-
-            // Use the sharpest (all-checks-passed) frame directly
-            val bestFrame = candidateBatch[blurSortedIndices.first()]
-
-            // Full image
-            val (fullByteArray, fullByteArraySize) = bestFrame.getByteArray(
-                requiresCropping = false,
-                cutoutRect = provider.getCutoutRectInImageCoordinates(
-                    Size(bestFrame.width, bestFrame.height),
-                    bestFrame.rotationDegrees
-                )
-            )
-            val fullBitmap = fullByteArray
-                .toBitmap(fullByteArraySize)
-                .rotate(bestFrame.rotationDegrees)
-
-            // Cropped image (this is the final image that will be uploaded)
-            val (croppedByteArray, croppedByteArraySize) = bestFrame.getByteArray(
-                requiresCropping = true,
-                cutoutRect = provider.getCutoutRectInImageCoordinates(
-                    Size(bestFrame.width, bestFrame.height),
-                    bestFrame.rotationDegrees
-                )
-            )
-            val croppedBitmap = croppedByteArray
-                .toBitmap(croppedByteArraySize)
-                .rotate(bestFrame.rotationDegrees)
-
-            // Save debug output if enabled
-            if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
-                controller.saveBitmap(croppedBitmap, "FinalOutput")
+            blurSortedIndices.forEach { _ ->
+                addToFinalBuffer(segmentedFrame)
             }
 
-            listener.onStage2ProcessingStageUpdate(ProcessingStage.FINGER_DETECTION)
+            // ----------------------------------------------------------------------
+            // FINGER DETECTION
+            // ----------------------------------------------------------------------
+
+            listener.onStage2ProcessingStageUpdate(
+                ProcessingStage.FINGER_DETECTION
+            )
+
             val finalScoreProvider = ImageDataProvider(
-                croppedByteArray,
-                croppedByteArraySize.width,
-                croppedByteArraySize.height,
+                segmentedFrame.croppedBitmap.let {
+                    // Keep the existing final scoring input unchanged.
+                    val (byteArray, size) = bestFrame.getByteArray(
+                        requiresCropping = true,
+                        cutoutRect = provider.getCutoutRectInImageCoordinates(
+                            Size(bestFrame.width, bestFrame.height),
+                            bestFrame.rotationDegrees
+                        )
+                    )
+                    byteArray
+                },
+                segmentedFrame.croppedBitmap.width,
+                segmentedFrame.croppedBitmap.height,
                 bestFrame.rotationDegrees
             )
+
             val finalFingerCheckProvider = ImageDataProvider(
-                fullByteArray,
-                fullByteArraySize.width,
-                fullByteArraySize.height,
+                bestFrame.getByteArray(
+                    requiresCropping = false,
+                    cutoutRect = provider.getCutoutRectInImageCoordinates(
+                        Size(bestFrame.width, bestFrame.height),
+                        bestFrame.rotationDegrees
+                    )
+                ).first,
+                bestFrame.width,
+                bestFrame.height,
                 bestFrame.rotationDegrees
             )
 
-            val (finalBlurResult, finalFingerResult) = withContext(blurExecutor.asCoroutineDispatcher()) {
-                val blurDeferreds = stage2BlurChecks.map { check -> async { check.run(finalScoreProvider) } }
-                val fingerDeferred = async { mediapipeFinger.run(finalFingerCheckProvider) }
-                Stage2BlurResult(blurDeferreds.awaitAll()) to fingerDeferred.await()
-            }
+            val (finalBlurResult, finalFingerResult) =
+                withContext(blurExecutor.asCoroutineDispatcher()) {
 
-            val finalBlurConfidence = finalBlurResult.primaryConfidence
+                    val blurDeferreds = stage2BlurChecks.map { check ->
+                        async {
+                            check.run(finalScoreProvider)
+                        }
+                    }
+
+                    val fingerDeferred = async {
+                        mediapipeFinger.run(finalFingerCheckProvider)
+                    }
+
+                    Stage2BlurResult(
+                        blurDeferreds.awaitAll()
+                    ) to fingerDeferred.await()
+                }
+
+            val finalBlurConfidence =
+                finalBlurResult.primaryConfidence
+
             Log.i(
                 TAG,
-                "FINAL_BLUR_RESCORE -- ${finalBlurResult.describe()} (this IS the delivered image)"
+                "FINAL_BLUR_RESCORE -- ${finalBlurResult.describe()} " +
+                        "(this IS the delivered image)"
             )
+
             Log.i(
                 TAG,
-                "BLUR_INPUT_SIZE -- crop before resize: ${croppedByteArraySize.width}x${croppedByteArraySize.height}"
+                "BLUR_INPUT_SIZE -- crop before resize: " +
+                        "${segmentedFrame.croppedBitmap.width}x" +
+                        "${segmentedFrame.croppedBitmap.height}"
             )
+
             Log.i(
                 TAG,
-                "FINAL_FINGER_RESCORE -- passed=${finalFingerResult.passed} confidence=${finalFingerResult.confidence} " +
-                        "status=${(finalFingerResult as? ProcessingResult.Failed)?.status} (this IS the delivered image)"
+                "FINAL_FINGER_RESCORE -- passed=${finalFingerResult.passed} " +
+                        "confidence=${finalFingerResult.confidence} " +
+                        "status=${(finalFingerResult as? ProcessingResult.Failed)?.status} " +
+                        "(this IS the delivered image)"
             )
+
             if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
-                val passLabel = if (finalFingerResult.passed) "PASS" else "FAIL"
-                val confFormatted = String.format("%.2f", finalFingerResult.confidence).removePrefix("0")
+                val passLabel =
+                    if (finalFingerResult.passed) "PASS" else "FAIL"
+
+                val confFormatted =
+                    String.format(
+                        "%.2f",
+                        finalFingerResult.confidence
+                    ).removePrefix("0")
+
                 controller.saveBitmap(
                     finalFingerCheckProvider.getAsUprightBitmap(),
                     "FinalFingerCheckInput_$passLabel($confFormatted)"
                 )
             }
+
             finalFingerCheckProvider.clearCache()
 
-            // Final authoritative check -- the delivered image itself must
-            // pass EVERY configured Stage 2 blur check (not just whichever
-            // candidate won the earlier ranking), AND still show a
-            // detectable finger.
             if (!finalBlurResult.allPassed) {
                 Log.w(
                     TAG,
-                    "STAGE2_REJECT -- Final delivered crop failed blur re-check: ${finalBlurResult.describe()} " +
-                            "(ranking-stage had suggested primaryConfidence=${blurResults[blurSortedIndices.first()].primaryConfidence})"
+                    "STAGE2_REJECT -- Final delivered crop failed " +
+                            "blur re-check: ${finalBlurResult.describe()} " +
+                            "(ranking-stage had suggested " +
+                            "primaryConfidence=${blurResults[blurSortedIndices.first()].primaryConfidence})"
                 )
+
                 finalScoreProvider.clearCache()
+
                 listener.onStage2Result(
                     passed = false,
                     errors = listOf(Error.Blur)
                 )
                 return
             }
+
             if (!finalFingerResult.passed) {
                 Log.w(
                     TAG,
-                    "STAGE2_REJECT -- Final delivered crop failed finger-presence re-check: confidence=${finalFingerResult.confidence}"
+                    "STAGE2_REJECT -- Final delivered crop failed " +
+                            "finger-presence re-check: " +
+                            "confidence=${finalFingerResult.confidence}"
                 )
+
                 finalScoreProvider.clearCache()
+
                 listener.onStage2Result(
                     passed = false,
-                    errors = listOf(Error.New(
-                        titleRes = R.string.error_title_finger,
-                        descriptionRes = R.string.error_desc_finger,
-                        imageRes = R.drawable.ic_android_black_24dp,
-                        processingStage = ProcessingStage.FINGER_DETECTION
-                    ))
+                    errors = listOf(
+                        Error.New(
+                            titleRes = R.string.error_title_finger,
+                            descriptionRes = R.string.error_desc_finger,
+                            imageRes = R.drawable.ic_android_black_24dp,
+                            processingStage = ProcessingStage.FINGER_DETECTION
+                        )
+                    )
                 )
                 return
             }
 
-            // Brightness/glare are non-gating (informational scores on the
-            // delivered image only) -- also run in parallel rather than
-            // sequentially, since neither depends on the other.
-            val (finalBrightnessResult, finalGlareResult) = coroutineScope {
-                val brightnessDeferred = async { stage1Methods[BRIGHTNESS_CHECK]!!.run(finalScoreProvider) }
-                val glareDeferred = async { stage1Methods[GLARE_CHECK]!!.run(finalScoreProvider) }
-                brightnessDeferred.await() to glareDeferred.await()
-            }
+            val (finalBrightnessResult, finalGlareResult) =
+                coroutineScope {
+
+                    val brightnessDeferred = async {
+                        stage1Methods[BRIGHTNESS_CHECK]!!
+                            .run(finalScoreProvider)
+                    }
+
+                    val glareDeferred = async {
+                        stage1Methods[GLARE_CHECK]!!
+                            .run(finalScoreProvider)
+                    }
+
+                    brightnessDeferred.await() to glareDeferred.await()
+                }
+
             finalScoreProvider.clearCache()
 
-            val segmentedFrame = SegmentedFrame(
-                processingId = processingId,
-                finalBitmap = croppedBitmap,
-                fullBitmap = fullBitmap,
-                croppedBitmap = croppedBitmap,
-                timestamp = bestFrame.timestamp,
-                finalMask = null,
+            val finalSegmentedFrame = segmentedFrame.copy(
                 blurScore = finalBlurConfidence,
                 brightnessScore = finalBrightnessResult.confidence,
                 glareScore = finalGlareResult.confidence
             )
-            blurSortedIndices.forEach { _ ->
-                addToFinalBuffer(segmentedFrame)
-            }
 
             stopCaptureTimer()
+
             listener.onStage2Result(
                 passed = true,
                 listOf()
             )
+
         } catch (e: Exception) {
-            Log.e(TAG, "Error in Stage 2 processing", e)
+            Log.e(
+                TAG,
+                "Error in Stage 2 processing",
+                e
+            )
+
             listener.onStage2Result(
                 passed = false,
                 listOf(Error.SomethingWentWrong)
