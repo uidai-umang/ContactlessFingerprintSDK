@@ -12,7 +12,7 @@ import java.io.ByteArrayOutputStream
 fun ByteArray.toBitmap(width: Int, height: Int): Bitmap {
     val stream = ByteArrayOutputStream()
     val yuvImage = YuvImage(this, ImageFormat.NV21, width, height, null)
-    yuvImage.compressToJpeg(Rect(0, 0, width, height), 100, stream)
+    yuvImage.compressToJpeg(Rect(0, 0, width, height), 80, stream)
     val imageBytes = stream.toByteArray()
     return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
 }
