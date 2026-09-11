@@ -36,7 +36,7 @@ class BlurCheckRunner(
 
     private val confidence = RollingConfidence(windowSize = 5, requiredPassRate = 0.7f)
 
-    private val laplacianGate = BlurGate(targetThreshold = 250f, fallbackThreshold = 200f, maxWaitMs = 3_000L)
+    private val laplacianGate = BlurGate(targetThreshold = 230f, fallbackThreshold = 200f, maxWaitMs = 1500L)
     private val densenetGate: BlurGate by lazy {
         val threshold = preferenceStore.get(BlurSettings.THRESHOLD)
         BlurGate(targetThreshold = threshold, fallbackThreshold = threshold, maxWaitMs = 3_000L)
