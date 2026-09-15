@@ -1,5 +1,6 @@
 package app.gov.uidai.registration.ui.registration.method
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -129,6 +131,8 @@ fun CaptureMethodScreen(
         null -> false
     }
 
+    val ctx = LocalContext.current
+
     // isLocked means "capture_mode is permanently set for this resident" --
     // it says nothing about WHICH card that is. isActive (computed per card
     // below) is what each card actually needs: "is MY method the one that's
@@ -184,8 +188,12 @@ fun CaptureMethodScreen(
         )
     }
 
-    if (uiState.uploadStage != null) {
-        UploadingDialog(stage = uiState.uploadStage)
+    if (uiState.uploadStage != null ) {
+        if(uiState.uploadStage == FingerCaptureStatus.FAILED) {
+            Toast.makeText(ctx, "Upload Failed, Pending Sync", Toast.LENGTH_SHORT).show()
+        } else {
+            UploadingDialog(stage = uiState.uploadStage)
+        }
     }
 }
 
