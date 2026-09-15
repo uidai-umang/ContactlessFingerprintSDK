@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.camera.CameraPreview
 import app.gov.uidai.capture.ui.camera.CaptureResult
+import app.gov.uidai.capture.ui.camera.CaptureReviewScreen
 import app.gov.uidai.capture.usecase.slap.SlapLiveState
 import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
 import app.gov.uidai.capture.utils.extension.toBase64
@@ -86,6 +87,9 @@ fun SlapCaptureRoute(
     val capturedBitmap by viewModel.capturedBitmap.collectAsStateWithLifecycle()
     val isTorchOn by viewModel.isTorchOn.collectAsStateWithLifecycle()
     var viewFinderSize by remember { mutableStateOf(Size(0, 0)) }
+    
+    var showReviewScreen by remember { mutableStateOf(false) }
+    var pendingResult by remember { mutableStateOf<CaptureResult?>(null) }
 
     LaunchedEffect(handType) { viewModel.setExpectedHandType(handType) }
 
@@ -122,15 +126,13 @@ fun SlapCaptureRoute(
     LaunchedEffect(capturedBitmap) {
         val bitmap = capturedBitmap ?: return@LaunchedEffect
         val encoded = bitmap.toBase64()
-        android.widget.Toast.makeText(context, "Capture completed", android.widget.Toast.LENGTH_SHORT).show()
-        onFinish(
-            CaptureResult(
-                resultCode = ResultCode.CAPTURE_SUCCESS,
-                finalImage = encoded,
-                fullImage = encoded,
-                croppedImage = encoded
-            )
+        pendingResult = CaptureResult(
+            resultCode = ResultCode.CAPTURE_SUCCESS,
+            finalImage = encoded,
+            fullImage = encoded,
+            croppedImage = encoded
         )
+        showReviewScreen = true
     }
 
     Box(modifier = Modifier.fillMaxSize().background(PageBackground)) {
@@ -272,6 +274,25 @@ fun SlapCaptureRoute(
                 }
             )
         }
+    }
+
+    if (showReviewScreen) {
+        CaptureReviewScreen(
+            bitmap = capturedBitmap,
+            // Slap only runs a blur check -- SlapBlurChecker has no
+            // brightness or glare equivalent, so those rows show 0.
+            blurScore = 0f,
+            brightnessScore = 0f,
+            glareScore = 0f,
+            onAccept = {
+                pendingResult?.let { onFinish(it) }
+            },
+            onReject = {
+                showReviewScreen = false
+                pendingResult = null
+                viewModel.reset()
+            }
+        )
     }
 }
 
