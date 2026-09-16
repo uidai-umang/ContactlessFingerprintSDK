@@ -3,11 +3,13 @@ package app.gov.uidai.capture.ui.camera.slap
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.util.Size
 import android.view.Surface
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -39,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.camera.CameraPreview
 import app.gov.uidai.capture.ui.camera.CaptureResult
@@ -63,6 +67,7 @@ import app.gov.uidai.capture.utils.KotlinUtils
 import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
 import app.gov.uidai.capture.utils.extension.toBase64
 import `in`.gov.uidai.utility.constants.ResultCode
+import kotlinx.coroutines.launch
 
 private val PageBackground = Color(0xFF0A0D14)
 private val IdleBorder = Color(0xFF253447)
@@ -84,6 +89,7 @@ fun SlapCaptureRoute(
     viewModel: SlapCaptureViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val activity = context as? Activity
     val liveState by viewModel.liveState.collectAsStateWithLifecycle()
     val capturedBitmap by viewModel.capturedBitmap.collectAsStateWithLifecycle()
@@ -117,6 +123,25 @@ fun SlapCaptureRoute(
                 )
             } ?: true
             if (!canShowRationale) showPermanentlyDeniedDialog = true else onPopBackStack()
+        }
+    }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let {
+            coroutineScope.launch {
+                val bitmap = context.contentResolver.openInputStream(it)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                }
+                bitmap?.let { bmp ->
+                    // TEST-ONLY: bypasses live capture, feeds a gallery
+                    // image straight into the same pipeline
+                    // processCapturedImage() uses, to test ridge
+                    // extraction against a genuinely sharp photo.
+                    viewModel.processPickedImage(bmp, handType)
+                }
+            }
         }
     }
 
@@ -213,6 +238,23 @@ fun SlapCaptureRoute(
                                 contentDescription = "Back",
                                 tint = Color.White
                             )
+                        }
+
+                        if (BuildConfig.DEBUG) {
+                            Spacer(modifier = Modifier.size(12.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF2A2A2A))
+                                    .clickable {
+                                        imagePickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                            ) {
+                                Text("Test: Pick Image", color = Color.White, fontSize = 12.sp)
+                            }
                         }
                     }
 

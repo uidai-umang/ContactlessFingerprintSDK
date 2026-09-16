@@ -1,5 +1,6 @@
 package app.gov.uidai.capture.ui.camera.slap
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -21,10 +22,12 @@ import javax.inject.Inject
 import app.gov.uidai.capture.domain.method.final_processing.FinalProcessingU2Net
 import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.ProcessingResult
+import app.gov.uidai.capture.slap.processing.SlapFingerprintProcessor
 import app.gov.uidai.capture.usecase.factory.SegmentationFactory
 import app.gov.uidai.capture.utils.KotlinUtils
 import app.gov.uidai.capture.utils.extension.toBase64
 import app.gov.uidai.capture.utils.extension.toByteArray
+import dagger.hilt.android.qualifiers.ApplicationContext
 import `in`.gov.uidai.network.data.local.FileRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,6 +35,7 @@ import kotlin.getValue
 
 @HiltViewModel
 class SlapCaptureViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     val cameraController: CameraController,
     private val analyzer: SlapFrameAnalyzer,
     private val fileRepository: FileRepository,
@@ -105,80 +109,143 @@ class SlapCaptureViewModel @Inject constructor(
      * degradation FinalProcessingU2Net.run already has when maskedImage
      * is null.
      */
+
+    private val slapFingerprintProcessor = SlapFingerprintProcessor(context = appContext)
     suspend fun processCapturedImage(
         colourCrop: Bitmap,
         handType: String
     ): String = withContext(Dispatchers.Default) {
+
         try {
-            // 1. Save the exact image going INTO U2Net
+            // 1. Save the exact captured Slap image.
             val inputUri = fileRepository.saveBitmapAndGetUri(
                 colourCrop,
-                "ColourCrop_Image_Before_Segmentation"
+                "Slap_ColourCrop_Before_Processing"
             )
+
             Log.d(
                 "DiagnosticImage",
-                "BEFORE SEGMENTATION URI = $inputUri"
+                "SLAP INPUT URI = $inputUri"
             )
 
-            val bytes = colourCrop.toByteArray()
+            // 2. Convert hand type.
+            val slapHandType =
+                if (handType.equals("LEFT", ignoreCase = true)) {
+                    SlapFingerprintProcessor.HandType.LEFT
+                } else {
+                    SlapFingerprintProcessor.HandType.RIGHT
+                }
 
-            val provider = ImageDataProvider(
-                bytes,
-                colourCrop.width,
-                colourCrop.height,
-                0
+            // 3. Run the completely independent Slap pipeline.
+            //
+            // No:
+            // - SlapSkinAreaDetector
+            // - MediaPipe
+            // - U2Net
+            // - existing segmentation pipeline
+            //
+            // The captured bitmap is passed at its original resolution.
+            val result = slapFingerprintProcessor.process(
+                bitmap = colourCrop,
+                handType = slapHandType
             )
-
-            // 2. Run segmentation
-            val segResult = segmentationCheck.run(provider)
 
             Log.d(
                 TAG,
-                "Segmentation result = $segResult"
+                "Slap processing complete. " +
+                        "Detected fingers = ${result.fingers.size}"
             )
 
-            val mask =
-                (segResult as? ProcessingResult.Passed)
-                    ?.data
-                    ?.mask
+            // 4. Save diagnostic image showing the four detected
+            // finger regions over the original image.
+            val diagnosticUri = fileRepository.saveBitmapAndGetUri(
+                result.diagnosticImage,
+                "Slap_Finger_Detection_Debug"
+            )
 
-            if (mask == null) {
-                Log.w(
-                    TAG,
-                    "Segmentation returned no mask"
+            Log.d(
+                "DiagnosticImage",
+                "FINGER DETECTION URI = $diagnosticUri"
+            )
+
+            // 5. Save every finger's intermediate/final images.
+            result.fingers.forEach { finger ->
+
+                val roiUri = fileRepository.saveBitmapAndGetUri(
+                    finger.fingerprintRoi,
+                    "Slap_Finger_${finger.index + 1}_ROI"
+                )
+
+                Log.d(
+                    "DiagnosticImage",
+                    "Finger ${finger.index + 1} ROI URI = $roiUri"
+                )
+
+                finger.segmentationMask?.let { mask ->
+                    val maskUri = fileRepository.saveBitmapAndGetUri(
+                        mask,
+                        "Slap_Finger_${finger.index + 1}_Mask"
+                    )
+                    Log.d("DiagnosticImage", "Finger ${finger.index + 1} Mask URI = $maskUri")
+                } ?: Log.w("DiagnosticImage", "Finger ${finger.index + 1} -- segmentation found no mask")
+
+
+                val ridgeUri = fileRepository.saveBitmapAndGetUri(
+                    finger.ridgeImage,
+                    "Slap_Finger_${finger.index + 1}_Ridges"
+                )
+
+                Log.d(
+                    "DiagnosticImage",
+                    "Finger ${finger.index + 1} Ridge URI = $ridgeUri"
                 )
             }
 
-            // 3. Current final processing
-            val enhanced = FinalProcessingU2Net.run(
-                colourCrop,
-                mask
-            )
+            // 6. For this first test, return the first ridge image
+            // as the final output.
+            //
+            // We are primarily interested in inspecting the
+            // diagnostic images at this stage.
+            val finalBitmap = result.fingers
+                .firstOrNull()
+                ?.ridgeImage
+                ?: colourCrop
 
-            provider.clearCache()
-
-            // 4. Save final result
-            val uri = fileRepository.saveBitmapAndGetUri(
-                enhanced,
+            // 7. Save the current final output.
+            val finalUri = fileRepository.saveBitmapAndGetUri(
+                finalBitmap,
                 "${handType.uppercase()}_SLAP_RIDGES"
             )
 
             Log.d(
                 "DiagnosticImage",
-                "FINAL IMAGE URI = $uri"
+                "FINAL RIDGE URI = $finalUri"
             )
 
-            enhanced.toBase64()
+            finalBitmap.toBase64()
 
         } catch (e: Exception) {
+
             Log.e(
                 TAG,
-                "Failed to process slap capture",
+                "Failed to process Slap fingerprint image",
                 e
             )
 
+            // Keep the existing failure behaviour.
             colourCrop.toBase64()
         }
+    }
+
+    /**
+     * TEST-ONLY entry point: bypasses live capture and blur checking
+     * entirely. Feeds a gallery-picked bitmap directly into the same
+     * SlapFingerprintProcessor pipeline processCapturedImage() already
+     * uses, to isolate whether ridge extraction works given genuinely
+     * sharp input -- removing camera blur as a variable.
+     */
+    suspend fun processPickedImage(pickedBitmap: Bitmap, handType: String): String {
+        return processCapturedImage(pickedBitmap, handType)
     }
 
     fun reset() {

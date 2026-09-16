@@ -49,7 +49,7 @@ class SlapCaptureListener(
         private val TAG = SlapCaptureListener::class.simpleName
         private const val THROTTLE_MS = 100L
         private const val MEDIAPIPE_THROTTLE_MS = 250L
-        private const val AREA_RATIO_THRESHOLD = 0.30f
+        private const val AREA_RATIO_THRESHOLD = 0.10f
         private const val REQUIRED_CONSECUTIVE_PASSES = 2
         private const val CROP_PADDING_PERCENT = 0.08f
     }
