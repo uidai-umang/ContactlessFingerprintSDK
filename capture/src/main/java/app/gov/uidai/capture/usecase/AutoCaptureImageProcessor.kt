@@ -37,6 +37,7 @@ import java.util.concurrent.Executors
 import app.gov.uidai.capture.utils.extension.crop
 import app.gov.uidai.capture.utils.extension.rotate
 import app.gov.uidai.capture.utils.extension.toBitmap
+import kotlinx.coroutines.launch
 
 class AutoCaptureImageProcessor @AssistedInject constructor(
     segmentationFactory: SegmentationFactory,
@@ -83,9 +84,22 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
         LaplacianBlurMethod(minVariance = 300f)
     }
 
+    private val stage2DensenetCheck by lazy {
+        blurCheckFactory.createWithDebugCallback { bitmap, callId, label ->
+            coroutineScope.launch {
+                try {
+                    val uri = controller.saveBitmap(bitmap, "S2_DN_Call${callId}_$label")
+                    Log.i(TAG, "STAGE2_DEBUG [DenseNet call=$callId] INTERNAL_CROP $label saved=$uri")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to save Stage2 debug crop", e)
+                }
+            }
+        }
+    }
+
     private val stage2BlurChecks: List<ImageProcessingMethod<Unit>> by lazy {
         listOf(
-            blurCheck
+            stage2DensenetCheck
 //        ,stage2LaplacianCheck
         )
     }
@@ -158,6 +172,12 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 }.awaitAll()
             }
 
+            imageDataProviders.forEachIndexed { i, dataProvider ->
+                val conf = blurResults[i].primaryConfidence
+                Log.i(TAG, "STAGE2_DEBUG [$i] RANK_INPUT confidence=$conf passed=${blurResults[i].allPassed}")
+                controller.saveBitmap(dataProvider.getAsUprightBitmap(), "S2_${i}_1_RankInput_conf${conf}")
+            }
+
             val isBlurPassed = blurResults.any { it.allPassed }
 
             if (preferenceStore.get(ProcessingSettings.SAVE_BLUR_INPUT)) {
@@ -203,6 +223,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     blurResults[it].primaryConfidence
                 }
 
+            Log.i(TAG, "STAGE2_DEBUG WINNER=candidate ${blurSortedIndices.firstOrNull()} of ${blurResults.size}, order=$blurSortedIndices")
+
+            val winnerIndex = blurSortedIndices.first()
             val bestFrame = candidateBatch[blurSortedIndices.first()]
 
             val (segCroppedByteArray, segCroppedByteArraySize) =
@@ -222,6 +245,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 segCroppedByteArraySize.height,
                 bestFrame.rotationDegrees
             )
+
+            Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEG_INPUT")
+            controller.saveBitmap(segmentationProvider.getAsUprightBitmap(), "S2_${winnerIndex}_2_SegInput")
 
             val segmentationResult = segmentationCheck.run(
                 segmentationProvider
@@ -300,6 +326,9 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                         }
                     }
 
+                    Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEG_OUTPUT")
+                    controller.saveBitmap(finalBitmap, "S2_${winnerIndex}_3_SegOutput")
+
                     SegmentedFrame(
                         processingId = processingId,
                         finalBitmap = finalBitmap,
@@ -310,6 +339,12 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                     )
                 }
             }
+
+            Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEGMENTED_FRAME finalBitmap=${segmentedFrame.finalBitmap.width}x${segmentedFrame.finalBitmap.height} fullBitmap=${segmentedFrame.fullBitmap.width}x${segmentedFrame.fullBitmap.height} croppedBitmap=${segmentedFrame.croppedBitmap.width}x${segmentedFrame.croppedBitmap.height}")
+
+            controller.saveBitmap(segmentedFrame.finalBitmap, "S2_${winnerIndex}_SF_finalBitmap")
+            controller.saveBitmap(segmentedFrame.fullBitmap, "S2_${winnerIndex}_SF_fullBitmap")
+            controller.saveBitmap(segmentedFrame.croppedBitmap, "S2_${winnerIndex}_SF_croppedBitmap")
 
             segmentationProvider.clearCache()
 
@@ -325,33 +360,28 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 ProcessingStage.FINGER_DETECTION
             )
 
+            val (byteArray, actualSize) = bestFrame.getByteArray(
+                requiresCropping = true,
+                cutoutRect = provider.getCutoutRectInImageCoordinates(
+                    Size(bestFrame.width, bestFrame.height),
+                    bestFrame.rotationDegrees
+                )
+            )
+
             val finalScoreProvider = ImageDataProvider(
-                segmentedFrame.croppedBitmap.let {
-                    // Keep the existing final scoring input unchanged.
-                    val (byteArray, size) = bestFrame.getByteArray(
-                        requiresCropping = true,
-                        cutoutRect = provider.getCutoutRectInImageCoordinates(
-                            Size(bestFrame.width, bestFrame.height),
-                            bestFrame.rotationDegrees
-                        )
-                    )
-                    byteArray
-                },
-                segmentedFrame.croppedBitmap.width,
-                segmentedFrame.croppedBitmap.height,
+                byteArray,
+                actualSize.width,
+                actualSize.height,
                 bestFrame.rotationDegrees
             )
 
+            Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] RESCORE_INPUT size=${finalScoreProvider.width}x${finalScoreProvider.height}")
+            controller.saveBitmap(finalScoreProvider.getAsUprightBitmap(), "S2_${winnerIndex}_4_RescoreInput")
+
             val finalFingerCheckProvider = ImageDataProvider(
-                bestFrame.getByteArray(
-                    requiresCropping = false,
-                    cutoutRect = provider.getCutoutRectInImageCoordinates(
-                        Size(bestFrame.width, bestFrame.height),
-                        bestFrame.rotationDegrees
-                    )
-                ).first,
-                bestFrame.width,
-                bestFrame.height,
+                byteArray,
+                actualSize.width,
+                actualSize.height,
                 bestFrame.rotationDegrees
             )
 
