@@ -142,7 +142,6 @@ abstract class ImageProcessor(
             provider = provider,
             controller = controller,
             preferenceStore = preferenceStore,
-            coroutineScope = coroutineScope,
             onBlurResult = ::onBlurResult
         )
     }
@@ -176,9 +175,6 @@ abstract class ImageProcessor(
     private val isCaptured = AtomicBoolean(false)
     protected val isStage1Passed = AtomicBoolean(false)
     private val firstScoreEmitted = AtomicBoolean(false)
-    // Counts ticks where the loop found its slot empty. High = loop is
-    // idle-waiting (frames aren't arriving fast enough). Near-zero = loop
-    // is saturated and is the bottleneck.
     private var stage1Skips = 0
     private var fingerSkips = 0
     private var mediapipeSkips = 0
