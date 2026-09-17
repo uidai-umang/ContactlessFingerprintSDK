@@ -27,7 +27,6 @@ class BlurCheckRunner(
     private val provider: ImageProcessor.Provider,
     private val controller: ImageProcessor.Controller,
     private val preferenceStore: PreferenceStore,
-    private val coroutineScope: CoroutineScope,
     private val onBlurResult: (frame: CameraFrame, confidence: Float, passed: Boolean) -> Unit
 ) {
     companion object {
@@ -67,24 +66,6 @@ class BlurCheckRunner(
                 croppedByteArray, croppedByteArraySize.width, croppedByteArraySize.height, frame.rotationDegrees
             )
 
-            // Both checks race, and BOTH stay off the main thread.
-            //
-            // `kotlinx.coroutines.coroutineScope { }` here is the suspend
-            // BUILDER, not the injected `coroutineScope` field. That
-            // distinction is the entire bug that was here before: the field
-            // is rememberCoroutineScope() from Compose, and
-            // `someScope.async { }` uses THAT SCOPE's context (Main) rather
-            // than the calling coroutine's -- verified on-device,
-            // DENSENET_THREAD logged "main", so a ~1.5s TFLite inference ran
-            // on the UI thread every frame. The builder instead inherits
-            // THIS coroutine's dispatcher (stage1LoopsDispatcher via
-            // blurCheckJob), so neither child can reach Main.
-            //
-            // It also can't leak: the block won't return until both children
-            // complete or are cancelled. The old version's children were
-            // parented to the long-lived injected scope, so they outlived
-            // the tick and piled up -- ~30 concurrent DenseNet inferences
-            // at a 33ms tick rate against a ~1.5s inference.
             val winner: NamedResult? = coroutineScope {
                 val lapDeferred = async {
                     try {
@@ -100,9 +81,7 @@ class BlurCheckRunner(
                 val dnDeferred = async {
                     try {
                         val t0 = SystemClock.uptimeMillis()
-                        val r = runInterruptible {
-                            densenetBlur.run(imageDataProvider)
-                        }
+                        val r = densenetBlur.run(imageDataProvider)
                         Log.d(TAG, "CALL_DURATION Densenet=${SystemClock.uptimeMillis() - t0}ms confidence=${r.confidence} thread=${Thread.currentThread().name}")
                         NamedResult("DenseNet", r, r.confidence >= densenetGate.currentThreshold())
                     } catch (e: Exception) {
@@ -117,8 +96,6 @@ class BlurCheckRunner(
                 }
 
                 if (first?.passed == true) {
-                    lapDeferred.cancel()
-                    dnDeferred.cancel()
                     first
                 } else {
                     val second = if (lapDeferred.isCompleted) dnDeferred.await() else lapDeferred.await()
