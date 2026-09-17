@@ -14,7 +14,8 @@ import java.nio.ByteBuffer
 
 class DensenetBlurMethod(
     private val context: Context,
-    private val blurConfig: BlurConfig
+    private val blurConfig: BlurConfig,
+    private val onDebugCrop: ((bitmap: Bitmap, callId: Int, label: String) -> Unit)? = null
 ) : ImageProcessingMethod<Unit> {
     companion object {
         private val TAG = DensenetBlurMethod::class.simpleName
@@ -24,43 +25,28 @@ class DensenetBlurMethod(
         DensenetBlur(context, blurConfig.modelPath)
     }
 
-    // NEW -- reuses the exact same finger-segmentation logic already
-    // validated for the Laplacian check (see blur_detector_laplacian.py's
-    // segment_finger / get_finger_bbox_from_rgba). This is DenseNet's
-    // first-ever Python/Chaquopy dependency; previously this class was
-    // pure Kotlin/TFLite -- a deliberate tradeoff to avoid a second,
-    // possibly-drifting copy of the same segmentation logic. See the
-    // reasoning in this session's conversation record for why this exists:
-    // DenseNet resizes whatever it's given straight to 224x224 regardless
-    // of source resolution; feeding it the WHOLE cutout (finger + a lot of
-    // background, since the finger measured only ~47% of cutout width on
-    // one real device) compounds that aggressive downsample, and was
-    // observed to sometimes pass genuinely blurry captures.
-    //
-    // NOT YET EMPIRICALLY VALIDATED against the real .tflite model on
-    // real device captures (no model file was available to test against
-    // when this was written) -- confirm on-device with known-sharp and
-    // known-blurry real captures before trusting this in production, and
-    // recalibrate BlurSettings.THRESHOLD if needed -- cropping before
-    // resize changes what the model actually sees, so the 0.85 default
-    // that was tuned against the OLD (whole-frame) preprocessing may not
-    // be the right cutoff anymore.
     private val py by lazy { Python.getInstance() }
     private val fingerSegmentModule by lazy { py.getModule("blur_detector_laplacian") }
+
+    // Debug: id counter so each call's saved crop is traceable back to
+    // logs by number, since this runs once per candidate per Stage 2 call.
+    private var callCounter = 0
 
     override fun run(provider: ImageDataProvider): ProcessingResult<Unit> {
         if (!blurConfig.enabled) {
             return ProcessingResult.Passed(data = Unit, confidence = 1.0f)
         }
         try {
+            val callId = callCounter++
             val bitmap = provider.getAsUprightBitmap()
-            val croppedBitmap = cropToFingerIfPossible(bitmap)
+            val croppedBitmap = cropToFingerIfPossible(bitmap, callId)
             val blurResult = densenetBlur.detectBlur(
                 croppedBitmap,
                 blurConfig.threshold
             )
             val passed = blurResult?.isSharp ?: false
             val confidence = blurResult?.confidence ?: 0f
+            Log.i(TAG, "STAGE2_DEBUG [DenseNet call=$callId] confidence=$confidence passed=$passed")
             return if (passed) {
                 ProcessingResult.Passed(data = Unit, confidence = confidence)
             } else {
@@ -76,15 +62,7 @@ class DensenetBlurMethod(
         }
     }
 
-    /**
-     * Crops [bitmap] to the segmented finger region before it reaches
-     * DenseNet's own fixed 224x224 resize, so that resize is spent
-     * entirely on ridge content instead of partly on background. Falls
-     * back to the original, uncropped bitmap on ANY failure -- a failed
-     * crop attempt should never be worse than the old (whole-frame)
-     * behavior, only potentially no better than it.
-     */
-    private fun cropToFingerIfPossible(bitmap: Bitmap): Bitmap {
+    private fun cropToFingerIfPossible(bitmap: Bitmap, callId: Int): Bitmap {
         return try {
             val argbBitmap = if (bitmap.config == Bitmap.Config.ARGB_8888) {
                 bitmap
@@ -101,6 +79,7 @@ class DensenetBlurMethod(
             val bboxList = bboxResult.asList()
             if (bboxList.size < 4) {
                 Log.d(TAG, "FINGER_CROP -- segmentation unavailable, scoring whole frame")
+                saveDebugCrop(bitmap, callId, "wholeFrame")
                 return bitmap
             }
 
@@ -110,14 +89,26 @@ class DensenetBlurMethod(
             val h = bboxList[3].toInt().coerceAtMost(argbBitmap.height - y)
             if (w <= 0 || h <= 0) {
                 Log.w(TAG, "FINGER_CROP -- degenerate bbox ($x,$y,$w,$h), scoring whole frame")
+                saveDebugCrop(bitmap, callId, "degenerateBbox")
                 return bitmap
             }
 
             Log.d(TAG, "FINGER_CROP -- cropped to finger bbox=($x,$y,${w}x$h) from ${argbBitmap.width}x${argbBitmap.height}")
-            Bitmap.createBitmap(argbBitmap, x, y, w, h)
+            val cropped = Bitmap.createBitmap(argbBitmap, x, y, w, h)
+            saveDebugCrop(cropped, callId, "bbox_${x}_${y}_${w}x$h")
+            cropped
         } catch (e: Exception) {
             Log.w(TAG, "FINGER_CROP -- failed, scoring whole frame", e)
+            saveDebugCrop(bitmap, callId, "cropFailed")
             bitmap
+        }
+    }
+
+    private fun saveDebugCrop(bitmap: Bitmap, callId: Int, label: String) {
+        try {
+            onDebugCrop?.invoke(bitmap, callId, label)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to log debug crop", e)
         }
     }
 }
