@@ -6,7 +6,7 @@ import androidx.work.Configuration
 import com.google.firebase.FirebaseApp
 import dagger.hilt.android.HiltAndroidApp
 import jakarta.inject.Inject
-
+import app.gov.uidai.capture.utils.KotlinUtils
 @HiltAndroidApp
 class ContactlessFingerSDKApplication : Application(), Configuration.Provider {
 
@@ -16,6 +16,7 @@ class ContactlessFingerSDKApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         FirebaseApp.initializeApp(this)
+        KotlinUtils.init(this)
     }
 
     override val workManagerConfiguration: Configuration
