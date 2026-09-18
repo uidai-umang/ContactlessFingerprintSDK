@@ -378,12 +378,22 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] RESCORE_INPUT size=${finalScoreProvider.width}x${finalScoreProvider.height}")
             controller.saveBitmap(finalScoreProvider.getAsUprightBitmap(), "S2_${winnerIndex}_4_RescoreInput")
 
+            val (fullByteArray, fullSize) = bestFrame.getByteArray(
+                requiresCropping = false,
+                cutoutRect = provider.getCutoutRectInImageCoordinates(
+                    Size(bestFrame.width, bestFrame.height),
+                    bestFrame.rotationDegrees
+                )
+            )
             val finalFingerCheckProvider = ImageDataProvider(
-                byteArray,
-                actualSize.width,
-                actualSize.height,
+                fullByteArray,
+                fullSize.width,
+                fullSize.height,
                 bestFrame.rotationDegrees
             )
+
+            Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] FINGER_RESCORE_INPUT size=${finalFingerCheckProvider.width}x${finalFingerCheckProvider.height}")
+            controller.saveBitmap(finalFingerCheckProvider.getAsUprightBitmap(), "S2_${winnerIndex}_5_FingerRescoreInput")
 
             val (finalBlurResult, finalFingerResult) =
                 withContext(blurExecutor.asCoroutineDispatcher()) {
@@ -463,29 +473,29 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
                 return
             }
 
-            if (!finalFingerResult.passed) {
-                Log.w(
-                    TAG,
-                    "STAGE2_REJECT -- Final delivered crop failed " +
-                            "finger-presence re-check: " +
-                            "confidence=${finalFingerResult.confidence}"
-                )
-
-                finalScoreProvider.clearCache()
-
-                listener.onStage2Result(
-                    passed = false,
-                    errors = listOf(
-                        Error.New(
-                            titleRes = R.string.error_title_finger,
-                            descriptionRes = R.string.error_desc_finger,
-                            imageRes = R.drawable.ic_android_black_24dp,
-                            processingStage = ProcessingStage.FINGER_DETECTION
-                        )
-                    )
-                )
-                return
-            }
+//            if (!finalFingerResult.passed) {
+//                Log.w(
+//                    TAG,
+//                    "STAGE2_REJECT -- Final delivered crop failed " +
+//                            "finger-presence re-check: " +
+//                            "confidence=${finalFingerResult.confidence}"
+//                )
+//
+//                finalScoreProvider.clearCache()
+//
+//                listener.onStage2Result(
+//                    passed = false,
+//                    errors = listOf(
+//                        Error.New(
+//                            titleRes = R.string.error_title_finger,
+//                            descriptionRes = R.string.error_desc_finger,
+//                            imageRes = R.drawable.ic_android_black_24dp,
+//                            processingStage = ProcessingStage.FINGER_DETECTION
+//                        )
+//                    )
+//                )
+//                return
+//            }
 
             val (finalBrightnessResult, finalGlareResult) =
                 coroutineScope {
