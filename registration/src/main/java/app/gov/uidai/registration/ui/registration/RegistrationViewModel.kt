@@ -20,7 +20,6 @@ import app.gov.uidai.registration.repository.FileRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
 import app.gov.uidai.registration.usecase.FingerSDKManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
-import app.gov.uidai.registration.usecase.SessionUseCase
 import app.gov.uidai.registration.usecase.UserUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import app.gov.uidai.registration.encryption.EncryptionService

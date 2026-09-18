@@ -18,14 +18,6 @@ interface ClfRepository {
         request: ResidentLookupRequest
     ): ApiResult<ResidentLookupResponse>
 
-    suspend fun createSession(
-        request: CreateSessionRequest
-    ): ApiResult<CreateSessionResponse>
-
-    suspend fun closeSession(
-        request: CloseSessionRequest
-    ): ApiResult<Unit>
-
     suspend fun uploadCapture(
         request: CaptureRequest
     ): ApiResult<CaptureResponse>

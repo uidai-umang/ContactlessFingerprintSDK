@@ -1,7 +1,5 @@
 package app.gov.uidai.registration.data.remote.api
 
-import app.gov.uidai.registration.model.capture.BatchCaptureRequest
-import app.gov.uidai.registration.model.capture.CaptureRequest
 import app.gov.uidai.registration.model.capture.CaptureResponse
 import app.gov.uidai.registration.model.dashboard.DashboardAlertsResponse
 import app.gov.uidai.registration.model.dashboard.DashboardDiversityResponse
@@ -14,9 +12,6 @@ import app.gov.uidai.registration.model.device.DeviceRegistrationRequest
 import app.gov.uidai.registration.model.device.DeviceRegistrationResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
-import app.gov.uidai.registration.model.session.CloseSessionRequest
-import app.gov.uidai.registration.model.session.CreateSessionRequest
-import app.gov.uidai.registration.model.session.CreateSessionResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -34,16 +29,6 @@ interface ClfApiService {
     suspend fun lookupResident(
         @Body request: ResidentLookupRequest
     ): Response<ResidentLookupResponse>
-
-    @POST(Urls.SESSION_CREATE)
-    suspend fun createSession(
-        @Body request: CreateSessionRequest
-    ): Response<CreateSessionResponse>
-
-    @POST(Urls.SESSION_CLOSE)
-    suspend fun closeSession(
-        @Body request: CloseSessionRequest
-    ): Response<Unit>
 
     @Multipart
     @POST(Urls.CAPTURE_UPLOAD)

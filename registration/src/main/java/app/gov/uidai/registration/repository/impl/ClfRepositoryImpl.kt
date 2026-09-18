@@ -6,16 +6,12 @@ import app.gov.uidai.registration.data.remote.network.MultipartHelper.buildBatch
 import app.gov.uidai.registration.data.remote.network.MultipartHelper.buildImagePart
 import app.gov.uidai.registration.data.remote.network.MultipartHelper.buildMetadataParts
 import app.gov.uidai.registration.data.remote.network.ResponseHandler
-import app.gov.uidai.registration.model.capture.BatchCaptureRequest
 import app.gov.uidai.registration.model.capture.CaptureRequest
 import app.gov.uidai.registration.model.capture.CaptureResponse
 import app.gov.uidai.registration.model.device.DeviceRegistrationRequest
 import app.gov.uidai.registration.model.device.DeviceRegistrationResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
-import app.gov.uidai.registration.model.session.CloseSessionRequest
-import app.gov.uidai.registration.model.session.CreateSessionRequest
-import app.gov.uidai.registration.model.session.CreateSessionResponse
 import app.gov.uidai.registration.repository.ClfRepository
 import javax.inject.Inject
 
@@ -27,18 +23,6 @@ class ClfRepositoryImpl @Inject constructor(
         request: ResidentLookupRequest
     ): ApiResult<ResidentLookupResponse> = ResponseHandler.safeApiCall {
         apiService.lookupResident(request)
-    }
-
-    override suspend fun createSession(
-        request: CreateSessionRequest
-    ): ApiResult<CreateSessionResponse> = ResponseHandler.safeApiCall {
-        apiService.createSession(request)
-    }
-
-    override suspend fun closeSession(
-        request: CloseSessionRequest
-    ): ApiResult<Unit> = ResponseHandler.safeApiCall {
-        apiService.closeSession(request)
     }
 
     override suspend fun uploadCapture(

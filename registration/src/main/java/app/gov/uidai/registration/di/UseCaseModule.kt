@@ -12,7 +12,6 @@ import app.gov.uidai.registration.usecase.DashboardUseCase
 import app.gov.uidai.registration.usecase.DeviceUseCase
 import app.gov.uidai.registration.usecase.FingerSDKManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
-import app.gov.uidai.registration.usecase.SessionUseCase
 import app.gov.uidai.registration.usecase.UIDManager
 import app.gov.uidai.registration.usecase.UserUseCase
 import app.gov.uidai.registration.usecase.impl.CaptureFileStorage
@@ -22,7 +21,6 @@ import app.gov.uidai.registration.usecase.impl.DashboardUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.DeviceUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.FingerSDKManagerImpl
 import app.gov.uidai.registration.usecase.impl.ResidentUseCaseImpl
-import app.gov.uidai.registration.usecase.impl.SessionUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.UIDManagerImpl
 import app.gov.uidai.registration.usecase.impl.UserUseCaseImpl
 import dagger.Module
@@ -72,14 +70,6 @@ object UseCaseModule {
     fun provideResidentUseCase(
         clfRepository: ClfRepository
     ): ResidentUseCase = ResidentUseCaseImpl(
-        clfRepository = clfRepository
-    )
-
-    @Provides
-    @Singleton
-    fun provideSessionUseCase(
-        clfRepository: ClfRepository
-    ): SessionUseCase = SessionUseCaseImpl(
         clfRepository = clfRepository
     )
 
