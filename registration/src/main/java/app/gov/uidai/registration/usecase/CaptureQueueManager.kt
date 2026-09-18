@@ -13,6 +13,6 @@ interface CaptureQueueManager {
     ): ApiResult<List<CaptureResponse>>
 
     // Called by WorkManager every 15 mins.
-    // Processes all pending captures grouped by session_id sequentially.
+    // Processes all pending captures grouped by resident sequentially.
     suspend fun syncPendingCaptures(): ApiResult<Unit>
 }

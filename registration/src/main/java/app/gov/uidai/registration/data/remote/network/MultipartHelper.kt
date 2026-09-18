@@ -38,7 +38,6 @@ object MultipartHelper {
     // Builds all metadata RequestBody parts from a CaptureRequest
     fun buildMetadataParts(req: CaptureRequest): Map<String, RequestBody> {
         return mapOf(
-            "session_id" to req.sessionId.toRequestBody(),
             "resident_pseudonym_id" to req.residentPseudonymId.toRequestBody(),
             "operator_id" to req.operatorId.toRequestBody(),
             "capture_mode" to req.captureMode.toRequestBody(),
@@ -68,7 +67,6 @@ object MultipartHelper {
     fun buildBatchMetadataParts(requests: List<CaptureRequest>): Map<String, RequestBody> {
         val parts = mutableMapOf<String, RequestBody>()
         requests.forEachIndexed { index, req ->
-            parts["session_id_$index"] = req.sessionId.toRequestBody()
             parts["resident_pseudonym_id_$index"] = req.residentPseudonymId.toRequestBody()
             parts["operator_id_$index"] = req.operatorId.toRequestBody()
             parts["capture_mode_$index"] = req.captureMode.toRequestBody()

@@ -31,10 +31,6 @@ interface PendingCaptureDao {
     @Query("SELECT COUNT(*) FROM pending_captures")
     fun observePendingCount(): Flow<Int>
 
-    // Deletes all captures for a session after successful batch upload
-    @Query("DELETE FROM pending_captures WHERE sessionId = :sessionId")
-    suspend fun deleteBySessionId(sessionId: String)
-
     // Deletes a single capture after successful single upload
     @Query("DELETE FROM pending_captures WHERE id = :id")
     suspend fun deleteById(id: Int)

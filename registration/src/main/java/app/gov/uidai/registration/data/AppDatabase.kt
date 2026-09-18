@@ -21,7 +21,7 @@ import javax.inject.Singleton
 
 @Database(
     entities = [UserEntity::class, FingerprintEntity::class, PendingCaptureEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(

@@ -25,10 +25,6 @@ class CaptureQueueManagerImpl @Inject constructor(
         private const val MAX_RETRY_COUNT = 5
     }
 
-    // Checks for any pending captures for this resident first.
-    // If pending exist → batch upload (pending + new capture together).
-    // If none → single upload.
-    // On any failure → saves new capture to local DB.
     override suspend fun uploadOrQueue(
         request: CaptureRequest
     ): ApiResult<List<CaptureResponse>> {
@@ -50,7 +46,6 @@ class CaptureQueueManagerImpl @Inject constructor(
         }
     }
 
-    // Tries single upload. On failure saves to local DB.
     // 409 is treated as soft-success: the finger was already captured previously.
     private suspend fun uploadSingle(
         request: CaptureRequest
@@ -75,10 +70,7 @@ class CaptureQueueManagerImpl @Inject constructor(
         }
     }
 
-    // Builds batch from pending + new capture, tries batch upload.
-    // On success clears session's pending queue.
     // 409 is treated as soft-success: all fingers in the batch were already captured.
-    // On other failure saves new capture to local DB — existing pending already there.
     private suspend fun uploadBatch(
         pendingCaptures: List<PendingCaptureEntity>,
         newRequest: CaptureRequest
@@ -122,9 +114,10 @@ class CaptureQueueManagerImpl @Inject constructor(
             }
         }
     }
+
     // Called by WorkManager every 15 mins.
-    // Groups all pending by session_id and uploads sequentially.
-    // Stops on first session failure — retries everything next cycle.
+    // Groups all pending by resident and uploads sequentially.
+    // Stops on first resident's failure — retries everything next cycle.
     override suspend fun syncPendingCaptures(): ApiResult<Unit> {
         val allPending = pendingCaptureDao.getAll()
 
@@ -133,21 +126,19 @@ class CaptureQueueManagerImpl @Inject constructor(
             return ApiResult.Success(Unit)
         }
 
-        Log.d(TAG, "Sync: Found ${allPending.size} pending captures. Grouping by session.")
+        Log.d(TAG, "Sync: Found ${allPending.size} pending captures. Grouping by resident.")
 
-        // Group by session_id preserving insertion order
-        val groupedBySession = allPending.groupBy { it.sessionId }
+        val groupedByResident = allPending.groupBy { it.residentPseudonymId }
 
-        for ((sessionId, captures) in groupedBySession) {
+        for ((residentId, captures) in groupedByResident) {
 
-            // Skip captures that have exceeded max retry limit
             val retryable = captures.filter { it.retryCount < MAX_RETRY_COUNT }
             if (retryable.isEmpty()) {
-                Log.w(TAG, "Session $sessionId exceeded max retries. Skipping.")
+                Log.w(TAG, "Resident $residentId exceeded max retries. Skipping.")
                 continue
             }
 
-            Log.d(TAG, "Sync: Uploading ${retryable.size} captures for session $sessionId")
+            Log.d(TAG, "Sync: Uploading ${retryable.size} captures for resident $residentId")
 
             val result = captureUseCase.uploadBatchCaptures(
                 retryable.map { it.toCaptureRequest() }
@@ -162,13 +153,12 @@ class CaptureQueueManagerImpl @Inject constructor(
                             entity.fingerType
                         )
                     }
-                    Log.d(TAG, "Sync: Session $sessionId uploaded successfully. Cleared ${retryable.size} pending by resident+fingerType.")
+                    Log.d(TAG, "Sync: Resident $residentId uploaded successfully. Cleared ${retryable.size} pending by resident+fingerType.")
                 }
 
                 is ApiResult.Error -> {
-                    pendingCaptureDao.incrementRetryCount(sessionId)
-                    Log.w(TAG, "Sync: Session $sessionId failed. Retrying next cycle.")
-                    // Stop processing — retry all remaining next cycle
+                    pendingCaptureDao.incrementRetryCount(residentId)
+                    Log.w(TAG, "Sync: Resident $residentId failed. Retrying next cycle.")
                     return ApiResult.Error(result.message, result.code, result.errorData)
                 }
             }
@@ -177,15 +167,13 @@ class CaptureQueueManagerImpl @Inject constructor(
         return ApiResult.Success(Unit)
     }
 
-    // Saves a failed capture request to local Room DB pending queue
     private suspend fun saveToPendingQueue(request: CaptureRequest) {
-        val fileName = "${request.sessionId}_${request.fingerType}_${System.currentTimeMillis()}.enc"
+        val fileName = "${request.residentPseudonymId}_${request.fingerType}_${System.currentTimeMillis()}.enc"
         val filePath = withContext(Dispatchers.IO) {
             captureFileStorage.write(request.imageBytes, fileName)
         }
 
         val entity = PendingCaptureEntity(
-            sessionId = request.sessionId,
             residentPseudonymId = request.residentPseudonymId,
             operatorId = request.operatorId,
             captureMode = request.captureMode,
@@ -204,13 +192,11 @@ class CaptureQueueManagerImpl @Inject constructor(
         pendingCaptureDao.insert(entity)
     }
 
-    // Converts PendingCaptureEntity back to CaptureRequest for upload
     private suspend fun PendingCaptureEntity.toCaptureRequest(): CaptureRequest {
         val imageBytes = withContext(Dispatchers.IO) {
             captureFileStorage.read(imageFilePath)
         }
         return CaptureRequest(
-            sessionId = sessionId,
             residentPseudonymId = residentPseudonymId,
             operatorId = operatorId,
             captureMode = captureMode,

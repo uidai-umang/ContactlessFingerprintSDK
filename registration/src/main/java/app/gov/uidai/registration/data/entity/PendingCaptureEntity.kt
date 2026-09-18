@@ -6,7 +6,6 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "pending_captures")
 data class PendingCaptureEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val sessionId: String,
     val residentPseudonymId: String,
     val operatorId: String,
     val captureMode: String,

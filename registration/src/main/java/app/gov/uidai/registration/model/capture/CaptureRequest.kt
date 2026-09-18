@@ -3,7 +3,6 @@ package app.gov.uidai.registration.model.capture
 import com.google.gson.annotations.SerializedName
 
 data class CaptureRequest(
-    @SerializedName("session_id") val sessionId: String,
     @SerializedName("resident_pseudonym_id") val residentPseudonymId: String,
     @SerializedName("operator_id") val operatorId: String,
     @SerializedName("capture_mode") val captureMode: String,
