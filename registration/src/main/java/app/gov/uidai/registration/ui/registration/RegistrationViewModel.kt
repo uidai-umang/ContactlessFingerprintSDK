@@ -203,10 +203,14 @@ class RegistrationViewModel @Inject constructor(
                         }
                     )
                 }
+                val captureMode = if (data.fingerPosition == FingerPosition.LEFT_THUMB ||
+                    data.fingerPosition == FingerPosition.RIGHT_THUMB
+                ) CaptureMode.SLAP else CaptureMode.SEQUENTIAL
+
                 viewModelScope.launch {
                     uploadCapture(
                         fingerPosition = data.fingerPosition,
-                        captureMode = CaptureMode.SEQUENTIAL,
+                        captureMode = captureMode,
                         imageBytes = data.imageBytes,
                         blurScore = data.blurScore,
                         brightnessScore = data.brightnessScore,
@@ -403,7 +407,7 @@ class RegistrationViewModel @Inject constructor(
                 )
 
                 saveRegisteredImagesToGallery(fingerprints = fingerprints)
-                
+
                 _registrationResult.update { RegistrationResult.Success }
 
             } catch (ex: Exception) {

@@ -28,7 +28,12 @@ object SlapCaptureLauncher {
     private fun SlapSubOption.toExpectedHandType(): String = when (this) {
         SlapSubOption.LEFT_SLAP -> "Left"
         SlapSubOption.RIGHT_SLAP -> "Right"
-        SlapSubOption.THUMBS -> throw IllegalArgumentException("Thumbs capture is not built -- Continue is disabled for it in CaptureMethodScreen")
+        SlapSubOption.LEFT_THUMB, SlapSubOption.RIGHT_THUMB ->
+            throw IllegalArgumentException(
+                "Thumbs capture doesn't go through SlapCaptureLauncher -- it's routed to " +
+                        "the single-finger SDK flow in RegistrationActivity's onContinueSlap. " +
+                        "This function should never be called with $this."
+            )
     }
 
     fun createIntent(context: Context, purpose: String, slapSubOption: SlapSubOption): Intent {

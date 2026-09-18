@@ -39,6 +39,8 @@ import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.registration.method.CaptureMethodRoute
 import app.gov.uidai.registration.model.SlapSubOption
+import app.gov.uidai.registration.model.toFingerPositionOrNull
+import app.gov.uidai.registration.model.usesSingleFingerCapture
 import app.gov.uidai.registration.utils.toBitmap
 import com.gemalto.jp2.JP2Encoder
 import `in`.gov.uidai.utility.constants.JourneyConstant
@@ -217,6 +219,13 @@ class RegistrationActivity : ComponentActivity() {
                                         )
                                     }
                                 }
+
+                                val thumbCaptureLauncher = rememberLauncherForActivityResult(
+                                    ActivityResultContracts.StartActivityForResult()
+                                ) { result ->
+                                    registrationViewModel.handleSdkActivityResult(result.resultCode, result.data)
+                                }
+
                                 CaptureMethodRoute(
                                     onNavigateUp = { navController.navigateUp() },
                                     registrationViewModel = registrationViewModel,
@@ -224,13 +233,18 @@ class RegistrationActivity : ComponentActivity() {
                                         navController.navigate(Routes.Registration.createRoute(uidHash))
                                     },
                                     onContinueSlap = { slapSubOption ->
-                                        pendingSlapSubOption = slapSubOption
-                                        val intent = SlapCaptureLauncher.createIntent(
-                                            context = context,
-                                            purpose = "register",
-                                            slapSubOption = slapSubOption
-                                        )
-                                        slapCaptureLauncher.launch(intent)
+                                        if (slapSubOption.usesSingleFingerCapture) {
+                                            val fingerPosition = slapSubOption.toFingerPositionOrNull()!!
+                                            registrationViewModel.captureFingerprint(fingerPosition, thumbCaptureLauncher)
+                                        } else {
+                                            pendingSlapSubOption = slapSubOption
+                                            val intent = SlapCaptureLauncher.createIntent(
+                                                context = context,
+                                                purpose = "register",
+                                                slapSubOption = slapSubOption
+                                            )
+                                            slapCaptureLauncher.launch(intent)
+                                        }
                                     }
                                 )
                             }

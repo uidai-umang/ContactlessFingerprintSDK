@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
+import app.gov.uidai.registration.model.toFingerPositionOrNull
 
 @HiltViewModel
 class CaptureMethodViewModel @Inject constructor() : ViewModel() {
@@ -24,11 +25,6 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
     // in uiState -- purely internal bookkeeping.
     private var previousFingerUploadStatus: Map<FingerPosition, FingerCaptureStatus> = emptyMap()
 
-    private fun SlapSubOption.toFingerPositionOrNull(): FingerPosition? = when (this) {
-        SlapSubOption.LEFT_SLAP -> FingerPosition.LEFT_SLAP
-        SlapSubOption.RIGHT_SLAP -> FingerPosition.RIGHT_SLAP
-        SlapSubOption.THUMBS -> null // no capture path built for Thumbs
-    }
 
     // Called reactively from CaptureMethodRoute whenever the shared
     // RegistrationViewModel's uiState changes. registrationCaptureMode is ""
@@ -45,18 +41,20 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
             .filterKeys {
                 it != FingerPosition.LEFT_SLAP &&
                         it != FingerPosition.RIGHT_SLAP &&
+                        it != FingerPosition.LEFT_THUMB &&
+                        it != FingerPosition.RIGHT_THUMB &&
                         it != FingerPosition.UNKNOWN
             }
             .count { it.value == FingerCaptureStatus.CAPTURED }
 
-        val completedSlapSubOptions = buildSet {
-            if (fingerUploadStatus[FingerPosition.LEFT_SLAP] == FingerCaptureStatus.CAPTURED) {
-                add(SlapSubOption.LEFT_SLAP)
-            }
-            if (fingerUploadStatus[FingerPosition.RIGHT_SLAP] == FingerCaptureStatus.CAPTURED) {
-                add(SlapSubOption.RIGHT_SLAP)
-            }
+        val slapSubOptionStatus = SlapSubOption.entries.associateWith { option ->
+            option.toFingerPositionOrNull()?.let { fingerUploadStatus[it] }
+                ?: FingerCaptureStatus.NOT_CAPTURED
         }
+
+        val completedSlapSubOptions = slapSubOptionStatus
+            .filterValues { it == FingerCaptureStatus.CAPTURED }
+            .keys
 
         val selected = _uiState.value.selectedSlapSubOption
         val selectedPosition = selected?.toFingerPositionOrNull()
@@ -70,10 +68,8 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
 
         val nextSelectedSubOption = when {
             !justResolved -> selected
-            selected in completedSlapSubOptions -> {
-                listOf(SlapSubOption.LEFT_SLAP, SlapSubOption.RIGHT_SLAP)
-                    .firstOrNull { it != selected && it !in completedSlapSubOptions }
-            }
+            selected in completedSlapSubOptions ->
+                SlapSubOption.entries.firstOrNull { it != selected && it !in completedSlapSubOptions }
             else -> null
         }
 
@@ -84,6 +80,7 @@ class CaptureMethodViewModel @Inject constructor() : ViewModel() {
                 isLocked = isLocked,
                 fingersAlreadyCaptured = fingersAlreadyCaptured,
                 completedSlapSubOptions = completedSlapSubOptions,
+                slapSubOptionStatus = slapSubOptionStatus,
                 selectedSlapSubOption = nextSelectedSubOption,
                 uploadStage = if (isNowInFlight) currentStatus else null,
                 selectedMethod = when {

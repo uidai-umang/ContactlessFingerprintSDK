@@ -123,10 +123,7 @@ fun CaptureMethodScreen(
     onBack: () -> Unit
 ) {
     val isMethodReadyToContinue = when (uiState.selectedMethod) {
-        // Thumbs stays selectable (visual feedback) but doesn't unlock
-        // Continue -- Thumbs capture isn't built, only Left/Right slap.
-        CaptureMethod.SLAP -> uiState.selectedSlapSubOption == SlapSubOption.LEFT_SLAP ||
-                uiState.selectedSlapSubOption == SlapSubOption.RIGHT_SLAP
+        CaptureMethod.SLAP -> uiState.selectedSlapSubOption != null
         CaptureMethod.SEQUENTIAL -> true
         null -> false
     }
@@ -167,6 +164,7 @@ fun CaptureMethodScreen(
                 isActive = slapIsActive,
                 selectedSubOption = uiState.selectedSlapSubOption,
                 completedSubOptions = uiState.completedSlapSubOptions,
+                subOptionStatus = uiState.slapSubOptionStatus,
                 onClick = { onSelectMethod(CaptureMethod.SLAP) },
                 onSelectSubOption = onSelectSlapSubOption
             )
@@ -239,6 +237,7 @@ private fun SlapCaptureCard(
     isActive: Boolean,
     selectedSubOption: SlapSubOption?,
     completedSubOptions: Set<SlapSubOption>,
+    subOptionStatus: Map<SlapSubOption, FingerCaptureStatus>,
     onClick: () -> Unit,
     onSelectSubOption: (SlapSubOption) -> Unit
 ) {
@@ -351,6 +350,7 @@ private fun SlapCaptureCard(
                 isInteractive = true,
                 selectedOption = selectedSubOption,
                 completedOptions = completedSubOptions,
+                subOptionStatus = subOptionStatus,
                 onSelectOption = onSelectSubOption
             )
         }
@@ -359,22 +359,21 @@ private fun SlapCaptureCard(
 
 @Composable
 private fun SlabSubOptionNeutralState() {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(color = md_theme_onTertiary)
             .padding(14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            text = "\uD83D\uDC48 Left slap"
-        )
-        Text(
-            text = "\uD83D\uDC49 Right slap"
-        )
-        Text(
-            text = "\uD83D\uDC4D Thumb"
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text = "\uD83D\uDC48 Left slap")
+            Text(text = "\uD83D\uDC49 Right slap")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text = "\uD83D\uDC4D Left thumb")
+            Text(text = "\uD83D\uDC4D Right thumb")
+        }
     }
 }
 
@@ -383,6 +382,7 @@ private fun SlapSubOptionsRow(
     isInteractive: Boolean,
     selectedOption: SlapSubOption?,
     completedOptions: Set<SlapSubOption>,
+    subOptionStatus: Map<SlapSubOption, FingerCaptureStatus>,
     onSelectOption: (SlapSubOption) -> Unit
 ) {
     Column(
@@ -395,24 +395,135 @@ private fun SlapSubOptionsRow(
             color = capture_method_primary,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         )
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(capture_method_strip_bg)
                 .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SlapSubOption.entries.forEach { option ->
-                SubOptionChip(
-                    option = option,
-                    isInteractive = isInteractive,
-                    isSelected = isInteractive && selectedOption == option,
-                    isCompleted = option in completedOptions,
-                    onClick = { onSelectOption(option) },
-                    modifier = Modifier.weight(1f)
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(SlapSubOption.LEFT_SLAP, SlapSubOption.RIGHT_SLAP).forEach { option ->
+                    SubOptionChip(
+                        option = option,
+                        isInteractive = isInteractive,
+                        isSelected = isInteractive && selectedOption == option,
+                        isCompleted = option in completedOptions,
+                        status = subOptionStatus[option] ?: FingerCaptureStatus.NOT_CAPTURED,
+                        onClick = { onSelectOption(option) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(SlapSubOption.LEFT_THUMB, SlapSubOption.RIGHT_THUMB).forEach { option ->
+                    SubOptionChip(
+                        option = option,
+                        isInteractive = isInteractive,
+                        isSelected = isInteractive && selectedOption == option,
+                        isCompleted = option in completedOptions,
+                        status = subOptionStatus[option] ?: FingerCaptureStatus.NOT_CAPTURED,
+                        onClick = { onSelectOption(option) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SubOptionChip(
+    option: SlapSubOption,
+    isInteractive: Boolean,
+    isSelected: Boolean,
+    isCompleted: Boolean,
+    status: FingerCaptureStatus,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val (emoji, title, subtitle) = when (option) {
+        SlapSubOption.LEFT_SLAP -> Triple("\uD83D\uDC48", "Left slap", "4 fingers")
+        SlapSubOption.RIGHT_SLAP -> Triple("\uD83D\uDC49", "Right slap", "4 fingers")
+        SlapSubOption.LEFT_THUMB -> Triple("\uD83D\uDC4D", "Left thumb", "1 finger")
+        SlapSubOption.RIGHT_THUMB -> Triple("\uD83D\uDC4D", "Right thumb", "1 finger")
+    }
+
+    // PENDING/FAILED/UPLOADING stay clickable so the operator can retry --
+    // mirrors FingerItem's isClickable rule in RegistrationRoute.kt. Only
+    // NOT_CAPTURED (fresh) and CAPTURED (done, locked) follow the plain
+    // isCompleted gate.
+    val isClickable = when (status) {
+        FingerCaptureStatus.NOT_CAPTURED -> isInteractive
+        FingerCaptureStatus.CAPTURING, FingerCaptureStatus.UPLOADING, FingerCaptureStatus.CAPTURED -> false
+        FingerCaptureStatus.PENDING, FingerCaptureStatus.FAILED -> isInteractive
+    }
+
+    val bgColor = when {
+        isSelected -> capture_method_primary
+        status == FingerCaptureStatus.UPLOADING -> capture_method_warning_bg
+        status == FingerCaptureStatus.PENDING -> capture_method_warning_bg
+        status == FingerCaptureStatus.FAILED -> capture_method_warning_bg
+        isCompleted -> capture_method_locked_border
+        isInteractive -> Color.White
+        else -> capture_method_strip_bg
+    }
+    val contentColor = when {
+        isSelected -> Color.White
+        status == FingerCaptureStatus.UPLOADING -> capture_method_warning_text
+        status == FingerCaptureStatus.PENDING -> capture_method_warning_text
+        status == FingerCaptureStatus.FAILED -> capture_method_warning_text
+        isCompleted -> capture_method_locked_text
+        isInteractive -> capture_method_primary
+        else -> capture_method_text_muted
+    }
+
+    val statusLabel = when (status) {
+        FingerCaptureStatus.UPLOADING -> "Syncing…"
+        FingerCaptureStatus.PENDING -> "Pending sync"
+        FingerCaptureStatus.FAILED -> "Failed — retry"
+        FingerCaptureStatus.CAPTURED -> "Done"
+        else -> subtitle
+    }
+    val icon = when (status) {
+        FingerCaptureStatus.CAPTURED -> "✓"
+        FingerCaptureStatus.PENDING -> "⟳"
+        FingerCaptureStatus.FAILED -> "!"
+        else -> emoji
+    }
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .then(
+                if (isInteractive && !isSelected) {
+                    Modifier.border(1.dp, capture_method_primary, RoundedCornerShape(8.dp))
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(enabled = isClickable, onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (status == FingerCaptureStatus.UPLOADING) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = contentColor
+            )
+        } else {
+            Text(icon, fontSize = 16.sp)
+        }
+        Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
+        Text(statusLabel, fontSize = 9.sp, color = contentColor.copy(alpha = 0.85f))
     }
 }
 
@@ -428,7 +539,8 @@ private fun SubOptionChip(
     val (emoji, title, subtitle) = when (option) {
         SlapSubOption.LEFT_SLAP -> Triple("\uD83D\uDC48", "Left slap", "4 fingers")
         SlapSubOption.RIGHT_SLAP -> Triple("\uD83D\uDC49", "Right slap", "4 fingers")
-        SlapSubOption.THUMBS -> Triple("👍", "Thumbs", "2 fingers")
+        SlapSubOption.LEFT_THUMB -> Triple("👍", "Left thumb", "1 finger")
+        SlapSubOption.RIGHT_THUMB -> Triple("👍", "Right thumb", "1 finger")
     }
     // Selectable once the Slap card itself is chosen — and only if this
     // particular sub-capture hasn't already been done this session.
@@ -762,14 +874,4 @@ private fun UploadingDialog(stage: FingerCaptureStatus) {
 }
 @Composable
 @Preview
-fun Preview() {
-    SlapCaptureCard(
-        isSelected = false,
-        isLocked = false,
-        isActive = false,
-        selectedSubOption = null,
-        completedSubOptions = emptySet(),
-        onClick = {},
-        onSelectSubOption = {}
-    )
-}
+fun Preview() {}
