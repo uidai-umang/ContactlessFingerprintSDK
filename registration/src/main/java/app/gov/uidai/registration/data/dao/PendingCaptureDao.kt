@@ -35,11 +35,11 @@ interface PendingCaptureDao {
     @Query("DELETE FROM pending_captures WHERE id = :id")
     suspend fun deleteById(id: Int)
 
-    // Increments retry count per session after a failed upload attempt
-    @Query("UPDATE pending_captures SET retryCount = retryCount + 1 WHERE sessionId = :sessionId")
-    suspend fun incrementRetryCount(sessionId: String)
+    // Increments retry count for a resident's pending captures after a failed upload attempt
+    @Query("UPDATE pending_captures SET retryCount = retryCount + 1 WHERE residentPseudonymId = :residentId")
+    suspend fun incrementRetryCount(residentId: String)
 
-    // Deletes a single capture by resident + finger — used after successful upload when sessionId may be stale
+    // Deletes a single capture by resident + finger — used after successful upload
     @Query("DELETE FROM pending_captures WHERE residentPseudonymId = :residentId AND fingerType = :fingerType")
     suspend fun deleteByResidentAndFingerType(residentId: String, fingerType: String)
 
