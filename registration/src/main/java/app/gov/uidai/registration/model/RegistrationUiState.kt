@@ -36,7 +36,6 @@ data class RegistrationUiState(
     ),
     val message: String? = null,
     val residentPseudonymId: String = "",
-    val sessionId: String = "",
     val isLookingUpResident: Boolean = false,
     val captureMode: String = "", // "" until resident's first capture sets it — mirrors backend
     val totalCaptured: Int = 0,

@@ -40,8 +40,7 @@ class DashboardViewModel @Inject constructor(
         loadAlerts()
     }
 
-    fun setSessionContext(sessionId: String, residentPseudonymId: String, operatorId: String) {
-        currentSessionId = sessionId
+    fun setContext(residentPseudonymId: String, operatorId: String) {
         currentResidentPseudonymId = residentPseudonymId
         currentOperatorId = operatorId
     }
@@ -134,7 +133,6 @@ class DashboardViewModel @Inject constructor(
     fun confirmOverride(dimension: String, key: String) {
         viewModelScope.launch {
             val result = dashboardUseCase.logOverride(
-                sessionId = currentSessionId,
                 residentPseudonymId = currentResidentPseudonymId,
                 operatorId = currentOperatorId,
                 dimension = dimension,

@@ -21,7 +21,6 @@ interface DashboardUseCase {
     suspend fun checkQuota(gender: String, ageGroup: String): ApiResult<QuotaCheckResponse>
 
     suspend fun logOverride(
-        sessionId: String,
         residentPseudonymId: String,
         operatorId: String,
         dimension: String,

@@ -42,7 +42,6 @@ class RegistrationViewModel @Inject constructor(
     private val userUseCase: UserUseCase,
     private val fileRepository: FileRepository,
     private val residentUseCase: ResidentUseCase,
-    private val sessionUseCase: SessionUseCase,
     private val captureQueueManager: CaptureQueueManager,
     private val pendingCaptureDao: PendingCaptureDao,
     private val sdkManager: FingerSDKManager,
@@ -57,7 +56,6 @@ class RegistrationViewModel @Inject constructor(
 
     private var currentUidHash: String = ""
     private var currentResidentId: String = ""
-    private var currentSessionId: String = ""
     private val testOperatorId = "00000000-0000-0000-0000-000000000001"
     private val testDeviceId = "00000000-0000-0000-0000-000000000002"
     private val testCentreId = "00000000-0000-0000-0000-000000000003"
@@ -130,8 +128,6 @@ class RegistrationViewModel @Inject constructor(
                             fingerUploadStatus = uploadStatusMap
                         )
                     }
-
-                    createSession(response.residentPseudonymId)
                 }
 
                 is ApiResult.Error -> {
@@ -141,27 +137,6 @@ class RegistrationViewModel @Inject constructor(
                             message = "Failed to load resident: ${result.message}"
                         )
                     }
-                }
-            }
-        }
-    }
-
-    private suspend fun createSession(residentPseudonymId: String) {
-        val result = sessionUseCase.createSession(
-            operatorId = testOperatorId,
-            deviceId = testDeviceId,
-            centreId = testCentreId,
-            residentPseudonymId = residentPseudonymId
-        )
-
-        when (result) {
-            is ApiResult.Success -> {
-                currentSessionId = result.data.sessionId
-            }
-
-            is ApiResult.Error -> {
-                _uiState.update {
-                    it.copy(message = "Session error: ${result.message}")
                 }
             }
         }
@@ -311,7 +286,6 @@ class RegistrationViewModel @Inject constructor(
         }
 
         val request = CaptureRequest(
-            sessionId = currentSessionId,
             residentPseudonymId = currentResidentId,
             operatorId = testOperatorId,
             captureMode = captureMode,
@@ -429,10 +403,7 @@ class RegistrationViewModel @Inject constructor(
                 )
 
                 saveRegisteredImagesToGallery(fingerprints = fingerprints)
-
-                if (currentSessionId.isNotEmpty()) {
-                    sessionUseCase.closeSession(currentSessionId)
-                }
+                
                 _registrationResult.update { RegistrationResult.Success }
 
             } catch (ex: Exception) {

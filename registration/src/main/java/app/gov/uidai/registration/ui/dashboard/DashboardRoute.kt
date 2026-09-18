@@ -65,7 +65,6 @@ fun DashboardRoute(
     operatorId: String,
     onNavigateUp: () -> Unit,
     onNewCollection: () -> Unit,
-    sessionId: String = "",
     residentPseudonymId: String = "",
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
@@ -75,7 +74,7 @@ fun DashboardRoute(
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
-        viewModel.setSessionContext(sessionId, residentPseudonymId, operatorId)
+        viewModel.setContext(residentPseudonymId, operatorId)
         viewModel.onTabSelected(DashboardTab.OVERVIEW)
     }
 

@@ -37,14 +37,12 @@ class DashboardUseCaseImpl @Inject constructor(
 
     // Builds the override log request and delegates to repository
     override suspend fun logOverride(
-        sessionId: String,
         residentPseudonymId: String,
         operatorId: String,
         dimension: String,
         key: String
     ): ApiResult<QuotaOverrideResponse> {
         val request = LogOverrideRequest(
-            sessionId = sessionId,
             residentPseudonymId = residentPseudonymId,
             operatorId = operatorId,
             dimension = dimension,

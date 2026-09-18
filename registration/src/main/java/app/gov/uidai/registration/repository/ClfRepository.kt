@@ -1,16 +1,12 @@
 package app.gov.uidai.registration.repository
 
 import app.gov.uidai.registration.data.remote.network.ApiResult
-import app.gov.uidai.registration.model.capture.BatchCaptureRequest
 import app.gov.uidai.registration.model.capture.CaptureRequest
 import app.gov.uidai.registration.model.capture.CaptureResponse
 import app.gov.uidai.registration.model.device.DeviceRegistrationRequest
 import app.gov.uidai.registration.model.device.DeviceRegistrationResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
-import app.gov.uidai.registration.model.session.CloseSessionRequest
-import app.gov.uidai.registration.model.session.CreateSessionRequest
-import app.gov.uidai.registration.model.session.CreateSessionResponse
 
 interface ClfRepository {
 
