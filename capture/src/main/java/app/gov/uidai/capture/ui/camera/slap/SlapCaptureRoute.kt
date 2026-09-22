@@ -100,6 +100,14 @@ fun SlapCaptureRoute(
     var pendingResult by remember { mutableStateOf<CaptureResult?>(null) }
     var reviewBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
+    var showHandGuide by remember { mutableStateOf(true) }
+
+    LaunchedEffect(handType) {
+        showHandGuide = true
+        kotlinx.coroutines.delay(3000)
+        showHandGuide = false
+    }
+
     LaunchedEffect(handType) { viewModel.setExpectedHandType(handType) }
 
     var hasCameraPermission by remember {
@@ -325,6 +333,10 @@ fun SlapCaptureRoute(
                     }) { Text("Cancel") }
                 }
             )
+        }
+
+        if (showHandGuide) {
+            SlapHandGuideOverlay(handType = handType, onClick = {showHandGuide = false})
         }
     }
 
