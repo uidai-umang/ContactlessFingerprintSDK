@@ -206,14 +206,16 @@ class SlapCaptureViewModel @Inject constructor(
             //
             // We are primarily interested in inspecting the
             // diagnostic images at this stage.
-            val finalBitmap = result.fingers
+            val finalBitmap = colourCrop
+
+            val segmentedBitmap = result.fingers
                 .firstOrNull()
                 ?.ridgeImage
                 ?: colourCrop
 
             // 7. Save the current final output.
             val finalUri = fileRepository.saveBitmapAndGetUri(
-                finalBitmap,
+                segmentedBitmap,
                 "${handType.uppercase()}_SLAP_RIDGES"
             )
 
