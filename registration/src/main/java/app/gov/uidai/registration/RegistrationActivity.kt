@@ -34,6 +34,7 @@ import app.gov.uidai.registration.connectivity.ui.NoInternetScreen
 import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
 import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
+import app.gov.uidai.registration.model.CaptureMode
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
@@ -230,9 +231,11 @@ class RegistrationActivity : ComponentActivity() {
                                     onNavigateUp = { navController.navigateUp() },
                                     registrationViewModel = registrationViewModel,
                                     onContinueSequential = {
+                                        registrationViewModel.setSelectedCaptureMode(CaptureMode.SEQUENTIAL)
                                         navController.navigate(Routes.Registration.createRoute(uidHash))
                                     },
                                     onContinueSlap = { slapSubOption ->
+                                        registrationViewModel.setSelectedCaptureMode(CaptureMode.SLAP)
                                         if (slapSubOption.usesSingleFingerCapture) {
                                             val fingerPosition = slapSubOption.toFingerPositionOrNull()!!
                                             registrationViewModel.captureFingerprint(fingerPosition, thumbCaptureLauncher)

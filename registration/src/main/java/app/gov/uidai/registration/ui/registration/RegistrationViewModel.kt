@@ -56,6 +56,9 @@ class RegistrationViewModel @Inject constructor(
 
     private var currentUidHash: String = ""
     private var currentResidentId: String = ""
+
+    private var selectedCaptureMode: String = CaptureMode.SEQUENTIAL
+
     private val testOperatorId = "00000000-0000-0000-0000-000000000001"
     private val testDeviceId = "00000000-0000-0000-0000-000000000002"
     private val testCentreId = "00000000-0000-0000-0000-000000000003"
@@ -203,14 +206,11 @@ class RegistrationViewModel @Inject constructor(
                         }
                     )
                 }
-                val captureMode = if (data.fingerPosition == FingerPosition.LEFT_THUMB ||
-                    data.fingerPosition == FingerPosition.RIGHT_THUMB
-                ) CaptureMode.SLAP else CaptureMode.SEQUENTIAL
 
                 viewModelScope.launch {
                     uploadCapture(
                         fingerPosition = data.fingerPosition,
-                        captureMode = captureMode,
+                        captureMode = selectedCaptureMode,
                         imageBytes = data.imageBytes,
                         blurScore = data.blurScore,
                         brightnessScore = data.brightnessScore,
@@ -468,6 +468,10 @@ class RegistrationViewModel @Inject constructor(
                 }
             )
         }
+    }
+
+    fun setSelectedCaptureMode(mode: String) {
+        selectedCaptureMode = mode
     }
 
 
