@@ -38,38 +38,50 @@ class SlapBlurChecker @Inject constructor(
         DensenetBlur(context, modelPath)
     }
 
+//    fun check(provider: ImageDataProvider, bitmap: Bitmap): Result {
+//        val laplacianResult = try {
+//            laplacian.run(provider)
+//        } catch (e: Exception) {
+//            Log.e(TAG, "Laplacian check failed", e)
+//            null
+//        }
+//        val laplacianVariance = laplacianResult?.confidence ?: 0f
+//
+//        if (laplacianResult?.passed == true) {
+//            Log.d(TAG, "Blur check passed via Laplacian (variance=$laplacianVariance)")
+//            return Result(passed = true, laplacianVariance = laplacianVariance, densenetConfidence = 0f)
+//        }
+//
+//        val densenetResult = try {
+//            densenet.detectBlur(bitmap, DENSENET_THRESHOLD)
+//        } catch (e: Exception) {
+//            Log.e(TAG, "DenseNet check failed", e)
+//            null
+//        }
+//        val densenetPassed = densenetResult?.isSharp ?: false
+//        val densenetConfidence = densenetResult?.confidence ?: 0f
+//
+//        if (densenetPassed) {
+//            Log.d(TAG, "Blur check passed via DenseNet (confidence=$densenetConfidence)")
+//        } else {
+//            Log.d(
+//                TAG,
+//                "Blur check failed on both -- laplacianVariance=$laplacianVariance densenetConfidence=$densenetConfidence"
+//            )
+//        }
+//
+//        return Result(passed = densenetPassed, laplacianVariance = laplacianVariance, densenetConfidence = densenetConfidence)
+//    }
+
     fun check(provider: ImageDataProvider, bitmap: Bitmap): Result {
-        val laplacianResult = try {
-            laplacian.run(provider)
-        } catch (e: Exception) {
-            Log.e(TAG, "Laplacian check failed", e)
-            null
-        }
-        val laplacianVariance = laplacianResult?.confidence ?: 0f
-
-        if (laplacianResult?.passed == true) {
-            Log.d(TAG, "Blur check passed via Laplacian (variance=$laplacianVariance)")
-            return Result(passed = true, laplacianVariance = laplacianVariance, densenetConfidence = 0f)
-        }
-
         val densenetResult = try {
             densenet.detectBlur(bitmap, DENSENET_THRESHOLD)
         } catch (e: Exception) {
             Log.e(TAG, "DenseNet check failed", e)
             null
         }
-        val densenetPassed = densenetResult?.isSharp ?: false
-        val densenetConfidence = densenetResult?.confidence ?: 0f
-
-        if (densenetPassed) {
-            Log.d(TAG, "Blur check passed via DenseNet (confidence=$densenetConfidence)")
-        } else {
-            Log.d(
-                TAG,
-                "Blur check failed on both -- laplacianVariance=$laplacianVariance densenetConfidence=$densenetConfidence"
-            )
-        }
-
-        return Result(passed = densenetPassed, laplacianVariance = laplacianVariance, densenetConfidence = densenetConfidence)
+        val passed = densenetResult?.isSharp ?: false
+        val confidence = densenetResult?.confidence ?: 0f
+        return Result(passed = passed, laplacianVariance = 0f, densenetConfidence = confidence)
     }
 }
