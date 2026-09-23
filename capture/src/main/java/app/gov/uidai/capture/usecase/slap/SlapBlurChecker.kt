@@ -18,7 +18,7 @@ class SlapBlurChecker @Inject constructor(
 ) {
     companion object {
         private val TAG = SlapBlurChecker::class.simpleName
-        private const val LAPLACIAN_MIN_VARIANCE = 300f
+        private const val LAPLACIAN_MIN_VARIANCE = 500f
         private const val DENSENET_THRESHOLD = 0.85f
     }
 
