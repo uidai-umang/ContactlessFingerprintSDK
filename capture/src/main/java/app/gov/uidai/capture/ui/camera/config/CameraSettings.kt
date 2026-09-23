@@ -38,6 +38,26 @@ object CameraSettings : PreferenceGroup {
         0.1f
     )
 
+    val TARGET_HAND_DISTANCE_MM = PreferenceParam(
+        "camera.target_hand_distance_mm",
+        "Target Hand Distance (mm)",
+        PreferenceType.FLOAT,
+        // Keep in sync with MANUAL_FOCUS_DISTANCE above (same 12cm,
+        // different unit) -- this one drives the live "move closer/move
+        // farther" guidance text, MANUAL_FOCUS_DISTANCE drives the lens.
+        120f
+    )
+
+    val HAND_DISTANCE_TOLERANCE_MM = PreferenceParam(
+        "camera.hand_distance_tolerance_mm",
+        "Hand Distance Tolerance (mm)",
+        PreferenceType.FLOAT,
+        // +/- this many mm around TARGET_HAND_DISTANCE_MM counts as "good,"
+        // no guidance shown. Tune against real observed distance-estimate
+        // noise once logs are in -- this is a starting guess.
+        15f
+    )
+
     val MANUAL_CAPTURE = PreferenceParam(
         "camera.manual_capture",
         "Manual Capture",

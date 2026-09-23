@@ -34,7 +34,10 @@ data class SlapLiveState(
     val uprightFrameWidth: Int = 0,
     val uprightFrameHeight: Int = 0,
     val isReady: Boolean = false,
-    val statusMessage: String = "Place all 4 fingers in frame"
+    val statusMessage: String = "Place all 4 fingers in frame",
+    // Live estimate of how far the hand is from the camera, for
+    // diagnostics/future UI -- null whenever no box has been detected yet.
+    val handDistanceMM: Float? = null
 )
 
 /**
@@ -51,7 +54,16 @@ class SlapCaptureListener(
     private val blurChecker: SlapBlurChecker,
     private val coroutineScope: CoroutineScope,
     private val getRotationDegrees: () -> Int,
-    private val triggerFocus: (handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) -> Unit
+    private val triggerFocus: (handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) -> Unit,
+    // Decoupled from triggerFocus on purpose -- triggerFocus goes through
+    // FocusManager.lock(), which is throttled by whichever focus strategy
+    // is active and, under the new default (ManualFocusAtFixedDistance),
+    // doesn't even look at the box width anymore (see CameraSettings.
+    // FOCUS_TYPE's kdoc). Guidance needs the distance number every frame
+    // regardless of what the focus strategy does with it.
+    private val getHandDistanceMM: (handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) -> Float,
+    private val targetHandDistanceMM: Float,
+    private val handDistanceToleranceMM: Float
 ) : ImageReader.OnImageAvailableListener {
 
     companion object {
@@ -153,6 +165,31 @@ class SlapCaptureListener(
 
         consecutivePasses = if (framePassed) consecutivePasses + 1 else 0
 
+        // Distance guidance -- computed independently of triggerFocus (see
+        // constructor kdoc): with the lens now locked to a fixed distance
+        // (ManualFocusAtFixedDistance), the USER has to be the one who
+        // moves, so tell them which way. Null whenever there's no box to
+        // measure, or the measured distance is within tolerance of the
+        // target (nothing to say -- falls through to the existing
+        // areaOk-based message below).
+        val handDistanceMM = result.box?.let { box ->
+            try {
+                getHandDistanceMM(box, Size(uprightWidth, uprightHeight), rotationDegrees)
+                    .takeIf { it > 0f }
+            } catch (e: Exception) {
+                Log.e(TAG, "getHandDistanceMM failed -- continuing without distance guidance", e)
+                null
+            }
+        }
+
+        val distanceGuidance = handDistanceMM?.let { distanceMM ->
+            when {
+                distanceMM > targetHandDistanceMM + handDistanceToleranceMM -> "Move hand closer to the camera"
+                distanceMM < targetHandDistanceMM - handDistanceToleranceMM -> "Move hand farther from the camera"
+                else -> null
+            }
+        }
+
         val statusMessage = when {
             detectedCount == 0 -> "Place all 4 fingers in frame"
             detectedCount < SlapFingerBandDetector.FINGER_COUNT ->
@@ -182,7 +219,8 @@ class SlapCaptureListener(
                 uprightFrameWidth = uprightWidth,
                 uprightFrameHeight = uprightHeight,
                 isReady = framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES,
-                statusMessage = statusMessage
+                statusMessage = statusMessage,
+                handDistanceMM = handDistanceMM
             )
         }
 
