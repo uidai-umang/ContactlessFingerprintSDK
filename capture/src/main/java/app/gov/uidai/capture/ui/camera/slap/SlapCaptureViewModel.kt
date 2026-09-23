@@ -49,6 +49,15 @@ class SlapCaptureViewModel @Inject constructor(
         private val TAG = SlapCaptureViewModel::class.simpleName
     }
 
+    init {
+        // Slap-only, device-independent fixed focus -- see
+        // SlapFixedDistanceFocus's kdoc and CameraController.
+        // useSlapFixedFocus's kdoc. Does not touch the shared FOCUS_TYPE
+        // preference or any existing FocusManager class, so single-finger
+        // capture (a separate CameraController instance) is unaffected.
+        cameraController.useSlapFixedFocus(preferenceStore.get(CameraSettings.TARGET_HAND_DISTANCE_MM))
+    }
+
     private var expectedHandType: String = "Left"
     private var listener: SlapCaptureListener? = null
 
@@ -85,7 +94,12 @@ class SlapCaptureViewModel @Inject constructor(
             getRotationDegrees = getRotationDegrees,
             triggerFocus = { box, size, rotation ->
                 cameraController.triggerHandFocusLock(box, size, rotation)
-            }
+            },
+            getHandDistanceMM = { box, size, rotation ->
+                cameraController.getHandDistanceMM(box, size, rotation)
+            },
+            targetHandDistanceMM = preferenceStore.get(CameraSettings.TARGET_HAND_DISTANCE_MM),
+            handDistanceToleranceMM = preferenceStore.get(CameraSettings.HAND_DISTANCE_TOLERANCE_MM)
         )
         listener = newListener
         viewModelScope.launch { newListener.liveState.collect { _liveState.value = it } }
