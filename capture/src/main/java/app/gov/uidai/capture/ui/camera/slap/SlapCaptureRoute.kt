@@ -212,22 +212,37 @@ fun SlapCaptureRoute(
                     )
                 }
 
-                // Fingertip markers -- redrawn at the latest positions every
-                // processed frame, no smoothing/animation.
+                // Per-finger ROI boxes -- one rect per detected finger,
+                // covering the actual fingerprint-bearing area (tip-anchored,
+                // not just a point at the tip). Matches the reference app's
+                // "4 boxes over each finger ROI" UI. Redrawn at the latest
+                // positions every processed frame, no smoothing/animation.
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     if (liveState.uprightFrameWidth > 0 && liveState.uprightFrameHeight > 0) {
                         val scaleX = size.width / liveState.uprightFrameWidth.toFloat()
                         val scaleY = size.height / liveState.uprightFrameHeight.toFloat()
-                        val squareSizePx = 18.dp.toPx()
                         val edgeColor = if (liveState.isReady) FingertipReadyEdge else FingertipFarEdge
                         val fillColor = if (liveState.isReady) FingertipReadyFill else FingertipFarFill
+
+                        liveState.fingerBoxes.forEach { box ->
+                            val topLeft = Offset(box.left * scaleX, box.top * scaleY)
+                            val boxSize = ComposeSize(
+                                (box.right - box.left) * scaleX,
+                                (box.bottom - box.top) * scaleY
+                            )
+                            drawRect(color = fillColor, topLeft = topLeft, size = boxSize)
+                            drawRect(color = edgeColor, topLeft = topLeft, size = boxSize, style = Stroke(width = 3.dp.toPx()))
+                        }
+
+                        // Small tip marker on top of each box -- keeps the
+                        // exact detected tip point visible for diagnosis.
+                        val squareSizePx = 10.dp.toPx()
                         liveState.fingertips.forEach { point ->
                             val cx = point.x * scaleX
                             val cy = point.y * scaleY
                             val topLeft = Offset(cx - squareSizePx / 2, cy - squareSizePx / 2)
                             val squareSize = ComposeSize(squareSizePx, squareSizePx)
-                            drawRect(color = fillColor, topLeft = topLeft, size = squareSize)
-                            drawRect(color = edgeColor, topLeft = topLeft, size = squareSize, style = Stroke(width = 2.dp.toPx()))
+                            drawRect(color = edgeColor, topLeft = topLeft, size = squareSize)
                         }
                     }
                 }

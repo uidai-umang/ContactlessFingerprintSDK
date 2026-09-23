@@ -8,8 +8,8 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import app.gov.uidai.capture.domain.model.CameraFrame
-import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.domain.model.SlapFrameResult
+import app.gov.uidai.capture.slap.processing.SlapFingerBandDetector
 import app.gov.uidai.capture.utils.extension.crop
 import app.gov.uidai.capture.utils.extension.inflatedByPercent
 import app.gov.uidai.capture.utils.extension.rotate
@@ -28,17 +28,26 @@ data class SlapLiveState(
     val handDetected: Boolean = false,
     val areaRatio: Float = 0f,
     val fingertips: List<PointF> = emptyList(),
-    val mediaPipeHandDetected: Boolean = false,
+    // Individual per-finger boxes -- draw one rect per detected finger,
+    // matching the reference app's "4 boxes over each finger ROI" UI.
+    val fingerBoxes: List<RectF> = emptyList(),
     val uprightFrameWidth: Int = 0,
     val uprightFrameHeight: Int = 0,
     val isReady: Boolean = false,
-    val statusMessage: String = "Move hand closer"
+    val statusMessage: String = "Place all 4 fingers in frame"
 )
 
+/**
+ * Live capture gate. Finger detection is SlapFingerBandDetector (classical
+ * Otsu + row-projection, no palm needed) via SlapFrameAnalyzer -- NOT
+ * MediaPipe hand-landmarks. MediaPipe was tried here and reverted: it
+ * requires the palm/wrist/MCP joints to detect anything, and this app's
+ * close, palm-not-shown framing never provides that, so it would never
+ * pass. Do not reintroduce it for gating.
+ */
 class SlapCaptureListener(
     private val expectedHandType: String,
     private val analyzer: SlapFrameAnalyzer,
-    private val mediaPipeAnalyzer: SlapMediaPipeAnalyzer,
     private val blurChecker: SlapBlurChecker,
     private val coroutineScope: CoroutineScope,
     private val getRotationDegrees: () -> Int,
@@ -48,8 +57,9 @@ class SlapCaptureListener(
     companion object {
         private val TAG = SlapCaptureListener::class.simpleName
         private const val THROTTLE_MS = 100L
-        private const val MEDIAPIPE_THROTTLE_MS = 250L
-        private const val AREA_RATIO_THRESHOLD = 0.10f
+        // Kept at 4 (bumped from 2 on origin, commit b80eadd: "avoid
+        // clicking if hand moves") -- that tuning is independent of the
+        // MediaPipe/skin-blob vs finger-band gating change and still applies.
         private const val REQUIRED_CONSECUTIVE_PASSES = 4
         private const val CROP_PADDING_PERCENT = 0.08f
     }
@@ -58,9 +68,6 @@ class SlapCaptureListener(
     private val lastProcessedAt = AtomicLong(0L)
     private val isProcessing = AtomicBoolean(false)
     private val isCaptured = AtomicBoolean(false)
-
-    private val lastMediaPipeProcessedAt = AtomicLong(0L)
-    private val isMediaPipeProcessing = AtomicBoolean(false)
 
     @Volatile
     private var consecutivePasses = 0
@@ -90,12 +97,9 @@ class SlapCaptureListener(
         val rotationDegrees = getRotationDegrees()
         val now = SystemClock.uptimeMillis()
 
-        val primaryEligible = now - lastProcessedAt.get() >= THROTTLE_MS && isProcessing.compareAndSet(false, true)
+        val eligible = now - lastProcessedAt.get() >= THROTTLE_MS && isProcessing.compareAndSet(false, true)
 
-        val mediaPipeEligible = now - lastMediaPipeProcessedAt.get() >= MEDIAPIPE_THROTTLE_MS &&
-                isMediaPipeProcessing.compareAndSet(false, true)
-
-        if (!primaryEligible && !mediaPipeEligible) {
+        if (!eligible) {
             image.close()
             return
         }
@@ -114,38 +118,20 @@ class SlapCaptureListener(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build CameraFrame", e)
-            if (primaryEligible) isProcessing.set(false)
-            if (mediaPipeEligible) isMediaPipeProcessing.set(false)
+            isProcessing.set(false)
             return
         }
 
-        if (primaryEligible) {
-            lastProcessedAt.set(now)
-            coroutineScope.launch {
-                try {
-                    processFrame(frame, rotationDegrees)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "processFrame failed unexpectedly", e)
-                } finally {
-                    isProcessing.set(false)
-                }
-            }
-        }
-
-        if (mediaPipeEligible) {
-            lastMediaPipeProcessedAt.set(now)
-            coroutineScope.launch {
-                try {
-                    processMediaPipeFrame(frame, rotationDegrees)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "processMediaPipeFrame failed unexpectedly", e)
-                } finally {
-                    isMediaPipeProcessing.set(false)
-                }
+        lastProcessedAt.set(now)
+        coroutineScope.launch {
+            try {
+                processFrame(frame, rotationDegrees)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "processFrame failed unexpectedly", e)
+            } finally {
+                isProcessing.set(false)
             }
         }
     }
@@ -156,18 +142,21 @@ class SlapCaptureListener(
         val uprightWidth = if (rotationDegrees == 90 || rotationDegrees == 270) frame.height else frame.width
         val uprightHeight = if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
 
-        val areaOk = result.areaRatio >= AREA_RATIO_THRESHOLD
-        val framePassed = result.handDetected && areaOk
+        val detectedCount = result.fingerBoxes.size
+        // result.handDetected already means "all 4 found" (see
+        // SlapFrameAnalyzer), kept explicit here for clarity at the call site.
+        val framePassed = result.handDetected
 
-        if (!result.handDetected || !areaOk) {
+        if (!framePassed) {
             lastAttemptBlurFailed = false
         }
 
         consecutivePasses = if (framePassed) consecutivePasses + 1 else 0
 
         val statusMessage = when {
-            !result.handDetected -> "No hand detected"
-            !areaOk -> "Move hand closer"
+            detectedCount == 0 -> "Place all 4 fingers in frame"
+            detectedCount < SlapFingerBandDetector.FINGER_COUNT ->
+                "Only $detectedCount/${SlapFingerBandDetector.FINGER_COUNT} fingers detected — reposition hand"
             lastAttemptBlurFailed -> "Too blurry — hold steady"
             consecutivePasses < REQUIRED_CONSECUTIVE_PASSES -> "Hold steady"
             else -> "Capturing automatically..."
@@ -188,6 +177,8 @@ class SlapCaptureListener(
                 frameId = frame.processingId,
                 handDetected = result.handDetected,
                 areaRatio = result.areaRatio,
+                fingertips = result.fingertips,
+                fingerBoxes = result.fingerBoxes,
                 uprightFrameWidth = uprightWidth,
                 uprightFrameHeight = uprightHeight,
                 isReady = framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES,
@@ -202,54 +193,34 @@ class SlapCaptureListener(
         }
     }
 
-    private suspend fun processMediaPipeFrame(frame: CameraFrame, rotationDegrees: Int) {
-        val result = mediaPipeAnalyzer.analyze(frame)
-
-        result.box?.let { box ->
-            val uprightWidth = if (rotationDegrees == 90 || rotationDegrees == 270) frame.height else frame.width
-            val uprightHeight = if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
-            try {
-                triggerFocus(box, Size(uprightWidth, uprightHeight), rotationDegrees)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "triggerFocus (mediapipe) failed -- continuing without it", e)
-            }
-        }
-
-        _liveState.update {
-            it.copy(
-                fingertips = result.fingertips,
-                mediaPipeHandDetected = result.handDetected
-            )
-        }
-    }
-
     private suspend fun attemptCapture(frame: CameraFrame, result: SlapFrameResult) {
         try {
             val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
-            val provider = ImageDataProvider(byteArray, size.width, size.height, frame.rotationDegrees)
-
             val uprightBitmap = byteArray.toBitmap(size).rotate(frame.rotationDegrees)
 
-            val blurResult = blurChecker.check(provider, uprightBitmap)
-            provider.clearCache()
+            // result.box is the union of the 4 detected finger bands (see
+            // SlapFrameAnalyzer) -- a real finger-shaped region, not a
+            // skin-color blob.
+            val box = result.box ?: RectF(0f, 0f, uprightBitmap.width.toFloat(), uprightBitmap.height.toFloat())
+            val paddedBox = box.inflatedByPercent(CROP_PADDING_PERCENT)
+            val croppedBitmap = uprightBitmap.crop(paddedBox)
+
+            // Blur check runs on the CROPPED hand region, not the full
+            // frame -- scoring the whole frame let a sharp background
+            // offset genuine motion blur on the hand itself.
+            val blurResult = blurChecker.check(croppedBitmap)
 
             if (!blurResult.passed) {
                 Log.w(
                     TAG,
-                    "Slap capture blur check failed (laplacian=${blurResult.laplacianVariance}, " +
-                            "densenet=${blurResult.densenetConfidence}) -- resetting, keep looping"
+                    "Slap capture blur check failed (densenet=${blurResult.densenetConfidence}) " +
+                            "-- resetting, keep looping"
                 )
                 lastAttemptBlurFailed = true
                 consecutivePasses = 0
                 isCaptured.set(false)
                 return
             }
-
-            val box = result.box ?: RectF(0f, 0f, uprightBitmap.width.toFloat(), uprightBitmap.height.toFloat())
-            val paddedBox = box.inflatedByPercent(CROP_PADDING_PERCENT)
-            val croppedBitmap = uprightBitmap.crop(paddedBox)
 
             _capturedBitmap.value = croppedBitmap
         } catch (e: Exception) {

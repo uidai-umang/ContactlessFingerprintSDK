@@ -5,9 +5,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.method.blur.DensenetBlur
-import app.gov.uidai.capture.domain.method.blur.LaplacianBlurMethod
 import app.gov.uidai.capture.domain.model.BlurCheckMethodType
-import app.gov.uidai.capture.domain.model.ImageDataProvider
 import app.gov.uidai.capture.pref.PreferenceStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -18,17 +16,13 @@ class SlapBlurChecker @Inject constructor(
 ) {
     companion object {
         private val TAG = SlapBlurChecker::class.simpleName
-        private const val LAPLACIAN_MIN_VARIANCE = 500f
         private const val DENSENET_THRESHOLD = 0.85f
     }
 
     data class Result(
         val passed: Boolean,
-        val laplacianVariance: Float,
         val densenetConfidence: Float
     )
-
-    private val laplacian by lazy { LaplacianBlurMethod(minVariance = LAPLACIAN_MIN_VARIANCE) }
 
     private val densenet by lazy {
         val modelPath = when (preferenceStore.get(BlurSettings.MODEL)) {
@@ -38,42 +32,27 @@ class SlapBlurChecker @Inject constructor(
         DensenetBlur(context, modelPath)
     }
 
-//    fun check(provider: ImageDataProvider, bitmap: Bitmap): Result {
-//        val laplacianResult = try {
-//            laplacian.run(provider)
-//        } catch (e: Exception) {
-//            Log.e(TAG, "Laplacian check failed", e)
-//            null
-//        }
-//        val laplacianVariance = laplacianResult?.confidence ?: 0f
-//
-//        if (laplacianResult?.passed == true) {
-//            Log.d(TAG, "Blur check passed via Laplacian (variance=$laplacianVariance)")
-//            return Result(passed = true, laplacianVariance = laplacianVariance, densenetConfidence = 0f)
-//        }
-//
-//        val densenetResult = try {
-//            densenet.detectBlur(bitmap, DENSENET_THRESHOLD)
-//        } catch (e: Exception) {
-//            Log.e(TAG, "DenseNet check failed", e)
-//            null
-//        }
-//        val densenetPassed = densenetResult?.isSharp ?: false
-//        val densenetConfidence = densenetResult?.confidence ?: 0f
-//
-//        if (densenetPassed) {
-//            Log.d(TAG, "Blur check passed via DenseNet (confidence=$densenetConfidence)")
-//        } else {
-//            Log.d(
-//                TAG,
-//                "Blur check failed on both -- laplacianVariance=$laplacianVariance densenetConfidence=$densenetConfidence"
-//            )
-//        }
-//
-//        return Result(passed = densenetPassed, laplacianVariance = laplacianVariance, densenetConfidence = densenetConfidence)
-//    }
-
-    fun check(provider: ImageDataProvider, bitmap: Bitmap): Result {
+    /**
+     * Laplacian was dropped for Slap (was: run first, DenseNet as fallback).
+     * It shares blur_detector_laplacian.py with single-finger capture, whose
+     * segment_finger() hard-rejects any region with height/width < 1.0 -- a
+     * 4-finger slap crop is landscape, so it always fell back to scoring the
+     * whole passed-in region. LAPLACIAN_MIN_VARIANCE (300, later bumped to
+     * 500) was also that module's pre-recalibration whole-cutout-era
+     * threshold, not its current segmented-finger scale (~13-14) -- so even
+     * the fallback score was being checked against the wrong number. Net
+     * effect: it never meaningfully passed or failed anything for Slap, it
+     * just always deferred to DenseNet -- confirmed independently (commit
+     * db1e235, "using densenet for blur check").
+     *
+     * Signature takes just the Bitmap now (dropped the unused
+     * ImageDataProvider param) -- caller passes the CROPPED hand region
+     * (see SlapCaptureListener.attemptCapture), so DenseNet itself no
+     * longer gets diluted by background. A real Slap-shaped
+     * blur/segmentation check belongs with the item-4 ROI work, not a
+     * patched threshold here.
+     */
+    fun check(bitmap: Bitmap): Result {
         val densenetResult = try {
             densenet.detectBlur(bitmap, DENSENET_THRESHOLD)
         } catch (e: Exception) {
@@ -82,6 +61,9 @@ class SlapBlurChecker @Inject constructor(
         }
         val passed = densenetResult?.isSharp ?: false
         val confidence = densenetResult?.confidence ?: 0f
-        return Result(passed = passed, laplacianVariance = 0f, densenetConfidence = confidence)
+
+        Log.d(TAG, "Slap blur check ${if (passed) "passed" else "failed"} (densenet=$confidence)")
+
+        return Result(passed = passed, densenetConfidence = confidence)
     }
 }
