@@ -8,31 +8,6 @@ import android.util.Log
 import kotlin.math.max
 import kotlin.math.min
 
-/**
- * Classical (no ML, no palm needed) per-finger band + fingertip + ROI
- * detector.
- *
- * Pulled OUT of SlapFingerprintProcessor, so it can be shared by:
- *  - SlapFingerprintProcessor (capture-time): bands -> ROI -> U2Net -> ridge
- *  - the live camera loop (SlapFrameAnalyzer): bands + ROI only, for the
- *    capture gate and the on-screen per-finger boxes
- *
- * One implementation, two callers -- so live and capture-time detection
- * can't quietly drift apart. Never uses MediaPipe/hand-landmarks: this is
- * exactly why it doesn't need the palm in frame, only the finger crop.
- *
- * Skin classification is done by YCbCr CHROMINANCE, not luminance. An
- * earlier version grayscaled the frame and ran Otsu thresholding, with a
- * heuristic that sampled the image border to guess whether the "finger"
- * was the darker or brighter cluster. That guess flipped between frames
- * whenever a finger sat near the frame edge or a background object was
- * itself dark, and worse, a dark BACKGROUND object is indistinguishable
- * from a dark SKIN region under luminance alone -- there is no signal to
- * tell them apart. Chrominance fixes both: skin color sits in a fairly
- * narrow, lighting-independent Cb/Cr band, and a dark (or light) neutral
- * object has near-zero color saturation regardless of brightness, so it
- * falls outside that band no matter how dark it is.
- */
 class SlapFingerBandDetector {
 
     companion object {
@@ -41,101 +16,40 @@ class SlapFingerBandDetector {
 
         private const val ROW_SMOOTHING_RADIUS = 8
         private const val MIN_FINGER_HEIGHT_RATIO = 0.04f
-
-        // Was 0.30 -- that let a single accepted band be up to 30% of the
-        // analysis height (170px at 568px height). Four fingers stacked
-        // with gaps can't each realistically be 30% of the frame, so a
-        // band anywhere near that size is almost certainly a merged false
-        // region (e.g. a background object), not a real finger. Tightened
-        // to bound how large a single false band -- and therefore its
-        // derived fingerprint ROI -- can get.
         private const val MAX_FINGER_HEIGHT_RATIO = 0.20f
-
-        // A candidate band must average at least this fraction of the
-        // image's WIDTH in skin pixels to count as a real finger. This is
-        // an ABSOLUTE floor, unlike the peak-relative activeThreshold
-        // below. Was 0.35 (112px at 320px analysis width) -- that's a
-        // FIXED pixel-width floor regardless of how far the finger is
-        // from the camera, so a finger farther away (occupying fewer
-        // columns) was rejected outright even though it was the only real
-        // skin region in frame. Lowered since chrominance classification
-        // is inherently much cleaner than luminance Otsu was, so this
-        // floor is now just a backstop against tiny noise, not the
-        // primary filter.
         private const val MIN_BAND_FILL_RATIO = 0.12f
-
-        // Relative to this frame's own peak row-projection value.
         private const val RELATIVE_ACTIVE_THRESHOLD_RATIO = 0.20
 
-        // We don't scan the entire band for the fingertip boundary -- just
-        // the middle portion, where it's cleanest.
         private const val TIP_SCAN_TOP_RATIO = 0.20f
         private const val TIP_SCAN_BOTTOM_RATIO = 0.80f
 
-        /*
-         * Fingerprint ROI (tip-anchored box, not the full-width row band).
-         * The fingerprint area is BEHIND the fingertip, not the fingertip
-         * point itself. Length is expressed relative to finger thickness.
-         */
         private const val FINGERPRINT_ROI_LENGTH_MULTIPLIER = 2.2f
         private const val FINGERPRINT_ROI_VERTICAL_PADDING_RATIO = 0.08f
 
-        // YCbCr skin-tone chrominance range. Deliberately wide to cover a
-        // broad range of skin tones (this SDK serves a large, diverse
-        // population) -- if testing shows darker skin tones still get
-        // missed, widen CR_MIN/CB_MIN further; if pale background objects
-        // (wood, some fabrics, skin-toned walls/surfaces) start getting
-        // picked up as false positives, narrow the range back down. Watch
-        // the "skin mask" log line below while tuning.
         private const val CB_MIN = 70
         private const val CB_MAX = 135
         private const val CR_MIN = 125
         private const val CR_MAX = 180
     }
 
-    enum class HandType {
-        LEFT,
-        RIGHT
-    }
+    enum class HandType { LEFT, RIGHT }
 
-    data class Fingertip(
-        val point: PointF,
-        val confidence: Float
-    )
+    data class Fingertip(val point: PointF, val confidence: Float)
 
     data class BandResult(
-        // Full-width horizontal strip this finger was detected in --
-        // useful for diagnostics, NOT what should be drawn/cropped as
-        // "the finger" (see fingerprintRegion).
         val fingerBand: RectF,
         val fingertip: Fingertip,
-        // Tip-anchored box actually covering the fingerprint-bearing area.
-        // This is what the live overlay and capture-time ROI crop should
-        // both use.
         val fingerprintRegion: RectF
     )
 
     data class DetectionResult(
         val bands: List<BandResult>,
-        // Skin binary mask + the (possibly downscaled) dimensions it was
-        // computed at -- callers that need pixel-level work (e.g. cropping
-        // an ROI) should re-derive from the bitmap they passed in; this is
-        // exposed mainly for diagnostics.
         val analysisWidth: Int,
         val analysisHeight: Int
     )
 
-    /**
-     * Detects up to FINGER_COUNT horizontal finger bands + a fingertip +
-     * fingerprint ROI per band. Everything is always returned in
-     * [bitmap]'s OWN (full-resolution) coordinate space, even when
-     * [maxAnalysisWidth] causes internal downscaling for speed -- callers
-     * never need to know that happened.
-     *
-     * [maxAnalysisWidth]: if set and smaller than bitmap.width, detection
-     * runs on a downscaled copy for speed (the live loop needs this; a
-     * single capture-time call on a still frame does not).
-     */
+    // Original per-frame entry point: builds its OWN mask using the fixed
+    // Cb/Cr classifySkin() range, then delegates to detectFromBinaryMask.
     fun detect(
         bitmap: Bitmap,
         handType: HandType,
@@ -172,6 +86,37 @@ class SlapFingerBandDetector {
         val skinRatio = binary.count { it }.toFloat() / binary.size
         Log.d(TAG, "skin mask: %.1f%% of analysis frame classified as skin".format(skinRatio * 100))
 
+        if (analysisBitmap !== bitmap) {
+            analysisBitmap.recycle()
+        }
+
+        val invScale = 1f / scale
+        val result = detectFromBinaryMask(binary, width, height, handType, invScale)
+
+        Log.d(
+            TAG,
+            "detect(): ${result.bands.size}/${FINGER_COUNT} finger bands found " +
+                    "(analysis ${width}x${height})"
+        )
+
+        return result
+    }
+
+    private fun RectF.scaledBy(factor: Float): RectF =
+        RectF(left * factor, top * factor, right * factor, bottom * factor)
+
+    // Shared band -> fingertip -> ROI pipeline. Runs on WHATEVER binary
+    // mask it's handed -- detect() feeds it the fixed-Cb/Cr mask it just
+    // built; SlapFingerprintProcessor feeds it SlapHandRegionDetector's
+    // background-relative mask instead.
+    fun detectFromBinaryMask(
+        binary: BooleanArray,
+        width: Int,
+        height: Int,
+        handType: HandType,
+        invScale: Float = 1f
+    ): DetectionResult {
+
         val fingerBands = detectFingerBands(binary, width, height)
 
         val bands = fingerBands.map { band ->
@@ -184,21 +129,7 @@ class SlapFingerBandDetector {
             BandResult(fingerBand = band, fingertip = fingertip, fingerprintRegion = fingerprintRegion)
         }
 
-        if (analysisBitmap !== bitmap) {
-            analysisBitmap.recycle()
-        }
-
-        Log.d(
-            TAG,
-            "detect(): ${bands.size}/${FINGER_COUNT} finger bands found " +
-                    "(analysis ${width}x${height})"
-        )
-
-        // Scale bands/fingertips/ROI back up to the caller's original
-        // bitmap coordinates -- callers should never have to know
-        // downscaling happened internally.
-        val invScale = 1f / scale
-        val scaledBands = if (scale == 1f) {
+        val scaledBands = if (invScale == 1f) {
             bands
         } else {
             bands.map { result ->
@@ -223,13 +154,6 @@ class SlapFingerBandDetector {
         )
     }
 
-    private fun RectF.scaledBy(factor: Float): RectF =
-        RectF(left * factor, top * factor, right * factor, bottom * factor)
-
-    // ========================================================================
-    // CHROMA EXTRACTION + SKIN CLASSIFICATION
-    // ========================================================================
-
     private fun extractChromaChannels(bitmap: Bitmap): Pair<IntArray, IntArray> {
         val width = bitmap.width
         val height = bitmap.height
@@ -253,14 +177,8 @@ class SlapFingerBandDetector {
     private fun classifySkin(cb: IntArray, cr: IntArray): BooleanArray =
         BooleanArray(cb.size) { i -> cb[i] in CB_MIN..CB_MAX && cr[i] in CR_MIN..CR_MAX }
 
-    // ========================================================================
-    // GAUSSIAN BLUR (generic over any single-channel plane -- used here on
-    // Cb/Cr instead of grayscale luminance)
-    // ========================================================================
-
     private fun gaussianBlur(pixels: IntArray, width: Int, height: Int): IntArray {
         val kernel = intArrayOf(1, 4, 6, 4, 1)
-
         val horizontal = IntArray(pixels.size)
         val output = IntArray(pixels.size)
 
@@ -288,10 +206,6 @@ class SlapFingerBandDetector {
 
         return output
     }
-
-    // ========================================================================
-    // FINGER BANDS
-    // ========================================================================
 
     private fun detectFingerBands(binary: BooleanArray, width: Int, height: Int): List<RectF> {
         val rowProjection = DoubleArray(height)
@@ -331,17 +245,6 @@ class SlapFingerBandDetector {
 
                 if (bandHeight >= minHeight && bandHeight <= maxHeight && bandScore >= minAbsoluteFill) {
                     candidates.add(start to end)
-                } else if (bandHeight in minHeight..maxHeight) {
-                    Log.d(
-                        TAG,
-                        "rejected band [$start,$end]: score=%.1f below absolute floor %.1f (width=$width)"
-                            .format(bandScore, minAbsoluteFill)
-                    )
-                } else if (bandHeight > maxHeight) {
-                    Log.d(
-                        TAG,
-                        "rejected band [$start,$end]: height=$bandHeight exceeds max $maxHeight -- likely a merged false region"
-                    )
                 }
                 start = -1
             }
@@ -349,12 +252,6 @@ class SlapFingerBandDetector {
 
         val merged = mergeNearbyBands(candidates, height)
 
-        // Always re-score and take the top FINGER_COUNT, even when there
-        // are 4 or fewer merged candidates -- previously a lone noise
-        // band sailed through untouched whenever total count was already
-        // <= FINGER_COUNT, since scoring only ran in the "too many"
-        // branch. The absolute floor above already screens most noise,
-        // this is a second pass that also handles ties/near-misses.
         val selected = merged
             .map { candidate ->
                 val score = smoothed.slice(candidate.first..candidate.second).average()
@@ -411,10 +308,6 @@ class SlapFingerBandDetector {
 
         return result
     }
-
-    // ========================================================================
-    // FINGERTIP DETECTION
-    // ========================================================================
 
     private fun detectFingertip(
         binary: BooleanArray,
@@ -493,10 +386,6 @@ class SlapFingerBandDetector {
         return Fingertip(point = PointF(medianX.toFloat(), tipY), confidence = confidence)
     }
 
-    // ========================================================================
-    // FINGERPRINT ROI (moved from SlapFingerprintProcessor -- now shared)
-    // ========================================================================
-
     private fun calculateFingerprintRegion(
         fingerBand: RectF,
         fingertip: PointF,
@@ -506,11 +395,6 @@ class SlapFingerBandDetector {
         val fingerHeight = fingerBand.height()
         val roiLength = (fingerHeight * FINGERPRINT_ROI_LENGTH_MULTIPLIER)
             .coerceAtLeast(1f)
-            // Safety cap independent of how fingerHeight was computed --
-            // even if a bad band slips through the height/fill filters
-            // above, this stops its derived ROI from ballooning past half
-            // the frame width (the "whole dark object becomes the box"
-            // failure mode).
             .coerceAtMost(fingerBand.width() * 0.5f)
         val verticalPadding = fingerHeight * FINGERPRINT_ROI_VERTICAL_PADDING_RATIO
 
