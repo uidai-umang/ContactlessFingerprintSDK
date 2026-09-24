@@ -122,141 +122,52 @@ class SlapCaptureViewModel @Inject constructor(
      */
 
     private val slapFingerprintProcessor = SlapFingerprintProcessor(context = appContext)
+
     suspend fun processCapturedImage(
         colourCrop: Bitmap,
         handType: String
     ): String = withContext(Dispatchers.Default) {
 
         try {
-            // 1. Save the exact captured Slap image.
-            val inputUri = fileRepository.saveBitmapAndGetUri(
-                colourCrop,
-                "Slap_ColourCrop_Before_Processing"
-            )
+            val slapHandType = if (handType.equals("LEFT", ignoreCase = true)) {
+                SlapFingerprintProcessor.HandType.LEFT
+            } else {
+                SlapFingerprintProcessor.HandType.RIGHT
+            }
 
-            Log.d(
-                "DiagnosticImage",
-                "SLAP INPUT URI = $inputUri"
-            )
-
-            // 2. Convert hand type.
-            val slapHandType =
-                if (handType.equals("LEFT", ignoreCase = true)) {
-                    SlapFingerprintProcessor.HandType.LEFT
-                } else {
-                    SlapFingerprintProcessor.HandType.RIGHT
-                }
-
-            // 3. Run the completely independent Slap pipeline.
-            //
-            // No:
-            // - SlapSkinAreaDetector
-            // - MediaPipe
-            // - U2Net
-            // - existing segmentation pipeline
-            //
-            // The captured bitmap is passed at its original resolution.
             val result = slapFingerprintProcessor.process(
                 bitmap = colourCrop,
                 handType = slapHandType
             )
 
-            Log.d(
-                TAG,
-                "Slap processing complete. " +
-                        "Detected fingers = ${result.fingers.size}"
-            )
+            val diagnosticUri = fileRepository.saveBitmapAndGetUri(result.diagnosticImage, "Slap_Finger_Detection_Debug")
+            Log.d("DiagnosticImage", "FINGER DETECTION URI = $diagnosticUri")
 
-            // 4. Save diagnostic image showing the four detected
-            // finger regions over the original image.
-            val diagnosticUri = fileRepository.saveBitmapAndGetUri(
-                result.diagnosticImage,
-                "Slap_Finger_Detection_Debug"
-            )
+            // Whole hand-region crop -- synced to backend as "the frame".
+            val handRegionUri = fileRepository.saveBitmapAndGetUri(result.handRegionBitmap, "${handType.uppercase()}_SLAP_HAND_REGION")
+            Log.d("DiagnosticImage", "Hand region URI = $handRegionUri")
 
-            Log.d(
-                "DiagnosticImage",
-                "FINGER DETECTION URI = $diagnosticUri"
-            )
-
-            // 5. Save every finger's intermediate/final images.
             result.fingers.forEach { finger ->
-
-                val roiUri = fileRepository.saveBitmapAndGetUri(
-                    finger.fingerprintRoi,
-                    "Slap_Finger_${finger.index + 1}_ROI"
-                )
-
-                Log.d(
-                    "DiagnosticImage",
-                    "Finger ${finger.index + 1} ROI URI = $roiUri"
-                )
+                val roiUri = fileRepository.saveBitmapAndGetUri(finger.fingerprintRoi, "Slap_Finger_${finger.index + 1}_ROI")
+                Log.d("DiagnosticImage", "Finger ${finger.index + 1} ROI URI = $roiUri")
 
                 finger.segmentationMask?.let { mask ->
-                    val maskUri = fileRepository.saveBitmapAndGetUri(
-                        mask,
-                        "Slap_Finger_${finger.index + 1}_Mask"
-                    )
+                    val maskUri = fileRepository.saveBitmapAndGetUri(mask, "Slap_Finger_${finger.index + 1}_Mask")
                     Log.d("DiagnosticImage", "Finger ${finger.index + 1} Mask URI = $maskUri")
                 } ?: Log.w("DiagnosticImage", "Finger ${finger.index + 1} -- segmentation found no mask")
 
-
-                val ridgeUri = fileRepository.saveBitmapAndGetUri(
-                    finger.ridgeImage,
-                    "Slap_Finger_${finger.index + 1}_Ridges"
-                )
-
-                Log.d(
-                    "DiagnosticImage",
-                    "Finger ${finger.index + 1} Ridge URI = $ridgeUri"
-                )
+                val ridgeUri = fileRepository.saveBitmapAndGetUri(finger.ridgeImage, "${handType.uppercase()}_SLAP_Finger_${finger.index + 1}_RIDGES")
+                Log.d("DiagnosticImage", "Finger ${finger.index + 1} Ridge URI = $ridgeUri")
             }
 
-            // 6. For this first test, return the first ridge image
-            // as the final output.
-            //
-            // We are primarily interested in inspecting the
-            // diagnostic images at this stage.
-            val finalBitmap = colourCrop
-
-            val segmentedBitmap = result.fingers
-                .firstOrNull()
-                ?.ridgeImage
-                ?: colourCrop
-
-            // 7. Save the current final output.
-            val finalUri = fileRepository.saveBitmapAndGetUri(
-                segmentedBitmap,
-                "${handType.uppercase()}_SLAP_RIDGES"
-            )
-
-            Log.d(
-                "DiagnosticImage",
-                "FINAL RIDGE URI = $finalUri"
-            )
-
-            finalBitmap.toBase64()
+            colourCrop.toBase64()
 
         } catch (e: Exception) {
-
-            Log.e(
-                TAG,
-                "Failed to process Slap fingerprint image",
-                e
-            )
-
-            // Keep the existing failure behaviour.
+            Log.e(TAG, "Failed to process Slap fingerprint image", e)
             colourCrop.toBase64()
         }
     }
 
-    /**
-     * TEST-ONLY entry point: bypasses live capture and blur checking
-     * entirely. Feeds a gallery-picked bitmap directly into the same
-     * SlapFingerprintProcessor pipeline processCapturedImage() already
-     * uses, to isolate whether ridge extraction works given genuinely
-     * sharp input -- removing camera blur as a variable.
-     */
     suspend fun processPickedImage(pickedBitmap: Bitmap, handType: String): String {
         return processCapturedImage(pickedBitmap, handType)
     }
