@@ -17,7 +17,10 @@ class FocusFactory @Inject constructor(
         return when (focusType) {
             FocusType.ContinuousAF -> ContinuousAF(provider)
             FocusType.FocusTriggerOnFinger -> FocusTriggerOnFinger(provider)
-            FocusType.ManualFocusAtFixedDistance -> ManualFocusAtFixedDistance(provider)
+            FocusType.ManualFocusAtFixedDistance -> ManualFocusAtFixedDistance(
+                provider,
+                preferenceStore.get(CameraSettings.MANUAL_FOCUS_DISTANCE)
+            )
             FocusType.ManualFocusAtFingerDistance -> ManualFocusAtFingerDistance(provider)
             FocusType.MacroFocusTriggerOnFinger -> MacroFocusTriggerOnFinger(provider)
             FocusType.HybridFingerDistanceFocus -> HybridFingerDistanceFocus(provider)
