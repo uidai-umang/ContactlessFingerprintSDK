@@ -67,6 +67,9 @@ class CameraController @Inject constructor(
     var currentSurface: Surface? = null
     private var isCameraInitialized = false
 
+    private var slapTorchOverride: Boolean? = null
+
+
     // Focus-drift diagnostics -- answers "does focus distance shift after
     // the session starts, and after how long". Reset per capture session
     // in initializeCamera(), NOT per-app-launch, so "t+" in the logs
@@ -86,7 +89,7 @@ class CameraController @Inject constructor(
         get() = preferenceStore.get(CameraSettings.CAMERA_FACING)
 
     private val isTorchOn
-        get() = preferenceStore.get(CameraSettings.TORCH_ON)
+        get() = slapTorchOverride ?: preferenceStore.get(CameraSettings.TORCH_ON)
 
     private val averageFingerWidthMM
         get() = preferenceStore.get(CameraSettings.AVERAGE_FINGER_WIDTH_MM)
@@ -721,6 +724,13 @@ class CameraController @Inject constructor(
         // meaning (union of all detected finger boxes).
         return 2 * (getFocalLengthInMM() * averageHandWidthMM * imageWidthPixels) /
                 (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
+    }
+
+    fun setSlapTorchOn(on: Boolean) {
+        slapTorchOverride = on
+        if (isCameraInitialized) {
+            updateTorchState()
+        }
     }
 
 

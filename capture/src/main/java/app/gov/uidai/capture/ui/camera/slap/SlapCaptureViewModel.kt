@@ -47,15 +47,6 @@ class SlapCaptureViewModel @Inject constructor(
         private val TAG = SlapCaptureViewModel::class.simpleName
     }
 
-    init {
-        // Slap-only, device-independent fixed focus -- see
-        // SlapFixedDistanceFocus's kdoc and CameraController.
-        // useSlapFixedFocus's kdoc. Does not touch the shared FOCUS_TYPE
-        // preference or any existing FocusManager class, so single-finger
-        // capture (a separate CameraController instance) is unaffected.
-        cameraController.useSlapFixedFocus(preferenceStore.get(CameraSettings.TARGET_HAND_DISTANCE_MM))
-    }
-
     private var expectedHandType: String = "Left"
     private var listener: SlapCaptureListener? = null
 
@@ -68,6 +59,12 @@ class SlapCaptureViewModel @Inject constructor(
     private val _isTorchOn = MutableStateFlow(preferenceStore.get(CameraSettings.TORCH_ON))
     val isTorchOn = _isTorchOn.asStateFlow()
 
+    init {
+        cameraController.useSlapFixedFocus(preferenceStore.get(CameraSettings.TARGET_HAND_DISTANCE_MM))
+        setTorch(true)
+    }
+
+
     private val segmentationCheck by lazy { segmentationFactory.create() }
 
     fun setExpectedHandType(handType: String) {
@@ -75,10 +72,12 @@ class SlapCaptureViewModel @Inject constructor(
     }
 
     fun toggleTorch() {
-        val newValue = !_isTorchOn.value
-        preferenceStore.save(CameraSettings.TORCH_ON.apply { currentValue = newValue })
-        _isTorchOn.update { newValue }
-        cameraController.updateTorchState()
+        setTorch(!_isTorchOn.value)
+    }
+
+    private fun setTorch(on: Boolean) {
+        cameraController.setSlapTorchOn(on)
+        _isTorchOn.value = on
     }
 
     fun getOrCreateListener(getRotationDegrees: () -> Int): SlapCaptureListener {
@@ -128,6 +127,8 @@ class SlapCaptureViewModel @Inject constructor(
         handType: String
     ): String = withContext(Dispatchers.Default) {
 
+        setTorch(false)
+
         try {
             val slapHandType = if (handType.equals("LEFT", ignoreCase = true)) {
                 SlapFingerprintProcessor.HandType.LEFT
@@ -176,6 +177,7 @@ class SlapCaptureViewModel @Inject constructor(
         listener?.reset()
         _capturedBitmap.value = null
         _liveState.value = SlapLiveState()
+        setTorch(true)
     }
 
     override fun onCleared() {
