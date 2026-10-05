@@ -43,7 +43,7 @@ class SlapCaptureListener(
     private val coroutineScope: CoroutineScope,
     private val getRotationDegrees: () -> Int,
     private val triggerFocus: (handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) -> Unit,
-    private val getHandDistanceMM: (handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) -> Float,
+    private val getFingerDistanceMM: (fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) -> Float,
     private val targetHandDistanceMM: Float,
     private val handDistanceToleranceMM: Float
 ) : ImageReader.OnImageAvailableListener {
@@ -71,6 +71,8 @@ class SlapCaptureListener(
 
     private val _capturedBitmap = MutableStateFlow<Bitmap?>(null)
     val capturedBitmap = _capturedBitmap.asStateFlow()
+
+
 
     override fun onImageAvailable(reader: ImageReader) {
         val image = try {
@@ -142,15 +144,20 @@ class SlapCaptureListener(
 
         consecutivePasses = if (framePassed) consecutivePasses + 1 else 0
 
-        val handDistanceMM = result.box?.let { box ->
-            try {
-                getHandDistanceMM(box, Size(uprightWidth, uprightHeight), rotationDegrees)
-                    .takeIf { it > 0f }
-            } catch (e: Exception) {
-                Log.e(TAG, "getHandDistanceMM failed -- continuing without distance guidance", e)
-                null
+        val handDistanceMM = result.fingerBoxes
+            .mapNotNull { box ->
+                try {
+                    getFingerDistanceMM(box, Size(uprightWidth, uprightHeight), rotationDegrees)
+                        .takeIf { it > 0f }
+                } catch (e: Exception) {
+                    Log.e(TAG, "getFingerDistanceMM failed for one finger box -- skipping it", e)
+                    null
+                }
             }
-        }
+            .sorted()
+            .let { distances -> distances.getOrNull(distances.size / 2) }
+
+        Log.d(TAG, "SLAP HAND DISTANCE -- ${handDistanceMM}mm (target=${targetHandDistanceMM}mm ± ${handDistanceToleranceMM}mm, from $detectedCount finger(s))")
 
         val distanceGuidance = handDistanceMM?.let { distanceMM ->
             when {

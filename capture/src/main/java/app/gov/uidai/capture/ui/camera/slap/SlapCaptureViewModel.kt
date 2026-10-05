@@ -91,8 +91,8 @@ class SlapCaptureViewModel @Inject constructor(
             triggerFocus = { box, size, rotation ->
                 cameraController.triggerHandFocusLock(box, size, rotation)
             },
-            getHandDistanceMM = { box, size, rotation ->
-                cameraController.getHandDistanceMM(box, size, rotation)
+            getFingerDistanceMM = { box, size, rotation ->
+                cameraController.getFingerDistanceMM(box, size, rotation)
             },
             targetHandDistanceMM = preferenceStore.get(CameraSettings.TARGET_HAND_DISTANCE_MM),
             handDistanceToleranceMM = preferenceStore.get(CameraSettings.HAND_DISTANCE_TOLERANCE_MM)

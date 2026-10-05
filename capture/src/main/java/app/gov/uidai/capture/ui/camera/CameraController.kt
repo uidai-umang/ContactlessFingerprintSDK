@@ -106,6 +106,8 @@ class CameraController @Inject constructor(
     private val shutterSpeed
         get() = preferenceStore.get(CameraSettings.SHUTTER_SPEED).toLong()
 
+    private val slapAverageFingerWidthMM = 15f
+
 
     private val cameraManager = context.getSystemService(
         Context.CAMERA_SERVICE
@@ -688,20 +690,6 @@ class CameraController @Inject constructor(
         focusManager.lock(paramProvider = paramProvider)
     }
 
-    /**
-     * Same pinhole-camera math triggerHandFocusLock already used
-     * internally, pulled out so callers that just want the NUMBER (e.g.
-     * live "move closer/move farther" guidance) don't have to go through
-     * FocusManager.lock() -- which is throttled by whichever focus
-     * strategy is active and may not even use this value anymore (see
-     * ManualFocusAtFixedDistance, the current default: it ignores
-     * getFingerDistance() entirely and always focuses at
-     * MANUAL_FOCUS_DISTANCE). Guidance needs this on every analyzed
-     * frame regardless of what the focus strategy does with it.
-     */
-    fun getHandDistanceMM(handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float =
-        calculateHandDistanceMM(handBoxUpright, uprightImageSize, rotationDegrees)
-
     private fun calculateHandDistanceMM(
         handBoxUpright: RectF,
         uprightImageSize: Size,
@@ -731,6 +719,26 @@ class CameraController @Inject constructor(
         if (isCameraInitialized) {
             updateTorchState()
         }
+    }
+
+    fun getFingerDistanceMM(fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float {
+        val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
+        val sensorPhysical = getSensorPhysicalSize()
+        val sensorWidthMMForUprightWidthAxis =
+            if (axesSwapped) sensorPhysical.height else sensorPhysical.width
+
+        // Row-projection banding (SlapFingerBandDetector) means each
+        // finger is a horizontal strip -- its HEIGHT in the upright image
+        // is its physical WIDTH (what averageFingerWidthMM measures), NOT
+        // the box's .width(), which is just the tip-anchored ROI length
+        // along the finger and has nothing to do with the finger's real
+        // width.
+        val perceivedWidthPixels = fingerBoxUpright.height()
+        val imageWidthPixels = uprightImageSize.width.toFloat()
+        if (perceivedWidthPixels <= 0) return 0f
+
+        return 2 * (getFocalLengthInMM() * slapAverageFingerWidthMM * imageWidthPixels) /
+                (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
     }
 
 
