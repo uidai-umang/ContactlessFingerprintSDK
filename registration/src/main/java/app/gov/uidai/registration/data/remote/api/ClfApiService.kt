@@ -1,5 +1,10 @@
 package app.gov.uidai.registration.data.remote.api
 
+import app.gov.uidai.registration.model.auth.AuthTokenRequest
+import app.gov.uidai.registration.model.auth.AuthTokenResponse
+import app.gov.uidai.registration.model.auth.LogoutRequest
+import app.gov.uidai.registration.model.auth.LogoutResponse
+import app.gov.uidai.registration.model.auth.RefreshTokenRequest
 import app.gov.uidai.registration.model.capture.CaptureResponse
 import app.gov.uidai.registration.model.dashboard.DashboardAlertsResponse
 import app.gov.uidai.registration.model.dashboard.DashboardDiversityResponse
@@ -24,6 +29,21 @@ import retrofit2.http.PartMap
 import retrofit2.http.Query
 
 interface ClfApiService {
+
+    @POST(Urls.ISSUE_TOKEN)
+    suspend fun issueToken(
+        @Body request: AuthTokenRequest
+    ): Response<AuthTokenResponse>
+
+    @POST(Urls.REFRESH_TOKEN)
+    suspend fun refreshToken(
+        @Body request: RefreshTokenRequest
+    ): Response<AuthTokenResponse>
+
+    @POST(Urls.LOGOUT)
+    suspend fun logout(
+        @Body request: LogoutRequest
+    ): Response<LogoutResponse>
 
     @POST(Urls.RESIDENT_LOOKUP)
     suspend fun lookupResident(

@@ -51,11 +51,18 @@ object RetrofitClient {
 
     // Builds OkHttpClient with debug-only interceptors (logging, Chucker).
     // Release builds get a clean client with no logging overhead.
-    fun buildOkHttpClient(context: Context): OkHttpClient {
+    fun buildOkHttpClient(
+        context: Context,
+        bearerInterceptor: Interceptor? = null,
+        authenticator: okhttp3.Authenticator? = null
+    ): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+
+        bearerInterceptor?.let { builder.addInterceptor(it) }
+        authenticator?.let { builder.authenticator(it) }
 
         if (BuildConfig.DEBUG) {
             builder

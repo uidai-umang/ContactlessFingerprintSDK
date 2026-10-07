@@ -59,6 +59,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import app.gov.uidai.registration.BuildConfig
+import app.gov.uidai.registration.repository.AuthRepository
+import app.gov.uidai.registration.repository.impl.AuthRepositoryImpl
 
 @AndroidEntryPoint
 class RegistrationActivity : ComponentActivity() {
@@ -73,6 +76,14 @@ class RegistrationActivity : ComponentActivity() {
 
     @Inject
     lateinit var maintenanceStatusProvider: MaintenanceStatusProvider
+
+    @Inject
+    lateinit var authRepository: AuthRepository
+
+    companion object {
+        const val EXTRA_OPERATOR_REF_ID = "operator_ref_id"   // host app passes this
+        private const val DEV_OPERATOR_REF_ID = "dev-operator-001"   // debug only
+    }
 
     private val dummyOperatorId = "00000000-0000-0000-0000-000000000001"
 
@@ -105,13 +116,22 @@ class RegistrationActivity : ComponentActivity() {
         sharedViewModel.initialize(this)
         CaptureWorkScheduler.schedule(this)
 
-        if (!DeviceRegistrationGate.isRegistered(this)) {
-            lifecycleScope.launch {
+        lifecycleScope.launch {
+            val operatorRefId = intent.getStringExtra(EXTRA_OPERATOR_REF_ID)
+                ?: if (BuildConfig.DEBUG) DEV_OPERATOR_REF_ID else null
+
+            // Get tokens (or reuse the saved session).
+            if (operatorRefId == null || !authRepository.ensureSession(operatorRefId)) {
+                Log.w("Auth", "No session: operator_ref_id missing or login failed")
+                return@launch
+            }
+
+            if (!DeviceRegistrationGate.isRegistered(this@RegistrationActivity)) {
                 val androidId =
                     Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
                 val result = deviceUseCase.registerDeviceIfNeeded(
                     context = this@RegistrationActivity,
-                    operatorId = dummyOperatorId,
+                    operatorId = dummyOperatorId,   // backend ignores it; the token decides
                     androidId = androidId
                 )
                 if (result is ApiResult.Success) {

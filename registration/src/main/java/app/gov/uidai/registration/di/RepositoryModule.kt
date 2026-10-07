@@ -1,10 +1,12 @@
 package app.gov.uidai.registration.di
 
+import app.gov.uidai.registration.repository.AuthRepository
 import app.gov.uidai.registration.repository.ClfRepository
 import app.gov.uidai.registration.repository.DashboardRepository
 import app.gov.uidai.registration.repository.FileRepository
 import app.gov.uidai.registration.repository.FingerprintRepository
 import app.gov.uidai.registration.repository.UserRepository
+import app.gov.uidai.registration.repository.impl.AuthRepositoryImpl
 import app.gov.uidai.registration.repository.impl.ClfRepositoryImpl
 import app.gov.uidai.registration.repository.impl.DashboardRepositoryImpl
 import app.gov.uidai.registration.repository.impl.FileRepositoryImpl
@@ -49,4 +51,11 @@ abstract class RepositoryModule {
     abstract fun bindDashboardRepository(
         impl: DashboardRepositoryImpl
     ): DashboardRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthRepository(
+        authRepositoryImpl: AuthRepositoryImpl
+    ): AuthRepository
 }
+
