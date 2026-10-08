@@ -39,6 +39,27 @@ class UIDEntryViewModel @Inject constructor(
             type = PreferenceType.STRING,
             defaultValue = ""
         )
+
+        private val RESIDENT_REF_ID_PREF = PreferenceParam(
+            key = "uid_entry.resident_ref_id",
+            displayName = "Resident Ref ID",
+            type = PreferenceType.STRING,
+            defaultValue = ""
+        )
+
+        private val RESIDENT_DOB_PREF = PreferenceParam(
+            key = "uid_entry.resident_dob",
+            displayName = "Resident DOB",
+            type = PreferenceType.STRING,
+            defaultValue = ""
+        )
+
+        private val RESIDENT_GENDER_PREF = PreferenceParam(
+            key = "uid_entry.resident_gender",
+            displayName = "Resident Gender",
+            type = PreferenceType.STRING,
+            defaultValue = ""
+        )
     }
 
     private val _uiState = MutableStateFlow(UIDEntryUiState())
@@ -48,10 +69,24 @@ class UIDEntryViewModel @Inject constructor(
 
     init {
         preferenceStore.save(LEGACY_UID_PREF.copy(currentValue = ""))
+
+        val refId = preferenceStore.get(RESIDENT_REF_ID_PREF)
+        val dob = runCatching { LocalDate.parse(preferenceStore.get(RESIDENT_DOB_PREF)) }.getOrNull()
+        val gender = runCatching { Gender.valueOf(preferenceStore.get(RESIDENT_GENDER_PREF)) }.getOrNull()
+        _uiState.update {
+            it.copy(
+                refId = refId,
+                isValidRefId = uidManager.validateRefId(refId),
+                dob = dob,
+                gender = gender
+            )
+        }
+        checkRegistration()
     }
 
     fun onRefIdChanged(raw: String) {
         val refId = uidManager.sanitizeRefId(raw)
+        preferenceStore.save(RESIDENT_REF_ID_PREF.copy(currentValue = refId))
         _uiState.update {
             it.copy(
                 refId = refId,
@@ -65,10 +100,12 @@ class UIDEntryViewModel @Inject constructor(
     }
 
     fun onDobSelected(dob: LocalDate) {
+        preferenceStore.save(RESIDENT_DOB_PREF.copy(currentValue = dob.toString()))
         _uiState.update { it.copy(dob = dob) }
     }
 
     fun onGenderSelected(gender: Gender) {
+        preferenceStore.save(RESIDENT_GENDER_PREF.copy(currentValue = gender.name))
         _uiState.update { it.copy(gender = gender) }
     }
 

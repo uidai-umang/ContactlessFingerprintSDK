@@ -17,6 +17,7 @@ import app.gov.uidai.registration.model.SDKResult
 import app.gov.uidai.registration.model.User
 import app.gov.uidai.registration.model.capture.CaptureRequest
 import app.gov.uidai.registration.repository.FileRepository
+import app.gov.uidai.registration.repository.OperatorRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
 import app.gov.uidai.registration.usecase.FingerSDKManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
@@ -46,7 +47,8 @@ class RegistrationViewModel @Inject constructor(
     private val captureQueueManager: CaptureQueueManager,
     private val pendingCaptureDao: PendingCaptureDao,
     private val sdkManager: FingerSDKManager,
-    private val encryptionService: EncryptionService
+    private val encryptionService: EncryptionService,
+    private val operatorRepository: OperatorRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RegistrationUiState())
@@ -60,7 +62,6 @@ class RegistrationViewModel @Inject constructor(
 
     private var currentResident: ResidentInput? = null
 
-    private val testOperatorId = "00000000-0000-0000-0000-000000000001"
     private val testDeviceId = "00000000-0000-0000-0000-000000000002"
     private val testCentreId = "00000000-0000-0000-0000-000000000003"
 
@@ -292,7 +293,7 @@ class RegistrationViewModel @Inject constructor(
 
         val request = CaptureRequest(
             residentPseudonymId = currentResidentId,
-            operatorId = testOperatorId,
+            operatorId = operatorRepository.getOperatorId(),
             captureMode = captureMode,
             fingerType = fingerPosition.name,
             hand = hand,

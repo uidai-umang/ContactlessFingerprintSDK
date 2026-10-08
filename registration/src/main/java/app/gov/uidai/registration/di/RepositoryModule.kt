@@ -5,12 +5,14 @@ import app.gov.uidai.registration.repository.ClfRepository
 import app.gov.uidai.registration.repository.DashboardRepository
 import app.gov.uidai.registration.repository.FileRepository
 import app.gov.uidai.registration.repository.FingerprintRepository
+import app.gov.uidai.registration.repository.OperatorRepository
 import app.gov.uidai.registration.repository.UserRepository
 import app.gov.uidai.registration.repository.impl.AuthRepositoryImpl
 import app.gov.uidai.registration.repository.impl.ClfRepositoryImpl
 import app.gov.uidai.registration.repository.impl.DashboardRepositoryImpl
 import app.gov.uidai.registration.repository.impl.FileRepositoryImpl
 import app.gov.uidai.registration.repository.impl.FingerprintRepositoryImpl
+import app.gov.uidai.registration.repository.impl.OperatorRepositoryImpl
 import app.gov.uidai.registration.repository.impl.UserRepositoryImpl
 import dagger.Binds
 import dagger.Module
@@ -57,5 +59,11 @@ abstract class RepositoryModule {
     abstract fun bindAuthRepository(
         authRepositoryImpl: AuthRepositoryImpl
     ): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindOperatorRepository(
+        impl: OperatorRepositoryImpl
+    ): OperatorRepository
 }
 

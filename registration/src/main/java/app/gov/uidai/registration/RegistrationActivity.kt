@@ -38,6 +38,7 @@ import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
 import app.gov.uidai.registration.model.CaptureMode
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
+import app.gov.uidai.registration.ui.operator.RegisterOperatorRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.registration.method.CaptureMethodRoute
@@ -61,9 +62,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import app.gov.uidai.registration.BuildConfig
-import app.gov.uidai.registration.repository.AuthRepository
-import app.gov.uidai.registration.repository.impl.AuthRepositoryImpl
 
 @AndroidEntryPoint
 class RegistrationActivity : ComponentActivity() {
@@ -79,15 +77,9 @@ class RegistrationActivity : ComponentActivity() {
     @Inject
     lateinit var maintenanceStatusProvider: MaintenanceStatusProvider
 
-    @Inject
-    lateinit var authRepository: AuthRepository
-
     companion object {
         const val EXTRA_OPERATOR_REF_ID = "operator_ref_id"   // host app passes this
-        private const val DEV_OPERATOR_REF_ID = "dev-operator-001"   // debug only
     }
-
-    private val dummyOperatorId = "00000000-0000-0000-0000-000000000001"
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -118,30 +110,6 @@ class RegistrationActivity : ComponentActivity() {
         sharedViewModel.initialize(this)
         CaptureWorkScheduler.schedule(this)
 
-        lifecycleScope.launch {
-            val operatorRefId = intent.getStringExtra(EXTRA_OPERATOR_REF_ID)
-                ?: if (BuildConfig.DEBUG) DEV_OPERATOR_REF_ID else null
-
-            // Get tokens (or reuse the saved session).
-            if (operatorRefId == null || !authRepository.ensureSession(operatorRefId)) {
-                Log.w("Auth", "No session: operator_ref_id missing or login failed")
-                return@launch
-            }
-
-            if (!DeviceRegistrationGate.isRegistered(this@RegistrationActivity)) {
-                val androidId =
-                    Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-                val result = deviceUseCase.registerDeviceIfNeeded(
-                    context = this@RegistrationActivity,
-                    operatorId = dummyOperatorId,   // backend ignores it; the token decides
-                    androidId = androidId
-                )
-                if (result is ApiResult.Success) {
-                    DeviceRegistrationGate.markRegistered(this@RegistrationActivity)
-                }
-            }
-        }
-
         setContent {
             AttendanceAppTheme {
                 val isConnected by connectivityObserver.isConnected.collectAsStateWithLifecycle(
@@ -165,8 +133,19 @@ class RegistrationActivity : ComponentActivity() {
 
                         NavHost(
                             navController = navController,
-                            startDestination = Routes.Dashboard.createRoute(dummyOperatorId)
+                            startDestination = Routes.RegisterOperator.route
                         ) {
+                            composable(Routes.RegisterOperator.route) {
+                                RegisterOperatorRoute(
+                                    initialOperatorRefId = intent.getStringExtra(EXTRA_OPERATOR_REF_ID),
+                                    onRegistered = { operatorId ->
+                                        registerDeviceIfNeeded(operatorId)
+                                        navController.navigate(Routes.Dashboard.createRoute(operatorId)) {
+                                            popUpTo(Routes.RegisterOperator.route) { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
                             composable(Routes.UidEntry.route) {
                                 UidEntryRoute(
                                     sharedUiState = sharedUiState,
@@ -274,8 +253,6 @@ class RegistrationActivity : ComponentActivity() {
                                 route = Routes.Registration.route,
                                 arguments = residentNavArguments
                             ) { backStackEntry ->
-                                val uidHash =
-                                    backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
                                 RegistrationRoute(
                                     resident = backStackEntry.residentInput(),
                                     viewModel = registrationViewModel,
@@ -304,6 +281,21 @@ class RegistrationActivity : ComponentActivity() {
                     }
                 }
 
+            }
+        }
+    }
+
+    private fun registerDeviceIfNeeded(operatorId: String) {
+        if (DeviceRegistrationGate.isRegistered(this)) return
+        lifecycleScope.launch {
+            val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            val result = deviceUseCase.registerDeviceIfNeeded(
+                context = this@RegistrationActivity,
+                operatorId = operatorId,
+                androidId = androidId
+            )
+            if (result is ApiResult.Success) {
+                DeviceRegistrationGate.markRegistered(this@RegistrationActivity)
             }
         }
     }

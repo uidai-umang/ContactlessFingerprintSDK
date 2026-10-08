@@ -8,6 +8,8 @@ import app.gov.uidai.registration.model.resident.ResidentInput
 
 sealed class Routes(val route: String) {
 
+    data object RegisterOperator : Routes(PATH_REGISTER_OPERATOR)
+
     data object UidEntry : Routes(PATH_UID_ENTRY)
 
     data object CaptureMethod :
@@ -33,6 +35,7 @@ sealed class Routes(val route: String) {
     }
 
     companion object {
+        private const val PATH_REGISTER_OPERATOR = "register_operator"
         private const val PATH_UID_ENTRY = "uid_entry"
         private const val PATH_CAPTURE_METHOD = "capture_method"
         private const val PATH_REGISTRATION = "registration"
