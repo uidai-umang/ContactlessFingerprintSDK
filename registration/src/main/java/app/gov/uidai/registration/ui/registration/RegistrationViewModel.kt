@@ -54,8 +54,6 @@ class RegistrationViewModel @Inject constructor(
 
     private val _registrationResult = MutableStateFlow<RegistrationResult?>(null)
     val registrationResult = _registrationResult.asStateFlow()
-
-    private var currentUidHash: String = ""
     private var currentResidentId: String = ""
 
     private var selectedCaptureMode: String = CaptureMode.SEQUENTIAL
@@ -69,16 +67,7 @@ class RegistrationViewModel @Inject constructor(
     init {
         sdkManager.setResultListener { result -> onSDKResult(result) }
     }
-
-    fun setUidHash(uidHash: String) {
-        // Same uidHash may be set again when navigating back into this
-        // shared instance from a sibling destination (e.g. CaptureMethod)
-        // -- avoid re-triggering a fresh lookup/session for no reason.
-        if (uidHash == currentUidHash && currentResidentId.isNotEmpty()) return
-        currentUidHash = uidHash
-        lookupResidentAndCreateSession()
-    }
-
+    
     fun setResident(resident: ResidentInput) {
         // Same resident may be set again when navigating back into this
         // shared instance from a sibling destination (e.g. CaptureMethod)

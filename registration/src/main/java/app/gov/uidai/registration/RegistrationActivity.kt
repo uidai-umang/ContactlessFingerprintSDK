@@ -178,9 +178,7 @@ class RegistrationActivity : ComponentActivity() {
                             }
                             composable(
                                 route = Routes.CaptureMethod.route,
-                                arguments = listOf(navArgument(Routes.ARG_UID_HASH) {
-                                    type = NavType.StringType
-                                })
+                                arguments = residentNavArguments
                             ) { backStackEntry ->
                                 val resident = backStackEntry.residentInput()
                                 val context = LocalContext.current
@@ -274,9 +272,7 @@ class RegistrationActivity : ComponentActivity() {
                             }
                             composable(
                                 route = Routes.Registration.route,
-                                arguments = listOf(navArgument(Routes.ARG_UID_HASH) {
-                                    type = NavType.StringType
-                                })
+                                arguments = residentNavArguments
                             ) { backStackEntry ->
                                 val uidHash =
                                     backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
