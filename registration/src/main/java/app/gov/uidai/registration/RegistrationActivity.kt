@@ -19,6 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import app.gov.uidai.registration.utils.residentInput
+import app.gov.uidai.registration.utils.residentNavArguments
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -169,8 +171,8 @@ class RegistrationActivity : ComponentActivity() {
                                 UidEntryRoute(
                                     sharedUiState = sharedUiState,
                                     onClearSharedMessage = sharedViewModel::clearError,
-                                    onNavigateToRegistration = { uidHash ->
-                                        navController.navigate(Routes.CaptureMethod.createRoute(uidHash))
+                                    onNavigateToRegistration = { resident ->
+                                        navController.navigate(Routes.CaptureMethod.createRoute(resident))
                                     }
                                 )
                             }
@@ -180,16 +182,15 @@ class RegistrationActivity : ComponentActivity() {
                                     type = NavType.StringType
                                 })
                             ) { backStackEntry ->
-                                val uidHash =
-                                    backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
+                                val resident = backStackEntry.residentInput()
                                 val context = LocalContext.current
 
                                 // registrationViewModel is Activity-scoped (see field above),
                                 // shared with the Registration destination below -- one
                                 // resident lookup / session / capture_mode source of truth
                                 // for both sequential and slap capture.
-                                LaunchedEffect(uidHash) {
-                                    registrationViewModel.setUidHash(uidHash)
+                                LaunchedEffect(resident) {
+                                    registrationViewModel.setResident(resident)
                                 }
 
                                 // Tracks which sub-option launched the slap capture Activity,
@@ -252,7 +253,7 @@ class RegistrationActivity : ComponentActivity() {
                                     registrationViewModel = registrationViewModel,
                                     onContinueSequential = {
                                         registrationViewModel.setSelectedCaptureMode(CaptureMode.SEQUENTIAL)
-                                        navController.navigate(Routes.Registration.createRoute(uidHash))
+                                        navController.navigate(Routes.Registration.createRoute(resident = resident))
                                     },
                                     onContinueSlap = { slapSubOption ->
                                         registrationViewModel.setSelectedCaptureMode(CaptureMode.SLAP)
@@ -280,7 +281,7 @@ class RegistrationActivity : ComponentActivity() {
                                 val uidHash =
                                     backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
                                 RegistrationRoute(
-                                    uidHash = uidHash,
+                                    resident = backStackEntry.residentInput(),
                                     viewModel = registrationViewModel,
                                     sharedUiState = sharedUiState,
                                     onNavigateUp = { navController.navigateUp() }

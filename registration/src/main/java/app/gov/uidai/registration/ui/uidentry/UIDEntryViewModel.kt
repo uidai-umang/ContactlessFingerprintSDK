@@ -4,21 +4,22 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.gov.uidai.registration.model.UIDEntryUiState
+import app.gov.uidai.registration.model.resident.Gender
+import app.gov.uidai.registration.model.resident.ResidentInput
 import app.gov.uidai.registration.pref.PreferenceStore
 import app.gov.uidai.registration.pref.model.PreferenceParam
 import app.gov.uidai.registration.pref.model.PreferenceType
 import app.gov.uidai.registration.usecase.UIDManager
 import app.gov.uidai.registration.usecase.UserUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 @HiltViewModel
@@ -31,14 +32,8 @@ class UIDEntryViewModel @Inject constructor(
     companion object {
         private val TAG = UIDEntryViewModel::class.simpleName
 
-        private val REMEMBER_ME_PREF = PreferenceParam(
-            key = "uid_entry.remember_me",
-            displayName = "Remember Me",
-            type = PreferenceType.BOOLEAN,
-            defaultValue = false
-        )
-
-        private val UID_PREF = PreferenceParam(
+        // Older builds saved the raw 12-digit UID under this key.
+        private val LEGACY_UID_PREF = PreferenceParam(
             key = "uid_entry.uid",
             displayName = "UID",
             type = PreferenceType.STRING,
@@ -49,90 +44,44 @@ class UIDEntryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(UIDEntryUiState())
     val uiState = _uiState.asStateFlow()
 
-    private var currentUIDHash: String = ""
+    private var checkJob: Job? = null
 
     init {
-        val initRememberMe = preferenceStore.get(REMEMBER_ME_PREF)
-        val initUid = if (initRememberMe) preferenceStore.get(UID_PREF) else ""
-        onRememberMeChanged(initRememberMe)
-        onUIDChanged(initUid)
-
-        if (initRememberMe) {
-            checkRegistration(isCheckingFromOnResume = true)
-        }
-
-        // Observe rememberMe and uid
-        uiState.map { it.rememberMe to it.isValidUID }
-            .distinctUntilChanged()
-            .onEach { (rememberMe, isValidUID) ->
-                preferenceStore.save(
-                    REMEMBER_ME_PREF.copy(currentValue = rememberMe)
-                )
-                if (rememberMe && isValidUID) {
-                    preferenceStore.save(
-                        pref = UID_PREF.copy(currentValue = _uiState.value.uid)
-                    )
-                } else if (!rememberMe) {
-                    preferenceStore.save(
-                        pref = UID_PREF.copy(currentValue = "")
-                    )
-                }
-            }
-            .launchIn(viewModelScope)
+        preferenceStore.save(LEGACY_UID_PREF.copy(currentValue = ""))
     }
 
-    fun onUIDChanged(uid: String) {
-        val isValidUid = uidManager.validateUID(uid)
-
+    fun onRefIdChanged(raw: String) {
+        val refId = uidManager.sanitizeRefId(raw)
         _uiState.update {
             it.copy(
-                uid = uid,
-                isValidUID = isValidUid,
+                refId = refId,
+                isValidRefId = uidManager.validateRefId(refId),
                 isUserRegistered = null,
                 user = null,
-                textInputErrorMessage = if (uid.isNotEmpty() && !isValidUid) {
-                    "Please enter a valid 12-digit UID"
-                } else null
+                isLoading = false
             )
         }
-
-        if (isValidUid) {
-            checkRegistration()
-        }
+        checkRegistration()
     }
 
-    fun onRememberMeChanged(value: Boolean) {
-        _uiState.update {
-            it.copy(
-                rememberMe = value
-            )
-        }
+    fun onDobSelected(dob: LocalDate) {
+        _uiState.update { it.copy(dob = dob) }
     }
 
-    fun checkRegistration(isCheckingFromOnResume: Boolean = false) {
-        val currentState = _uiState.value
+    fun onGenderSelected(gender: Gender) {
+        _uiState.update { it.copy(gender = gender) }
+    }
 
-        if (!currentState.isValidUID) {
-            if (!isCheckingFromOnResume) {
-                _uiState.update {
-                    it.copy(message = "Please enter a valid 12-digit UID")
-                }
-            }
-            return
-        }
+    fun checkRegistration() {
+        val state = _uiState.value
+        checkJob?.cancel()
+        if (!state.isValidRefId) return
 
-        _uiState.update {
-            it.copy(
-                isLoading = true,
-                textInputErrorMessage = null
-            )
-        }
+        _uiState.update { it.copy(isLoading = true) }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        checkJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                currentUIDHash = uidManager.hashUID(currentState.uid)
-                val user = userUseCase.getUser(currentUIDHash)
-
+                val user = userUseCase.getUser(state.refId)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -140,7 +89,8 @@ class UIDEntryViewModel @Inject constructor(
                         isUserRegistered = user != null
                     )
                 }
-
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error while checking registration", e)
                 _uiState.update {
@@ -153,11 +103,15 @@ class UIDEntryViewModel @Inject constructor(
         }
     }
 
-    fun clearMessage() {
-        _uiState.update {
-            it.copy(message = null)
-        }
+    fun residentInput(): ResidentInput? {
+        val state = _uiState.value
+        val dob = state.dob ?: return null
+        val gender = state.gender ?: return null
+        if (!state.isValidRefId) return null
+        return ResidentInput(refId = state.refId, dob = dob.toString(), gender = gender.name)
     }
 
-    fun getCurrentUidHash(): String = currentUIDHash
+    fun clearMessage() {
+        _uiState.update { it.copy(message = null) }
+    }
 }
