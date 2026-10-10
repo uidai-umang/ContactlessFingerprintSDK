@@ -32,28 +32,54 @@ class SlapFrameAnalyzer @Inject constructor(
     }
     private var probeCounter = 0
 
+//    suspend fun analyze(frame: CameraFrame, expectedHandType: String): SlapFrameResult =
+//        withContext(Dispatchers.Default) {
+//            try {
+//                val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
+//                val bitmap = byteArray.toBitmap(size).rotate(frame.rotationDegrees)
+//
+//                if (probeCounter++ % PROBE_EVERY_N_FRAMES == 0) yoloProbe?.probe(bitmap)
+//
+//                val handType = if (expectedHandType.equals("Left", ignoreCase = true)) {
+//                    SlapFingerBandDetector.HandType.LEFT
+//                } else {
+//                    SlapFingerBandDetector.HandType.RIGHT
+//                }
+//
+//                val detection = bandDetector.detect(
+//                    bitmap = bitmap,
+//                    handType = handType,
+//                    maxAnalysisWidth = LIVE_ANALYSIS_MAX_WIDTH
+//                )
+//
+//                val fingerBoxes = detection.bands.map { it.fingerprintRegion }
+//                val fingertips = detection.bands.map { it.fingertip.point }
+//
+//                val unionBox = fingerBoxes.fold<RectF, RectF?>(null) { acc, box ->
+//                    if (acc == null) RectF(box) else acc.apply { union(box) }
+//                }
+//
+//                SlapFrameResult(
+//                    handDetected = fingerBoxes.isNotEmpty(),
+//                    areaRatio = fingerBoxes.size.toFloat() / SlapFingerBandDetector.FINGER_COUNT,
+//                    fingertips = fingertips,
+//                    box = unionBox,
+//                    fingerBoxes = fingerBoxes
+//                )
+//            } catch (e: Exception) {
+//                Log.e(TAG, "Error in slap frame analysis", e)
+//                SlapFrameResult(handDetected = false, areaRatio = 0f, fingertips = emptyList(), box = null)
+//            }
+//        }
+
+
     suspend fun analyze(frame: CameraFrame, expectedHandType: String): SlapFrameResult =
         withContext(Dispatchers.Default) {
             try {
                 val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
                 val bitmap = byteArray.toBitmap(size).rotate(frame.rotationDegrees)
 
-                if (probeCounter++ % PROBE_EVERY_N_FRAMES == 0) yoloProbe?.probe(bitmap)
-
-                val handType = if (expectedHandType.equals("Left", ignoreCase = true)) {
-                    SlapFingerBandDetector.HandType.LEFT
-                } else {
-                    SlapFingerBandDetector.HandType.RIGHT
-                }
-
-                val detection = bandDetector.detect(
-                    bitmap = bitmap,
-                    handType = handType,
-                    maxAnalysisWidth = LIVE_ANALYSIS_MAX_WIDTH
-                )
-
-                val fingerBoxes = detection.bands.map { it.fingerprintRegion }
-                val fingertips = detection.bands.map { it.fingertip.point }
+                val fingerBoxes = yoloProbe?.probe(bitmap).orEmpty()
 
                 val unionBox = fingerBoxes.fold<RectF, RectF?>(null) { acc, box ->
                     if (acc == null) RectF(box) else acc.apply { union(box) }
@@ -61,8 +87,8 @@ class SlapFrameAnalyzer @Inject constructor(
 
                 SlapFrameResult(
                     handDetected = fingerBoxes.isNotEmpty(),
-                    areaRatio = fingerBoxes.size.toFloat() / SlapFingerBandDetector.FINGER_COUNT,
-                    fingertips = fingertips,
+                    areaRatio = fingerBoxes.size / 4f,
+                    fingertips = emptyList(),
                     box = unionBox,
                     fingerBoxes = fingerBoxes
                 )

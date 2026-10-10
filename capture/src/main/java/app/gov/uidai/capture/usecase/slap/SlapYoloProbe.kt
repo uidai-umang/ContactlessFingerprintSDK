@@ -61,7 +61,7 @@ class SlapYoloProbe(private val context: Context) {
     private data class Det(val box: RectF, val score: Float, val row: Int)
 
     @Synchronized
-    fun probe(bitmap: Bitmap) {
+    fun probe(bitmap: Bitmap): List<RectF> {
         frameNo++
         val resized = Bitmap.createScaledBitmap(bitmap, INPUT, INPUT, true)
         resized.getPixels(pixels, 0, INPUT, 0, 0, INPUT, INPUT)
@@ -110,6 +110,16 @@ class SlapYoloProbe(private val context: Context) {
         )
 
         if (saved < MAX_SAVED) save(bitmap, kept, ms)
+
+        return kept.map {
+            RectF(
+                (it.box.left * bitmap.width).coerceIn(0f, bitmap.width.toFloat()),
+                (it.box.top * bitmap.height).coerceIn(0f, bitmap.height.toFloat()),
+                (it.box.right * bitmap.width).coerceIn(0f, bitmap.width.toFloat()),
+                (it.box.bottom * bitmap.height).coerceIn(0f, bitmap.height.toFloat())
+            )
+        }
+
     }
 
     private fun nms(dets: List<Det>): List<Det> {
