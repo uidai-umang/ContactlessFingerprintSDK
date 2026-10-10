@@ -1,10 +1,6 @@
 package app.gov.uidai.capture.usecase.slap
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.RectF
 import android.os.SystemClock
 import android.util.Log
@@ -12,13 +8,10 @@ import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.support.common.FileUtil
-import java.io.File
-import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** TEMP, test-only. Runs YOLO on a frame, logs row stats and saves annotated JPEGs. */
-class SlapYoloProbe(private val context: Context) {
+class SlapYoloProbe(context: Context) {
 
     companion object {
         private const val TAG = "SlapYoloProbe"
@@ -27,138 +20,124 @@ class SlapYoloProbe(private val context: Context) {
         private const val NUM_BOXES = 13125
         private const val CONF = 0.25f
         private const val NMS_IOU = 0.3f
-        private const val MAX_SAVED = 60
-        // rows 4,5,6,7
-        private val ROW_COLORS = intArrayOf(Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW)
     }
 
-    private val interpreter: Interpreter = run {
-        val model = FileUtil.loadMappedFile(context, MODEL)
-        val compat = CompatibilityList()
-        Log.i(TAG, "GPU supported=${compat.isDelegateSupportedOnThisDevice}")
-        if (compat.isDelegateSupportedOnThisDevice) {
-            try {
-                Interpreter(
-                    model,
-                    Interpreter.Options().addDelegate(GpuDelegate(compat.bestOptionsForThisDevice))
-                ).also { Log.i(TAG, "Using GPU delegate") }
-            } catch (e: Exception) {
-                Log.e(TAG, "GPU delegate failed, falling back to CPU", e)
-                Interpreter(model, Interpreter.Options().setNumThreads(4))
-            }
-        } else {
-            Interpreter(model, Interpreter.Options().setNumThreads(4))
-        }
-    }
+    private class Candidate(val score: Float, val l: Float, val t: Float, val r: Float, val b: Float)
 
-    private val input = ByteBuffer.allocateDirect(4 * INPUT * INPUT * 3).order(ByteOrder.nativeOrder())
+    private val interpreter: Interpreter = createInterpreter(context)
+    private val inputBuffer = ByteBuffer.allocateDirect(INPUT * INPUT * 3 * 4).order(ByteOrder.nativeOrder())
+    private val inputFloats = inputBuffer.asFloatBuffer()
     private val output = Array(1) { Array(8) { FloatArray(NUM_BOXES) } }
-    private val pixels = IntArray(INPUT * INPUT)
-    private val outDir = File(context.getExternalFilesDir(null), "yolo_probe").apply { mkdirs() }
-    private var saved = 0
-    private var frameNo = 0
+    private val xMap = IntArray(INPUT)
+    private val yMap = IntArray(INPUT)
 
-    private data class Det(val box: RectF, val score: Float, val row: Int)
-
-    @Synchronized
-    fun probe(bitmap: Bitmap): List<RectF> {
-        frameNo++
-        val resized = Bitmap.createScaledBitmap(bitmap, INPUT, INPUT, true)
-        resized.getPixels(pixels, 0, INPUT, 0, 0, INPUT, INPUT)
-        if (resized !== bitmap) resized.recycle()
-
-        input.rewind()
-        for (p in pixels) {
-            input.putFloat((p shr 16 and 0xFF) / 255f)
-            input.putFloat((p shr 8 and 0xFF) / 255f)
-            input.putFloat((p and 0xFF) / 255f)
+    private fun createInterpreter(context: Context): Interpreter {
+        val model = FileUtil.loadMappedFile(context, MODEL)
+        try {
+            val compat = CompatibilityList()
+            if (compat.isDelegateSupportedOnThisDevice) {
+                val options = Interpreter.Options().addDelegate(GpuDelegate(compat.bestOptionsForThisDevice))
+                return Interpreter(model, options)
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "GPU delegate failed -- using CPU", e)
         }
+        return Interpreter(model, Interpreter.Options().setNumThreads(4))
+    }
+
+    /** Runs one dummy inference so shader compilation happens before the first real frame. */
+    @Synchronized
+    fun warmUp() {
+        val start = SystemClock.uptimeMillis()
+        inputBuffer.rewind()
+        interpreter.run(inputBuffer, output)
+        Log.d(TAG, "WARMUP done in ${SystemClock.uptimeMillis() - start}ms")
+    }
+
+    /**
+     * nv21: tightly packed NV21 frame in sensor orientation.
+     * rotation: same degrees the app passes to Bitmap.rotate (90/180/270).
+     * Returns finger boxes in pixels of the UPRIGHT frame.
+     */
+    @Synchronized
+    fun detect(nv21: ByteArray, width: Int, height: Int, rotation: Int): List<RectF> {
+        val swapped = rotation == 90 || rotation == 270
+        val uw = if (swapped) height else width
+        val uh = if (swapped) width else height
 
         val t0 = SystemClock.uptimeMillis()
-        interpreter.run(input, output)
-        val ms = SystemClock.uptimeMillis() - t0
 
-        val rows = output[0]
-
-        // Per-row max and count above threshold, rows 4..7
-        val stats = (4..7).joinToString(" ") { r ->
-            "r$r(max=${"%.2f".format(rows[r].max())},n=${rows[r].count { it > CONF }})"
+        for (i in 0 until INPUT) {
+            xMap[i] = ((i + 0.5f) * uw / INPUT).toInt().coerceIn(0, uw - 1)
+            yMap[i] = ((i + 0.5f) * uh / INPUT).toInt().coerceIn(0, uh - 1)
         }
 
-        // Finger score = max(row 6, row 7). Rows 4 and 5 are logged but never drive boxes.
-        val dets = ArrayList<Det>()
+        inputFloats.clear()
+        val ySize = width * height
+        for (j in 0 until INPUT) {
+            val yu = yMap[j]
+            for (i in 0 until INPUT) {
+                val xu = xMap[i]
+                val sx: Int
+                val sy: Int
+                when (rotation) {
+                    90 -> { sx = yu; sy = height - 1 - xu }
+                    180 -> { sx = width - 1 - xu; sy = height - 1 - yu }
+                    270 -> { sx = width - 1 - yu; sy = xu }
+                    else -> { sx = xu; sy = yu }
+                }
+                val y = nv21[sy * width + sx].toInt() and 0xFF
+                val uvIndex = ySize + (sy shr 1) * width + (sx and 1.inv())
+                val v = (nv21[uvIndex].toInt() and 0xFF) - 128
+                val u = (nv21[uvIndex + 1].toInt() and 0xFF) - 128
+                inputFloats.put(clamp(y + 1.402f * v) / 255f)
+                inputFloats.put(clamp(y - 0.344136f * u - 0.714136f * v) / 255f)
+                inputFloats.put(clamp(y + 1.772f * u) / 255f)
+            }
+        }
+        inputBuffer.rewind()
+        val t1 = SystemClock.uptimeMillis()
+
+        interpreter.run(inputBuffer, output)
+        val t2 = SystemClock.uptimeMillis()
+
+        val o = output[0]
+        val candidates = ArrayList<Candidate>()
         for (i in 0 until NUM_BOXES) {
-            val s6 = rows[6][i]
-            val s7 = rows[7][i]
-            val score = maxOf(s6, s7)
-            if (score <= CONF) continue
-            val cx = rows[0][i]; val cy = rows[1][i]; val w = rows[2][i]; val h = rows[3][i]
-            dets.add(
-                Det(
-                    RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2),
-                    score,
-                    if (s6 >= s7) 6 else 7
-                )
-            )
+            val score = maxOf(o[6][i], o[7][i])
+            if (score < CONF) continue
+            val cx = o[0][i]
+            val cy = o[1][i]
+            val w = o[2][i]
+            val h = o[3][i]
+            candidates.add(Candidate(score, cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2))
         }
-        val kept = nms(dets)
+        candidates.sortByDescending { it.score }
+        val kept = ArrayList<Candidate>()
+        for (c in candidates) {
+            if (kept.none { iou(it, c) > NMS_IOU }) kept.add(c)
+        }
 
-        Log.i(
-            TAG,
-            "frame=$frameNo inference=${ms}ms $stats boxes=${kept.size} " +
-                    kept.joinToString { "[r${it.row} ${"%.2f".format(it.score)} w=${"%.2f".format(it.box.width())}]" }
-        )
-
-        if (saved < MAX_SAVED) save(bitmap, kept, ms)
+        Log.d(TAG, "PREP=${t1 - t0}ms INFER=${t2 - t1}ms boxes=${kept.size}")
 
         return kept.map {
             RectF(
-                (it.box.left * bitmap.width).coerceIn(0f, bitmap.width.toFloat()),
-                (it.box.top * bitmap.height).coerceIn(0f, bitmap.height.toFloat()),
-                (it.box.right * bitmap.width).coerceIn(0f, bitmap.width.toFloat()),
-                (it.box.bottom * bitmap.height).coerceIn(0f, bitmap.height.toFloat())
+                (it.l * uw).coerceIn(0f, uw.toFloat()),
+                (it.t * uh).coerceIn(0f, uh.toFloat()),
+                (it.r * uw).coerceIn(0f, uw.toFloat()),
+                (it.b * uh).coerceIn(0f, uh.toFloat())
             )
         }
-
     }
 
-    private fun nms(dets: List<Det>): List<Det> {
-        val kept = ArrayList<Det>()
-        for (d in dets.sortedByDescending { it.score }) {
-            if (kept.none { iou(it.box, d.box) > NMS_IOU }) kept.add(d)
-        }
-        return kept
-    }
+    private fun clamp(v: Float) = if (v < 0f) 0f else if (v > 255f) 255f else v
 
-    private fun iou(a: RectF, b: RectF): Float {
-        val l = maxOf(a.left, b.left); val t = maxOf(a.top, b.top)
-        val r = minOf(a.right, b.right); val btm = minOf(a.bottom, b.bottom)
-        val inter = maxOf(0f, r - l) * maxOf(0f, btm - t)
-        val union = a.width() * a.height() + b.width() * b.height() - inter
+    private fun iou(a: Candidate, b: Candidate): Float {
+        val iw = minOf(a.r, b.r) - maxOf(a.l, b.l)
+        val ih = minOf(a.b, b.b) - maxOf(a.t, b.t)
+        if (iw <= 0f || ih <= 0f) return 0f
+        val inter = iw * ih
+        val union = (a.r - a.l) * (a.b - a.t) + (b.r - b.l) * (b.b - b.t) - inter
         return if (union <= 0f) 0f else inter / union
     }
-
-    private fun save(src: Bitmap, dets: List<Det>, ms: Long) {
-        try {
-            val copy = src.copy(Bitmap.Config.ARGB_8888, true)
-            val canvas = Canvas(copy)
-            val stroke = Paint().apply { style = Paint.Style.STROKE; strokeWidth = copy.width / 200f }
-            val text = Paint().apply { textSize = copy.width / 30f; color = Color.WHITE; setShadowLayer(4f, 0f, 0f, Color.BLACK) }
-            for (d in dets) {
-                stroke.color = ROW_COLORS[d.row - 4]
-                val r = RectF(d.box.left * copy.width, d.box.top * copy.height, d.box.right * copy.width, d.box.bottom * copy.height)
-                canvas.drawRect(r, stroke)
-                canvas.drawText("r${d.row} ${"%.2f".format(d.score)}", r.left, r.top - 4f, text)
-            }
-            canvas.drawText("${dets.size} boxes ${ms}ms", 10f, text.textSize + 10f, text)
-            val file = File(outDir, "probe_%03d_n%d_%dms.jpg".format(saved, dets.size, ms))
-            FileOutputStream(file).use { copy.compress(Bitmap.CompressFormat.JPEG, 85, it) }
-            copy.recycle()
-            saved++
-        } catch (e: Exception) {
-            Log.e(TAG, "save failed", e)
-        }
-    }
-
-    fun close() = interpreter.close()
 }

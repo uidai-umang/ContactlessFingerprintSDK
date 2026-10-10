@@ -62,6 +62,7 @@ class SlapCaptureViewModel @Inject constructor(
     init {
         cameraController.useSlapFixedFocus(preferenceStore.get(CameraSettings.TARGET_HAND_DISTANCE_MM))
         setTorch(true)
+        viewModelScope.launch { analyzer.warmUp() }
     }
 
 

@@ -5,12 +5,10 @@ import android.graphics.RectF
 import android.util.Log
 import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.SlapFrameResult
-import app.gov.uidai.capture.slap.processing.SlapFingerBandDetector
-import app.gov.uidai.capture.utils.extension.rotate
-import app.gov.uidai.capture.utils.extension.toBitmap
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
+import java.util.concurrent.Executors
 import javax.inject.Inject
 
 class SlapFrameAnalyzer @Inject constructor(
@@ -19,20 +17,35 @@ class SlapFrameAnalyzer @Inject constructor(
 
     companion object {
         private val TAG = SlapFrameAnalyzer::class.simpleName
-        private const val LIVE_ANALYSIS_MAX_WIDTH = 320
-        private const val PROBE_EVERY_N_FRAMES = 2
     }
 
-    private val bandDetector = SlapFingerBandDetector()
+    private val yoloDispatcher = Executors.newSingleThreadExecutor { Thread(it, "slap-yolo") }.asCoroutineDispatcher()
 
-    private val yoloProbe by lazy {
-        try { SlapYoloProbe(context) } catch (e: Throwable) {
-            Log.e(TAG, "SlapYoloProbe init failed", e); null
+    private var yolo: SlapYoloProbe? = null
+    private var yoloInitTried = false
+
+    private fun yolo(): SlapYoloProbe? {
+        if (!yoloInitTried) {
+            yoloInitTried = true
+            yolo = try {
+                SlapYoloProbe(context)
+            } catch (e: Throwable) {
+                Log.e(TAG, "YOLO init failed", e)
+                null
+            }
+        }
+        return yolo
+    }
+
+    suspend fun warmUp() = withContext(yoloDispatcher) {
+        try {
+            yolo()?.warmUp()
+        } catch (e: Throwable) {
+            Log.e(TAG, "YOLO warm-up failed", e)
         }
     }
-    private var probeCounter = 0
 
-//    suspend fun analyze(frame: CameraFrame, expectedHandType: String): SlapFrameResult =
+    //    suspend fun analyze(frame: CameraFrame, expectedHandType: String): SlapFrameResult =
 //        withContext(Dispatchers.Default) {
 //            try {
 //                val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
@@ -72,19 +85,14 @@ class SlapFrameAnalyzer @Inject constructor(
 //            }
 //        }
 
-
     suspend fun analyze(frame: CameraFrame, expectedHandType: String): SlapFrameResult =
-        withContext(Dispatchers.Default) {
+        withContext(yoloDispatcher) {
             try {
-                val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
-                val bitmap = byteArray.toBitmap(size).rotate(frame.rotationDegrees)
-
-                val fingerBoxes = yoloProbe?.probe(bitmap).orEmpty()
-
+                val (nv21, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
+                val fingerBoxes = yolo()?.detect(nv21, size.width, size.height, frame.rotationDegrees).orEmpty()
                 val unionBox = fingerBoxes.fold<RectF, RectF?>(null) { acc, box ->
                     if (acc == null) RectF(box) else acc.apply { union(box) }
                 }
-
                 SlapFrameResult(
                     handDetected = fingerBoxes.isNotEmpty(),
                     areaRatio = fingerBoxes.size / 4f,
