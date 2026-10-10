@@ -9,6 +9,8 @@ object Urls {
 
     const val DEVICE_REGISTER = "${PRIMARY_END_POINT}${VERSION_V1}devices/register"
 
+    const val OPERATOR_LOOKUP = "${PRIMARY_END_POINT}${VERSION_V1}operators/lookup"
+
     const val DASHBOARD_OVERVIEW = "${PRIMARY_END_POINT}${VERSION_V1}dashboard/overview"
     const val DASHBOARD_DIVERSITY = "${PRIMARY_END_POINT}${VERSION_V1}dashboard/diversity"
     const val DASHBOARD_FINGERS = "${PRIMARY_END_POINT}${VERSION_V1}dashboard/fingers"

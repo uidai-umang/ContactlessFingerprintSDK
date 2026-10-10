@@ -19,6 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import app.gov.uidai.registration.utils.residentInput
+import app.gov.uidai.registration.utils.residentNavArguments
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -36,6 +38,7 @@ import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
 import app.gov.uidai.registration.model.CaptureMode
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
+import app.gov.uidai.registration.ui.operator.RegisterOperatorRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.registration.method.CaptureMethodRoute
@@ -59,9 +62,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import app.gov.uidai.registration.BuildConfig
-import app.gov.uidai.registration.repository.AuthRepository
-import app.gov.uidai.registration.repository.impl.AuthRepositoryImpl
 
 @AndroidEntryPoint
 class RegistrationActivity : ComponentActivity() {
@@ -77,15 +77,9 @@ class RegistrationActivity : ComponentActivity() {
     @Inject
     lateinit var maintenanceStatusProvider: MaintenanceStatusProvider
 
-    @Inject
-    lateinit var authRepository: AuthRepository
-
     companion object {
         const val EXTRA_OPERATOR_REF_ID = "operator_ref_id"   // host app passes this
-        private const val DEV_OPERATOR_REF_ID = "dev-operator-001"   // debug only
     }
-
-    private val dummyOperatorId = "00000000-0000-0000-0000-000000000001"
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -116,30 +110,6 @@ class RegistrationActivity : ComponentActivity() {
         sharedViewModel.initialize(this)
         CaptureWorkScheduler.schedule(this)
 
-        lifecycleScope.launch {
-            val operatorRefId = intent.getStringExtra(EXTRA_OPERATOR_REF_ID)
-                ?: if (BuildConfig.DEBUG) DEV_OPERATOR_REF_ID else null
-
-            // Get tokens (or reuse the saved session).
-            if (operatorRefId == null || !authRepository.ensureSession(operatorRefId)) {
-                Log.w("Auth", "No session: operator_ref_id missing or login failed")
-                return@launch
-            }
-
-            if (!DeviceRegistrationGate.isRegistered(this@RegistrationActivity)) {
-                val androidId =
-                    Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-                val result = deviceUseCase.registerDeviceIfNeeded(
-                    context = this@RegistrationActivity,
-                    operatorId = dummyOperatorId,   // backend ignores it; the token decides
-                    androidId = androidId
-                )
-                if (result is ApiResult.Success) {
-                    DeviceRegistrationGate.markRegistered(this@RegistrationActivity)
-                }
-            }
-        }
-
         setContent {
             AttendanceAppTheme {
                 val isConnected by connectivityObserver.isConnected.collectAsStateWithLifecycle(
@@ -163,33 +133,41 @@ class RegistrationActivity : ComponentActivity() {
 
                         NavHost(
                             navController = navController,
-                            startDestination = Routes.Dashboard.createRoute(dummyOperatorId)
+                            startDestination = Routes.RegisterOperator.route
                         ) {
+                            composable(Routes.RegisterOperator.route) {
+                                RegisterOperatorRoute(
+                                    initialOperatorRefId = intent.getStringExtra(EXTRA_OPERATOR_REF_ID),
+                                    onRegistered = { operatorId ->
+                                        registerDeviceIfNeeded(operatorId)
+                                        navController.navigate(Routes.Dashboard.createRoute(operatorId)) {
+                                            popUpTo(Routes.RegisterOperator.route) { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
                             composable(Routes.UidEntry.route) {
                                 UidEntryRoute(
                                     sharedUiState = sharedUiState,
                                     onClearSharedMessage = sharedViewModel::clearError,
-                                    onNavigateToRegistration = { uidHash ->
-                                        navController.navigate(Routes.CaptureMethod.createRoute(uidHash))
+                                    onNavigateToRegistration = { resident ->
+                                        navController.navigate(Routes.CaptureMethod.createRoute(resident))
                                     }
                                 )
                             }
                             composable(
                                 route = Routes.CaptureMethod.route,
-                                arguments = listOf(navArgument(Routes.ARG_UID_HASH) {
-                                    type = NavType.StringType
-                                })
+                                arguments = residentNavArguments
                             ) { backStackEntry ->
-                                val uidHash =
-                                    backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
+                                val resident = backStackEntry.residentInput()
                                 val context = LocalContext.current
 
                                 // registrationViewModel is Activity-scoped (see field above),
                                 // shared with the Registration destination below -- one
                                 // resident lookup / session / capture_mode source of truth
                                 // for both sequential and slap capture.
-                                LaunchedEffect(uidHash) {
-                                    registrationViewModel.setUidHash(uidHash)
+                                LaunchedEffect(resident) {
+                                    registrationViewModel.setResident(resident)
                                 }
 
                                 // Tracks which sub-option launched the slap capture Activity,
@@ -252,7 +230,7 @@ class RegistrationActivity : ComponentActivity() {
                                     registrationViewModel = registrationViewModel,
                                     onContinueSequential = {
                                         registrationViewModel.setSelectedCaptureMode(CaptureMode.SEQUENTIAL)
-                                        navController.navigate(Routes.Registration.createRoute(uidHash))
+                                        navController.navigate(Routes.Registration.createRoute(resident = resident))
                                     },
                                     onContinueSlap = { slapSubOption ->
                                         registrationViewModel.setSelectedCaptureMode(CaptureMode.SLAP)
@@ -273,14 +251,10 @@ class RegistrationActivity : ComponentActivity() {
                             }
                             composable(
                                 route = Routes.Registration.route,
-                                arguments = listOf(navArgument(Routes.ARG_UID_HASH) {
-                                    type = NavType.StringType
-                                })
+                                arguments = residentNavArguments
                             ) { backStackEntry ->
-                                val uidHash =
-                                    backStackEntry.arguments?.getString(Routes.ARG_UID_HASH).orEmpty()
                                 RegistrationRoute(
-                                    uidHash = uidHash,
+                                    resident = backStackEntry.residentInput(),
                                     viewModel = registrationViewModel,
                                     sharedUiState = sharedUiState,
                                     onNavigateUp = { navController.navigateUp() }
@@ -307,6 +281,21 @@ class RegistrationActivity : ComponentActivity() {
                     }
                 }
 
+            }
+        }
+    }
+
+    private fun registerDeviceIfNeeded(operatorId: String) {
+        if (DeviceRegistrationGate.isRegistered(this)) return
+        lifecycleScope.launch {
+            val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            val result = deviceUseCase.registerDeviceIfNeeded(
+                context = this@RegistrationActivity,
+                operatorId = operatorId,
+                androidId = androidId
+            )
+            if (result is ApiResult.Success) {
+                DeviceRegistrationGate.markRegistered(this@RegistrationActivity)
             }
         }
     }

@@ -11,18 +11,15 @@ class ResidentUseCaseImpl @Inject constructor(
     private val clfRepository: ClfRepository
 ) : ResidentUseCase {
 
-    // Builds the lookup request and delegates to repository
     override suspend fun lookupResident(
-        aadhaarHash: String,
-        ageGroup: String,
-        gender: String,
-        skinTone: String
+        residentRefId: String,
+        dateOfBirth: String,
+        gender: String
     ): ApiResult<ResidentLookupResponse> {
         val request = ResidentLookupRequest(
-            aadhaarHash = aadhaarHash,
-            ageGroup = ageGroup,
-            gender = gender,
-            skinTone = skinTone
+            residentRefId = residentRefId,
+            dateOfBirth = dateOfBirth,
+            gender = gender
         )
         return clfRepository.lookupResident(request)
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import app.gov.uidai.registration.auth.BearerTokenInterceptor
 import app.gov.uidai.registration.auth.TokenAuthenticator
 import app.gov.uidai.registration.data.remote.api.ClfApiService
+import app.gov.uidai.registration.data.remote.api.OperatorApi
 import app.gov.uidai.registration.data.remote.network.RetrofitClient
 import dagger.Module
 import dagger.Provides
@@ -60,4 +61,9 @@ object NetworkModule {
     @Singleton
     fun provideClfApiService(retrofit: Retrofit): ClfApiService =
         RetrofitClient.buildApiService(retrofit)
+
+    @Provides
+    @Singleton
+    fun provideOperatorApi(retrofit: Retrofit): OperatorApi =
+        retrofit.create(OperatorApi::class.java)
 }

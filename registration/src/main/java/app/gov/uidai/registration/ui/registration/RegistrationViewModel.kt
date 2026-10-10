@@ -17,12 +17,14 @@ import app.gov.uidai.registration.model.SDKResult
 import app.gov.uidai.registration.model.User
 import app.gov.uidai.registration.model.capture.CaptureRequest
 import app.gov.uidai.registration.repository.FileRepository
+import app.gov.uidai.registration.repository.OperatorRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
 import app.gov.uidai.registration.usecase.FingerSDKManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
 import app.gov.uidai.registration.usecase.UserUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import app.gov.uidai.registration.encryption.EncryptionService
+import app.gov.uidai.registration.model.resident.ResidentInput
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,7 +47,8 @@ class RegistrationViewModel @Inject constructor(
     private val captureQueueManager: CaptureQueueManager,
     private val pendingCaptureDao: PendingCaptureDao,
     private val sdkManager: FingerSDKManager,
-    private val encryptionService: EncryptionService
+    private val encryptionService: EncryptionService,
+    private val operatorRepository: OperatorRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RegistrationUiState())
@@ -53,38 +56,37 @@ class RegistrationViewModel @Inject constructor(
 
     private val _registrationResult = MutableStateFlow<RegistrationResult?>(null)
     val registrationResult = _registrationResult.asStateFlow()
-
-    private var currentUidHash: String = ""
     private var currentResidentId: String = ""
 
     private var selectedCaptureMode: String = CaptureMode.SEQUENTIAL
 
-    private val testOperatorId = "00000000-0000-0000-0000-000000000001"
+    private var currentResident: ResidentInput? = null
+
     private val testDeviceId = "00000000-0000-0000-0000-000000000002"
     private val testCentreId = "00000000-0000-0000-0000-000000000003"
 
     init {
         sdkManager.setResultListener { result -> onSDKResult(result) }
     }
-
-    fun setUidHash(uidHash: String) {
-        // Same uidHash may be set again when navigating back into this
+    
+    fun setResident(resident: ResidentInput) {
+        // Same resident may be set again when navigating back into this
         // shared instance from a sibling destination (e.g. CaptureMethod)
         // -- avoid re-triggering a fresh lookup/session for no reason.
-        if (uidHash == currentUidHash && currentResidentId.isNotEmpty()) return
-        currentUidHash = uidHash
+        if (resident == currentResident && currentResidentId.isNotEmpty()) return
+        currentResident = resident
+        currentResidentId = ""
         lookupResidentAndCreateSession()
     }
-
     private fun lookupResidentAndCreateSession() {
+        val resident = currentResident ?: return
         _uiState.update { it.copy(isLookingUpResident = true) }
 
         viewModelScope.launch {
             val result = residentUseCase.lookupResident(
-                aadhaarHash = currentUidHash,
-                ageGroup = "25",
-                gender = "Male",
-                skinTone = "Dusky"
+                residentRefId = resident.refId,
+                dateOfBirth = resident.dob,
+                gender = resident.gender
             )
 
             when (result) {
@@ -291,7 +293,7 @@ class RegistrationViewModel @Inject constructor(
 
         val request = CaptureRequest(
             residentPseudonymId = currentResidentId,
-            operatorId = testOperatorId,
+            operatorId = operatorRepository.getOperatorId(),
             captureMode = captureMode,
             fingerType = fingerPosition.name,
             hand = hand,
@@ -398,7 +400,7 @@ class RegistrationViewModel @Inject constructor(
                 val fingerprints = currentState.fingerprints.values.filterNotNull()
                 // Save user data
                 userUseCase.register(
-                    uidHash = currentUidHash,
+                    uidHash = currentResident?.refId.orEmpty(),
                     user = User(
                         name = currentState.name,
                         phoneNumber = currentState.phoneNumber
@@ -431,7 +433,7 @@ class RegistrationViewModel @Inject constructor(
                 val fileName = "[REG]_${it.fingerPosition.name}"
                 launch {
                     fileRepository.saveJP2FingerImageToGallery(
-                        uid = currentUidHash.take(10),
+                        uid = currentResident?.refId.orEmpty().take(10),
                         fingerType = FingerType.Contactless,
                         fileName = fileName,
                         data = data

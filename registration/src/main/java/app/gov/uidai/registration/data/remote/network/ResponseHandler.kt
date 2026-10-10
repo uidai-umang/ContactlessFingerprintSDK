@@ -43,6 +43,14 @@ object ResponseHandler {
     // Routes any thrown exception to the correct handler based on its type.
     // Does not assume — checks concrete exception types explicitly.
     private fun <T> handleException(e: Exception): ApiResult<T> {
+        e.printStackTrace()
+
+        android.util.Log.e(
+            "ResponseHandler",
+            "Exception type: ${e.javaClass.name}, message: ${e.message}",
+            e
+        )
+
         return when (e) {
             // HttpException is thrown by Retrofit when using suspend fun
             // that isn't wrapped in Response<T> and the server returns non-2xx.

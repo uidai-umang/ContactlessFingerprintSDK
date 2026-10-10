@@ -1,8 +1,7 @@
 package app.gov.uidai.registration.usecase
 
 interface UIDManager {
-    fun validateUID(uid: String): Boolean
+    fun sanitizeRefId(raw: String): String
+    fun validateRefId(refId: String): Boolean
     fun hashUID(uid: String): String
 }
-
-

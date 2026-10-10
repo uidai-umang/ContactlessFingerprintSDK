@@ -37,6 +37,7 @@ import app.gov.uidai.registration.model.FingerCaptureStatus
 import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.model.RegistrationUiState
 import app.gov.uidai.registration.model.SharedUiState
+import app.gov.uidai.registration.model.resident.ResidentInput
 import app.gov.uidai.registration.ui.composable.LoadingDialog
 import app.gov.uidai.registration.ui.theme.Spacer
 
@@ -71,7 +72,7 @@ private object FingerListColors {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegistrationRoute(
-    uidHash: String,
+    resident: ResidentInput,
     sharedUiState: SharedUiState,
     onNavigateUp: () -> Unit,
     viewModel: RegistrationViewModel = hiltViewModel()
@@ -85,7 +86,7 @@ fun RegistrationRoute(
         ActivityResultContracts.StartActivityForResult()
     ) { result -> viewModel.handleSdkActivityResult(result.resultCode, result.data) }
 
-    LaunchedEffect(Unit) { viewModel.setUidHash(uidHash) }
+    LaunchedEffect(resident) { viewModel.setResident(resident) }
 
     Scaffold(
         topBar = {

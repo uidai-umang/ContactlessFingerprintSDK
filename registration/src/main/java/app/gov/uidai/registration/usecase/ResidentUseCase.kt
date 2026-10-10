@@ -7,9 +7,8 @@ import app.gov.uidai.registration.model.resident.ResidentLookupResponse
 interface ResidentUseCase {
 
     suspend fun lookupResident(
-        aadhaarHash: String,
-        ageGroup: String,
-        gender: String,
-        skinTone: String
+        residentRefId: String,
+        dateOfBirth: String,
+        gender: String
     ): ApiResult<ResidentLookupResponse>
 }

@@ -1,30 +1,36 @@
 package app.gov.uidai.registration.ui.uidentry
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,44 +40,49 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.registration.R
 import app.gov.uidai.registration.model.SharedUiState
 import app.gov.uidai.registration.model.UIDEntryUiState
+import app.gov.uidai.registration.model.resident.Gender
+import app.gov.uidai.registration.model.resident.MIN_RESIDENT_AGE_YEARS
+import app.gov.uidai.registration.model.resident.ResidentInput
 import app.gov.uidai.registration.ui.composable.LoadingDialog
 import app.gov.uidai.registration.ui.theme.AppButton
-import app.gov.uidai.registration.ui.theme.CheckboxRow
 import app.gov.uidai.registration.ui.theme.Spacer
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private val DobDisplayFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
 
 @Composable
 fun UidEntryRoute(
     sharedUiState: SharedUiState,
     onClearSharedMessage: () -> Unit,
-    onNavigateToRegistration: (uidHash: String) -> Unit,
+    onNavigateToRegistration: (ResidentInput) -> Unit,
     viewModel: UIDEntryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
-        viewModel.checkRegistration(isCheckingFromOnResume = true)
+        viewModel.checkRegistration()
     }
 
     Scaffold(
@@ -79,10 +90,11 @@ fun UidEntryRoute(
     ) { paddingValues ->
         UidEntryScreen(
             uiState = uiState,
-            onUidChanged = viewModel::onUIDChanged,
-            onRememberMeCheckChanged = viewModel::onRememberMeChanged,
+            onRefIdChanged = viewModel::onRefIdChanged,
+            onDobSelected = viewModel::onDobSelected,
+            onGenderSelected = viewModel::onGenderSelected,
             onNavigateToRegistration = {
-                onNavigateToRegistration(viewModel.getCurrentUidHash())
+                viewModel.residentInput()?.let(onNavigateToRegistration)
             },
             onNavigateToMatchFingers = { /* UserInfoFragment out of scope per your instruction */ },
             paddingValues = paddingValues
@@ -105,28 +117,24 @@ fun UidEntryRoute(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UidEntryScreen(
     uiState: UIDEntryUiState,
-    onUidChanged: (String) -> Unit,
-    onRememberMeCheckChanged: (Boolean) -> Unit,
+    onRefIdChanged: (String) -> Unit,
+    onDobSelected: (LocalDate) -> Unit,
+    onGenderSelected: (Gender) -> Unit,
     onNavigateToRegistration: () -> Unit,
     onNavigateToMatchFingers: () -> Unit,
     paddingValues: PaddingValues
 ) {
-
-    var showDialog by remember {
-        mutableStateOf(false)
-    }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .padding(
-                paddingValues
-            )
+            .padding(paddingValues)
     ) {
-
         val halfHeight = maxHeight * 0.30f
 
         BackgroundWithGradient()
@@ -134,40 +142,74 @@ fun UidEntryScreen(
         Column(
             modifier = Modifier
                 .matchParentSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp)
                 .padding(top = halfHeight),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
             Text(
-                text = "Enter Aadhaar Number",
+                text = "Enter Resident Details",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.secondary,
                 fontWeight = FontWeight.Bold,
             )
 
-            UidEntryUI(
-                value = uiState.uid,
-                onValueChange = onUidChanged,
-                isError = uiState.textInputErrorMessage != null,
-                enabled = uiState.isTextFieldEnabled,
+            Spacer(16.dp)
+
+            OutlinedTextField(
+                value = uiState.refId,
+                onValueChange = onRefIdChanged,
+                label = { Text("Resident Ref ID") },
+                placeholder = { Text("test-001") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Ascii,
+                    imeAction = ImeAction.Done
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            CheckboxRow(
-                checked = uiState.rememberMe,
-                onCheckedChange = onRememberMeCheckChanged,
-                text = "Remember Me",
-                modifier = Modifier.fillMaxWidth()
-            )
+            Spacer(12.dp)
 
-            AnimatedVisibility(uiState.textInputErrorMessage != null) {
-                Text(
-                    text = uiState.textInputErrorMessage ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 8.dp)
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = uiState.dob?.format(DobDisplayFormat).orEmpty(),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Date of Birth") },
+                    placeholder = { Text("Select date") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
+                // Transparent overlay: a read-only text field swallows taps.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { showDatePicker = true }
+                )
+            }
+
+            Spacer(12.dp)
+
+            Text(
+                text = "Gender",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(4.dp)
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                Gender.entries.forEachIndexed { index, gender ->
+                    SegmentedButton(
+                        selected = uiState.gender == gender,
+                        onClick = { onGenderSelected(gender) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = Gender.entries.size
+                        ),
+                        label = { Text(gender.label) }
+                    )
+                }
             }
 
             AnimatedVisibility(uiState.isLoading) {
@@ -180,113 +222,52 @@ fun UidEntryScreen(
 
             Spacer(16.dp)
 
-            AnimatedVisibility(uiState.isUserRegistered != null) {
-                when (uiState.isUserRegistered) {
-                    true -> {
-                        RegisteredUserButtons(
-                            onNavigateToMatchFingers = onNavigateToMatchFingers
-                        )
-                    }
-
-                    false -> {
-                        UnregisteredUserButtons(
-                            onNavigateToRegistration = onNavigateToRegistration
-                        )
-                    }
-
-                    null -> {
-
-                    }
-                }
+            if (uiState.isUserRegistered == true) {
+                RegisteredUserButtons(onNavigateToMatchFingers = onNavigateToMatchFingers)
+            } else {
+                UnregisteredUserButtons(
+                    enabled = uiState.canRegister,
+                    onNavigateToRegistration = onNavigateToRegistration
+                )
             }
         }
     }
-}
 
-@Composable
-fun UidEntryUI(
-    value: String,
-    onValueChange: (String) -> Unit,
-    isError: Boolean,
-    enabled: Boolean,
-    modifier: Modifier = Modifier
-) {
+    if (showDatePicker) {
+        val latestDob = LocalDate.now().minusYears(MIN_RESIDENT_AGE_YEARS.toLong())
+        val latestDobMillis = latestDob.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val selectedMillis = uiState.dob?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
 
-    var textFieldValue by remember {
-        mutableStateOf(TextFieldValue(value, selection = TextRange(value.length)))
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(72.dp)
-            .padding(8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        // Invisible text field layered in the same Box
-        BasicTextField(
-            value = textFieldValue,
-            onValueChange = { newValue ->
-                val filtered = newValue.text.filter { it.isDigit() }.take(12)
-                textFieldValue = TextFieldValue(
-                    text = filtered,
-                    selection = TextRange(filtered.length) // cursor always at end
-                )
-                if (filtered != value) {
-                    onValueChange(filtered)
-                }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-            enabled = enabled,
-            cursorBrush = SolidColor(Color.Transparent),
-            modifier = Modifier
-                .fillMaxSize()
-                .onFocusChanged { state ->
-                    Log.d("UidEntryUI", "Hidden field focus: ${state.isFocused}")
-                }
-        ) { innerTextField ->
-            Row {
-                Row(
-                    modifier = modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    repeat(12) { index ->
-                        val char = value.getOrNull(index)
-                        Box(
-                            Modifier.width(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (char != null) {
-                                // Show entered digit
-                                Text(
-                                    text = char.toString(),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    textAlign = TextAlign.Center,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 28.sp
-                                )
-                            } else {
-                                // Show a circle dot instead of text
-                                Box(
-                                    modifier = Modifier
-                                        .size(12.dp) // control dot size here
-                                        .background(
-                                            MaterialTheme.colorScheme.outline,
-                                            shape = CircleShape
-                                        )
-                                )
-                            }
-                        }
-
-
-                        if ((index + 1) % 4 == 0 && index != 11) {
-                            Spacer(12.dp) // group gap
-                        }
-                    }
-                }
-                innerTextField()
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedMillis,
+            initialDisplayedMonthMillis = selectedMillis ?: latestDobMillis,
+            yearRange = 1900..latestDob.year,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= latestDobMillis
+                override fun isSelectableYear(year: Int) = year <= latestDob.year
             }
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    enabled = pickerState.selectedDateMillis != null,
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { millis ->
+                            onDobSelected(
+                                Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                            )
+                        }
+                        showDatePicker = false
+                    }
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = pickerState)
         }
     }
 }
@@ -311,37 +292,14 @@ fun RegisteredUserButtons(
 
 @Composable
 fun UnregisteredUserButtons(
+    enabled: Boolean,
     onNavigateToRegistration: () -> Unit
 ) {
     AppButton(
         text = "Register",
         icon = ImageVector.vectorResource(R.drawable.ic_add_person),
-        onClick = onNavigateToRegistration
-    )
-}
-
-@Composable
-fun UidTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    isError: Boolean,
-    enabled: Boolean,
-    modifier: Modifier = Modifier
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { newValue ->
-            // Only allow digits and limit to 12 characters
-            if (newValue.length <= 12 && newValue.all { it.isDigit() }) {
-                onValueChange(newValue)
-            }
-        },
-        label = { Text("Enter 12-digit UID") },
-        isError = isError,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-        enabled = enabled,
-        modifier = modifier
+        onClick = onNavigateToRegistration,
+        enabled = enabled
     )
 }
 
@@ -391,31 +349,6 @@ fun BackgroundWithGradient() {
                         clip = false
                     )
             )
-
         }
-
-        /*Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(24.dp)
-                .padding(bottom = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Contactless Finger Validation",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-            Text(
-                text = "Powered by UIDAI",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Thin,
-                color = MaterialTheme.colorScheme.secondary,
-                textAlign = TextAlign.Center
-            )
-        }*/
     }
 }
