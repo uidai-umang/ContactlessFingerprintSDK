@@ -1,6 +1,5 @@
 package app.gov.uidai.capture.usecase
 
-import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.domain.model.CaptureStrategyType
 import app.gov.uidai.capture.pref.model.PreferenceGroup
 import app.gov.uidai.capture.pref.model.PreferenceParam
@@ -91,7 +90,7 @@ object ProcessingSettings : PreferenceGroup {
         key = "global.show_live_quality_scores",
         displayName = "Show Live Quality Scores",
         type = PreferenceType.BOOLEAN,
-        defaultValue = BuildConfig.DEBUG
+        defaultValue = false
     )
 
     val CAPTURE_STRATEGY = PreferenceParam(

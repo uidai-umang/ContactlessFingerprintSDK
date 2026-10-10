@@ -6,15 +6,27 @@ import app.gov.uidai.capture.ui.camera.provider.CameraContextProvider
 import app.gov.uidai.capture.ui.camera.provider.FocusLockParamProvider
 
 class ManualFocusAtFixedDistance(
-    provider: CameraContextProvider,
-    private val manualDistanceM: Float
+    provider: CameraContextProvider
 ) : FocusManager(provider) {
 
-    private val focusDistanceDiopters: Float
-        get() = 1f / manualDistanceM.coerceIn(0.05f, 1f)
-
     override fun lock(paramProvider: FocusLockParamProvider) {
-        applyFixedFocus()
+        val requestBuilder = provider.captureRequestBuilder
+        val session = provider.captureSession
+        val captureCallback = provider.captureCallback
+        val cameraPreviewHandler = provider.cameraPreviewHandler
+
+        val focusDistance = 1f / paramProvider.getManualDistance().coerceIn(0.05f, 1f)
+
+        requestBuilder.apply {
+            set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
+            set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistance)
+        }
+
+        session.setRepeatingRequest(
+            requestBuilder.build(),
+            captureCallback,
+            cameraPreviewHandler
+        )
     }
 
     override fun unlock() {
@@ -22,18 +34,15 @@ class ManualFocusAtFixedDistance(
     }
 
     override fun setOptimalMode() {
-        provider.captureRequestBuilder.apply {
-            set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
-            set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistanceDiopters)
-        }
-    }
+        val requestBuilder = provider.captureRequestBuilder
+        val characteristics = provider.characteristics
 
-    private fun applyFixedFocus() {
-        setOptimalMode()
-        provider.captureSession.setRepeatingRequest(
-            provider.captureRequestBuilder.build(),
-            provider.captureCallback,
-            provider.cameraPreviewHandler
-        )
+        val minFocusDistance =
+            characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
+
+        requestBuilder.apply {
+            set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
+            set(CaptureRequest.LENS_FOCUS_DISTANCE, minFocusDistance)
+        }
     }
 }

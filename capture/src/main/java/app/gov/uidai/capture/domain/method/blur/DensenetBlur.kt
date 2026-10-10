@@ -118,7 +118,7 @@ class DensenetBlur(
 
         val isSharp = prediction >= blurThreshold
 
-        Log.d(TAG, "Prediction of Blur model: $prediction , Threshold: $blurThreshold")
+        Log.d(TAG, "Prediction of Blur model: $prediction")
 
         return BlurResult(isSharp, prediction)
     }

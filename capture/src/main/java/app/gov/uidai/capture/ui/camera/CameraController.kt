@@ -32,7 +32,6 @@ import app.gov.uidai.capture.ui.camera.config.CameraSettings
 import app.gov.uidai.capture.ui.camera.focus.FocusFactory
 import app.gov.uidai.capture.ui.camera.focus.FocusManager
 import app.gov.uidai.capture.ui.camera.focus.FocusState
-import app.gov.uidai.capture.ui.camera.focus.SlapFixedDistanceFocus
 import app.gov.uidai.capture.ui.camera.provider.CameraContextProvider
 import app.gov.uidai.capture.ui.camera.provider.FocusLockParamProvider
 import app.gov.uidai.capture.utils.CameraUtils
@@ -56,27 +55,10 @@ class CameraController @Inject constructor(
         private const val IMAGE_BUFFER_SIZE: Int = 1
         private const val IMAGE_FORMAT = ImageFormat.YUV_420_888
         private const val DESIRED_UPPER_FPS = 24
-
-        // Only log a FOCUS_DRIFT line when the lens moved at least this
-        // much from the last logged value -- otherwise sub-mm float noise
-        // on every single frame would flood logcat and hide the real
-        // shifts we're trying to catch.
-        private const val FOCUS_DRIFT_LOG_THRESHOLD_MM = 5f
     }
 
     var currentSurface: Surface? = null
     private var isCameraInitialized = false
-
-    private var slapTorchOverride: Boolean? = null
-
-
-    // Focus-drift diagnostics -- answers "does focus distance shift after
-    // the session starts, and after how long". Reset per capture session
-    // in initializeCamera(), NOT per-app-launch, so "t+" in the logs
-    // always means "since this camera screen was opened".
-    private var sessionStartTimeMs: Long = 0L
-    private var initialFocusDistanceMM: Float? = null
-    private var lastLoggedFocusDistanceMM: Float? = null
 
 
     private val frameCounter = AtomicLong(0)
@@ -89,13 +71,10 @@ class CameraController @Inject constructor(
         get() = preferenceStore.get(CameraSettings.CAMERA_FACING)
 
     private val isTorchOn
-        get() = slapTorchOverride ?: preferenceStore.get(CameraSettings.TORCH_ON)
+        get() = preferenceStore.get(CameraSettings.TORCH_ON)
 
     private val averageFingerWidthMM
         get() = preferenceStore.get(CameraSettings.AVERAGE_FINGER_WIDTH_MM)
-
-    private val averageHandWidthMM
-        get() = preferenceStore.get(CameraSettings.AVERAGE_HAND_WIDTH_MM)
 
     private val isManualAE
         get() = preferenceStore.get(CameraSettings.MANUAL_AE_SETTINGS)
@@ -105,8 +84,6 @@ class CameraController @Inject constructor(
 
     private val shutterSpeed
         get() = preferenceStore.get(CameraSettings.SHUTTER_SPEED).toLong()
-
-    private val slapAverageFingerWidthMM = 15f
 
 
     private val cameraManager = context.getSystemService(
@@ -189,50 +166,10 @@ class CameraController @Inject constructor(
             )
 
             Log.d(TAG, "FOCUS_DISTANCE --: ${focusDistanceMM}mm")
-            logFocusDrift(focusDistanceMM)
 
             val needsFocusTrigger = focusDistanceMM > focusThMaxMM
 
             focusManager.setNeedFocusTrigger(needsFocusTrigger)
-        }
-
-        /**
-         * Tracks the lens's ACTUAL reported focus distance (from the
-         * capture result, not what we asked for) against where it started
-         * this session, and logs whenever it moves meaningfully. Grep
-         * logcat for "FOCUS_DRIFT" to see: the baseline distance, every
-         * later shift, how big each shift was, and -- via the t+ prefix --
-         * how long into the session it happened. This is how "focus
-         * shifts to a farther distance after 7-8 seconds" gets confirmed
-         * or ruled out with real numbers instead of a guess.
-         */
-        private fun logFocusDrift(focusDistanceMM: Float) {
-            val now = SystemClock.uptimeMillis()
-            val baseline = initialFocusDistanceMM
-
-            if (baseline == null) {
-                initialFocusDistanceMM = focusDistanceMM
-                lastLoggedFocusDistanceMM = focusDistanceMM
-                Log.i(
-                    TAG,
-                    "FOCUS_DRIFT -- baseline set: ${focusDistanceMM}mm at t+${now - sessionStartTimeMs}ms"
-                )
-                return
-            }
-
-            val lastLogged = lastLoggedFocusDistanceMM ?: baseline
-            val deltaFromLastLogged = focusDistanceMM - lastLogged
-
-            if (kotlin.math.abs(deltaFromLastLogged) >= FOCUS_DRIFT_LOG_THRESHOLD_MM) {
-                val deltaFromBaseline = focusDistanceMM - baseline
-                Log.i(
-                    TAG,
-                    "FOCUS_DRIFT -- t+${now - sessionStartTimeMs}ms: now=${focusDistanceMM}mm " +
-                            "baseline=${baseline}mm deltaFromBaseline=${deltaFromBaseline}mm " +
-                            "deltaFromLastShift=${deltaFromLastLogged}mm"
-                )
-                lastLoggedFocusDistanceMM = focusDistanceMM
-            }
         }
 
         private fun processAFState(afState: Int?) {
@@ -309,13 +246,6 @@ class CameraController @Inject constructor(
             return
         }
         isCameraInitialized = true
-
-        // Reset drift diagnostics for this session -- "t+" in FOCUS_DRIFT
-        // logs is always relative to this point, and the first capture
-        // result's focus distance becomes the new baseline.
-        sessionStartTimeMs = SystemClock.uptimeMillis()
-        initialFocusDistanceMM = null
-        lastLoggedFocusDistanceMM = null
 
         // Creates list of Surfaces where the camera will output frames
         val targets =
@@ -500,21 +430,6 @@ class CameraController @Inject constructor(
         focusManager = focusFactory.create(this)
     }
 
-    /**
-     * Slap-only opt-in, bypassing FocusFactory/FOCUS_TYPE entirely -- see
-     * SlapFixedDistanceFocus's kdoc for why. Call this before
-     * initializeCamera() so the very first session-configuration's
-     * focusManager.setOptimalMode() already uses it; if the camera is
-     * already running, the next triggerHandFocusLock() call (Slap's live
-     * loop calls this ~every frame) will pick it up and re-apply it via
-     * lock(), same as updateFocusManager() already relies on elsewhere.
-     * Does not touch the shared FOCUS_TYPE preference, so single-finger
-     * capture (a separate CameraController instance) is unaffected.
-     */
-    fun useSlapFixedFocus(distanceMM: Float) {
-        focusManager = SlapFixedDistanceFocus(this, distanceMM)
-    }
-
     fun triggerFocusLock(fingerRect: RectF, cutoutRect: RectF, imageSize: Size) {
         val paramProvider = object : FocusLockParamProvider {
             override fun getMeteringRectangle(): MeteringRectangle? {
@@ -664,81 +579,6 @@ class CameraController @Inject constructor(
         // AF mode gets restored to whatever the active strategy actually uses
         // once focus locks — see the processAFState fix below. Without that
         // fix, every tap permanently strands the camera in AF_MODE_AUTO.
-    }
-
-    fun triggerHandFocusLock(handBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int) {
-        val paramProvider = object : FocusLockParamProvider {
-            override fun getMeteringRectangle(): MeteringRectangle? {
-                // Full sensor active array -- see note above on why we don't
-                // attempt a precise region for the upright hand box here.
-                val active = getSensorActiveArraySize()
-                return MeteringRectangle(active, MeteringRectangle.METERING_WEIGHT_MAX)
-            }
-
-            override fun getFingerDistance(): Float {
-                val distanceMM = calculateHandDistanceMM(handBoxUpright, uprightImageSize, rotationDegrees)
-                val distanceM = distanceMM / 1000f
-                Log.d(TAG, "HAND DISTANCE -- ${distanceM}m")
-                return distanceM
-            }
-
-            override fun getManualDistance(): Float {
-                return preferenceStore.get(CameraSettings.MANUAL_FOCUS_DISTANCE)
-            }
-        }
-
-        focusManager.lock(paramProvider = paramProvider)
-    }
-
-    private fun calculateHandDistanceMM(
-        handBoxUpright: RectF,
-        uprightImageSize: Size,
-        rotationDegrees: Int
-    ): Float {
-        val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
-        val sensorPhysical = getSensorPhysicalSize()
-        val sensorWidthMMForUprightWidthAxis =
-            if (axesSwapped) sensorPhysical.height else sensorPhysical.width
-
-        val perceivedWidthPixels = handBoxUpright.width()
-        val imageWidthPixels = uprightImageSize.width.toFloat()
-        if (perceivedWidthPixels <= 0) return 0f
-
-        // Similar-triangles pinhole model, same formula used everywhere
-        // else in this file: Distance = (Focal * RealWidth * ImageWidth) /
-        // (PerceivedWidth * SensorWidth). averageHandWidthMM (85mm
-        // default, tunable via CameraSettings.AVERAGE_HAND_WIDTH_MM) is
-        // the width across 4 flat fingers, matching handBoxUpright's
-        // meaning (union of all detected finger boxes).
-        return 2 * (getFocalLengthInMM() * averageHandWidthMM * imageWidthPixels) /
-                (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
-    }
-
-    fun setSlapTorchOn(on: Boolean) {
-        slapTorchOverride = on
-        if (isCameraInitialized) {
-            updateTorchState()
-        }
-    }
-
-    fun getFingerDistanceMM(fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float {
-        val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
-        val sensorPhysical = getSensorPhysicalSize()
-        val sensorWidthMMForUprightWidthAxis =
-            if (axesSwapped) sensorPhysical.height else sensorPhysical.width
-
-        // Row-projection banding (SlapFingerBandDetector) means each
-        // finger is a horizontal strip -- its HEIGHT in the upright image
-        // is its physical WIDTH (what averageFingerWidthMM measures), NOT
-        // the box's .width(), which is just the tip-anchored ROI length
-        // along the finger and has nothing to do with the finger's real
-        // width.
-        val perceivedWidthPixels = fingerBoxUpright.height()
-        val imageWidthPixels = uprightImageSize.width.toFloat()
-        if (perceivedWidthPixels <= 0) return 0f
-
-        return 2 * (getFocalLengthInMM() * slapAverageFingerWidthMM * imageWidthPixels) /
-                (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
     }
 
 
