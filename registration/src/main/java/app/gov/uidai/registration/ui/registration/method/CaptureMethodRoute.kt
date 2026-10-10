@@ -367,8 +367,8 @@ private fun SlabSubOptionNeutralState() {
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = "\uD83D\uDC48 Left slap")
-            Text(text = "\uD83D\uDC49 Right slap")
+            Text(text = "\uD83E\uDEF1 Left slap")
+            Text(text = "\uD83E\uDEF2 Right slap")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = "\uD83D\uDC4D Left thumb")
@@ -449,8 +449,8 @@ private fun SubOptionChip(
     modifier: Modifier = Modifier
 ) {
     val (emoji, title, subtitle) = when (option) {
-        SlapSubOption.LEFT_SLAP -> Triple("\uD83D\uDC48", "Left slap", "4 fingers")
-        SlapSubOption.RIGHT_SLAP -> Triple("\uD83D\uDC49", "Right slap", "4 fingers")
+        SlapSubOption.LEFT_SLAP -> Triple("\uD83E\uDEF1", "Left slap", "4 fingers")
+        SlapSubOption.RIGHT_SLAP -> Triple("\uD83E\uDEF2", "Right slap", "4 fingers")
         SlapSubOption.LEFT_THUMB -> Triple("\uD83D\uDC4D", "Left thumb", "1 finger")
         SlapSubOption.RIGHT_THUMB -> Triple("\uD83D\uDC4D", "Right thumb", "1 finger")
     }
@@ -537,8 +537,8 @@ private fun SubOptionChip(
     modifier: Modifier = Modifier
 ) {
     val (emoji, title, subtitle) = when (option) {
-        SlapSubOption.LEFT_SLAP -> Triple("\uD83D\uDC48", "Left slap", "4 fingers")
-        SlapSubOption.RIGHT_SLAP -> Triple("\uD83D\uDC49", "Right slap", "4 fingers")
+        SlapSubOption.LEFT_SLAP -> Triple("\uD83E\uDEF1", "Left slap", "4 fingers")
+        SlapSubOption.RIGHT_SLAP -> Triple("\uD83E\uDEF2", "Right slap", "4 fingers")
         SlapSubOption.LEFT_THUMB -> Triple("👍", "Left thumb", "1 finger")
         SlapSubOption.RIGHT_THUMB -> Triple("👍", "Right thumb", "1 finger")
     }
@@ -874,4 +874,6 @@ private fun UploadingDialog(stage: FingerCaptureStatus) {
 }
 @Composable
 @Preview
-fun Preview() {}
+fun Preview() {
+    SlabSubOptionNeutralState()
+}
