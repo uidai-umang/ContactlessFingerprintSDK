@@ -16,3 +16,4 @@
 .cxx
 local.properties
 /PROJECT_FULL_SOURCE_REFERENCE.md
+__pycache__/

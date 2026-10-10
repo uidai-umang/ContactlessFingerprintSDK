@@ -1,0 +1,38 @@
+<resources>
+    <string name="app_name">ContactlessRegistration_SITA</string>
+
+    <!-- Navigation titles -->
+    <string name="uid_entry_title">Enter UID</string>
+    <string name="registration_title">Registration</string>
+    <string name="user_info_title">User Information</string>
+
+    <!-- UID Entry -->
+    <string name="uid_hint">Enter 12-digit UID</string>
+    <string name="check_registration">Check Registration</string>
+    <string name="initiate_registration">Initiate Registration</string>
+    <string name="proceed">Proceed</string>
+    <string name="invalid_uid">Please enter a valid 12-digit UID</string>
+
+    <!-- Registration -->
+    <string name="name_hint">Full Name</string>
+    <string name="phone_hint">Phone Number</string>
+    <string name="add_fingerprint">Add Fingerprint</string>
+    <string name="save">Save</string>
+    <string name="fingerprint_count">Fingerprints: %1$d/5 (Min: 3)</string>
+    <string name="registration_success">Registration completed successfully</string>
+    <string name="registration_error">Registration failed. Please try again.</string>
+    <string name="minimum_fingerprints_required">Minimum 3 fingerprints required</string>
+
+    <!-- User Info -->
+    <string name="validate">Validate</string>
+    <string name="validation_success">Validation Successful</string>
+    <string name="validation_failure">Validation Failed</string>
+    <string name="validation_in_progress">Validating...</string>
+
+    <!-- Common -->
+    <string name="loading">Loading...</string>
+    <string name="error_occurred">An error occurred. Please try again.</string>
+    <string name="sdk_error">SDK error occurred</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+</resources>

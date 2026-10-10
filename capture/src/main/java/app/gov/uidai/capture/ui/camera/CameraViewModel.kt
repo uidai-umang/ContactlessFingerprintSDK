@@ -181,12 +181,14 @@ class CameraViewModel @Inject constructor(
             val startTime = SystemClock.uptimeMillis()
 
             Log.d(TAG, "ACTIVITY_RESULT -- encoding Pid and sending it")
+
             val image = segmentedFrame.finalBitmap
+
             val maskedImage = segmentedFrame.finalMask
             val enhancedImage = FinalProcessingU2Net.run(image, maskedImage)
-
             saveBitmapAndGetUri(enhancedImage, "FinalEnhancedImage")
-            val encodedBitmap = enhancedImage.toBase64()
+
+            val encodedBitmap = image.toBase64()
             val timeLapsed = SystemClock.uptimeMillis() - startTime
             delay(max(2500 - timeLapsed, 1))
             encodedBitmap

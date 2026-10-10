@@ -1,0 +1,877 @@
+package app.gov.uidai.registration.ui.registration.method
+
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.gov.uidai.registration.model.CaptureMethod
+import app.gov.uidai.registration.model.CaptureMethodUiState
+import app.gov.uidai.registration.model.FingerCaptureStatus
+import app.gov.uidai.registration.model.SlapSubOption
+import app.gov.uidai.registration.ui.registration.RegistrationViewModel
+import app.gov.uidai.registration.ui.theme.capture_method_active
+import app.gov.uidai.registration.ui.theme.capture_method_active_container
+import app.gov.uidai.registration.ui.theme.capture_method_bg
+import app.gov.uidai.registration.ui.theme.capture_method_border
+import app.gov.uidai.registration.ui.theme.capture_method_disabled_bg
+import app.gov.uidai.registration.ui.theme.capture_method_disabled_text
+import app.gov.uidai.registration.ui.theme.capture_method_icon_chip_bg
+import app.gov.uidai.registration.ui.theme.capture_method_info_footer_text
+import app.gov.uidai.registration.ui.theme.capture_method_locked_bg
+import app.gov.uidai.registration.ui.theme.capture_method_locked_border
+import app.gov.uidai.registration.ui.theme.capture_method_locked_text
+import app.gov.uidai.registration.ui.theme.capture_method_nav_back_circle
+import app.gov.uidai.registration.ui.theme.capture_method_primary
+import app.gov.uidai.registration.ui.theme.capture_method_primary_container
+import app.gov.uidai.registration.ui.theme.capture_method_progress_bg
+import app.gov.uidai.registration.ui.theme.capture_method_progress_border
+import app.gov.uidai.registration.ui.theme.capture_method_progress_track_bg
+import app.gov.uidai.registration.ui.theme.capture_method_strip_bg
+import app.gov.uidai.registration.ui.theme.capture_method_strip_border
+import app.gov.uidai.registration.ui.theme.capture_method_text_muted
+import app.gov.uidai.registration.ui.theme.capture_method_text_primary
+import app.gov.uidai.registration.ui.theme.capture_method_warning_bg
+import app.gov.uidai.registration.ui.theme.capture_method_warning_border
+import app.gov.uidai.registration.ui.theme.capture_method_warning_text
+import app.gov.uidai.registration.ui.theme.md_theme_onTertiary
+
+@Composable
+fun CaptureMethodRoute(
+    onNavigateUp: () -> Unit,
+    onContinueSequential: () -> Unit,
+    onContinueSlap: (SlapSubOption) -> Unit,
+    registrationViewModel: RegistrationViewModel,
+    viewModel: CaptureMethodViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val registrationUiState by registrationViewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(registrationUiState.captureMode, registrationUiState.fingerUploadStatus) {
+        viewModel.updateFromRegistrationState(
+            registrationCaptureMode = registrationUiState.captureMode,
+            fingerUploadStatus = registrationUiState.fingerUploadStatus
+        )
+    }
+
+    CaptureMethodScreen(
+        uiState = uiState,
+        onSelectMethod = viewModel::selectMethod,
+        onSelectSlapSubOption = viewModel::selectSlapSubOption,
+        onContinue = {
+            viewModel.onContinue()
+            val selectedSlapSubOption = uiState.selectedSlapSubOption
+            when {
+                uiState.selectedMethod == CaptureMethod.SEQUENTIAL -> onContinueSequential()
+                uiState.selectedMethod == CaptureMethod.SLAP && selectedSlapSubOption != null ->
+                    onContinueSlap(selectedSlapSubOption)
+                else -> {} // Continue is disabled until one of the above is true.
+            }
+        },
+        onBack = onNavigateUp
+    )
+}
+
+@Composable
+fun CaptureMethodScreen(
+    uiState: CaptureMethodUiState,
+    onSelectMethod: (CaptureMethod) -> Unit,
+    onSelectSlapSubOption: (SlapSubOption) -> Unit,
+    onContinue: () -> Unit,
+    onBack: () -> Unit
+) {
+    val isMethodReadyToContinue = when (uiState.selectedMethod) {
+        CaptureMethod.SLAP -> uiState.selectedSlapSubOption != null
+        CaptureMethod.SEQUENTIAL -> true
+        null -> false
+    }
+
+    val ctx = LocalContext.current
+
+    // isLocked means "capture_mode is permanently set for this resident" --
+    // it says nothing about WHICH card that is. isActive (computed per card
+    // below) is what each card actually needs: "is MY method the one that's
+    // locked in" vs "is the OTHER method locked in, so I'm blocked."
+    val slapIsActive = uiState.isLocked && uiState.selectedMethod == CaptureMethod.SLAP
+    val sequentialIsActive = uiState.isLocked && uiState.selectedMethod == CaptureMethod.SEQUENTIAL
+
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .background(capture_method_bg)) {
+        CaptureMethodTopBar(onBack = onBack)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = if (uiState.isLocked) {
+                    "Capture method is locked for this session."
+                } else {
+                    "Choose how fingerprints will be captured for this session. You can switch methods until the first finger is saved."
+                },
+                fontSize = 13.sp,
+                color = capture_method_text_primary,
+                lineHeight = 20.sp
+            )
+            SlapCaptureCard(
+                isSelected = uiState.selectedMethod == CaptureMethod.SLAP,
+                isLocked = uiState.isLocked,
+                isActive = slapIsActive,
+                selectedSubOption = uiState.selectedSlapSubOption,
+                completedSubOptions = uiState.completedSlapSubOptions,
+                subOptionStatus = uiState.slapSubOptionStatus,
+                onClick = { onSelectMethod(CaptureMethod.SLAP) },
+                onSelectSubOption = onSelectSlapSubOption
+            )
+            SequentialCaptureCard(
+                isSelected = uiState.selectedMethod == CaptureMethod.SEQUENTIAL,
+                isLocked = uiState.isLocked,
+                isActive = sequentialIsActive,
+                fingersAlreadyCaptured = uiState.fingersAlreadyCaptured,
+                onClick = { onSelectMethod(CaptureMethod.SEQUENTIAL) }
+            )
+            if (uiState.isLocked) {
+                CaptureLockedWarningNote(activeMethod = uiState.selectedMethod)
+            }
+        }
+        CaptureMethodBottomBar(
+            isLocked = uiState.isLocked,
+            isMethodReadyToContinue = isMethodReadyToContinue,
+            onContinue = onContinue
+        )
+    }
+
+    if (uiState.uploadStage != null ) {
+        if(uiState.uploadStage == FingerCaptureStatus.FAILED) {
+            Toast.makeText(ctx, "Upload Failed, Pending Sync", Toast.LENGTH_SHORT).show()
+        } else {
+            UploadingDialog(stage = uiState.uploadStage)
+        }
+    }
+}
+
+@Composable
+private fun CaptureMethodTopBar(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(capture_method_bg)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(capture_method_nav_back_circle)
+                .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Go Back",
+                tint = capture_method_text_primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Text(
+            text = "New Collection",
+            fontWeight = FontWeight.Bold,
+            fontSize = 17.sp,
+            color = capture_method_text_primary
+        )
+    }
+}
+
+@Composable
+private fun SlapCaptureCard(
+    isSelected: Boolean,
+    isLocked: Boolean,
+    isActive: Boolean,
+    selectedSubOption: SlapSubOption?,
+    completedSubOptions: Set<SlapSubOption>,
+    subOptionStatus: Map<SlapSubOption, FingerCaptureStatus>,
+    onClick: () -> Unit,
+    onSelectSubOption: (SlapSubOption) -> Unit
+) {
+    // blocked = some OTHER method is locked in, so this card is unavailable.
+    // isActive = THIS card's method is the one locked in -- still fully
+    // usable, just can't be switched away from anymore.
+    val blocked = isLocked && !isActive
+
+    val borderColor = when {
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
+        isSelected -> capture_method_primary
+        else -> capture_method_border
+    }
+    val bgColor = when {
+        isActive -> capture_method_active_container
+        blocked -> capture_method_locked_bg
+        isSelected -> capture_method_primary_container
+        else -> Color.White
+    }
+    val iconChipBg = when {
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
+        isSelected -> capture_method_primary
+        else -> capture_method_icon_chip_bg
+    }
+    val textColor = when {
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_text
+        isSelected -> capture_method_primary
+        else -> capture_method_text_primary
+    }
+    val descColor = when {
+        isActive -> capture_method_active.copy(alpha = 0.85f)
+        blocked -> capture_method_locked_text
+        isSelected -> capture_method_primary.copy(alpha = 0.8f)
+        else -> capture_method_text_muted
+    }
+    val dividerColor = when {
+        !isLocked && !isSelected -> capture_method_locked_border
+        isSelected -> capture_method_primary.copy(alpha = 0.2f)
+        else -> capture_method_strip_border
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (blocked) 0.5f else 1f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bgColor)
+            .border(2.dp, borderColor, RoundedCornerShape(14.dp))
+            .clickable(enabled = !isLocked, onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconChipBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("\uD83D\uDD90", fontSize = 20.sp)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "Slap capture",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = textColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                    when {
+                        blocked -> Text("🔒", fontSize = 16.sp)
+                        else -> RadioIndicator(
+                            isSelected = isSelected || isActive,
+                            fillColor = if (isActive) capture_method_active else capture_method_primary
+                        )
+                    }
+                }
+                Text(
+                    text = when {
+                        isActive -> "In progress — continuing slap capture for this resident."
+                        blocked -> "Not available — sequential capture already in progress."
+                        else -> "Capture all four fingers of each hand together using the palm overlay, then thumbs separately. Faster per resident."
+                    },
+                    fontSize = 12.sp,
+                    color = descColor
+                )
+            }
+        }
+        if (!blocked) HorizontalDivider(color = dividerColor, thickness = 1.dp)
+        if (!isSelected && !blocked) {
+            SlabSubOptionNeutralState()
+        }
+        // Sub-options stay interactive whenever this card isn't blocked --
+        // including while isActive/isLocked, so an in-progress slap resident
+        // can still pick "Right slap" after "Left slap" was already captured.
+        if (isSelected && !blocked) {
+            SlapSubOptionsRow(
+                isInteractive = true,
+                selectedOption = selectedSubOption,
+                completedOptions = completedSubOptions,
+                subOptionStatus = subOptionStatus,
+                onSelectOption = onSelectSubOption
+            )
+        }
+    }
+}
+
+@Composable
+private fun SlabSubOptionNeutralState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color = md_theme_onTertiary)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text = "\uD83D\uDC48 Left slap")
+            Text(text = "\uD83D\uDC49 Right slap")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text = "\uD83D\uDC4D Left thumb")
+            Text(text = "\uD83D\uDC4D Right thumb")
+        }
+    }
+}
+
+@Composable
+private fun SlapSubOptionsRow(
+    isInteractive: Boolean,
+    selectedOption: SlapSubOption?,
+    completedOptions: Set<SlapSubOption>,
+    subOptionStatus: Map<SlapSubOption, FingerCaptureStatus>,
+    onSelectOption: (SlapSubOption) -> Unit
+) {
+    Column(
+        modifier = Modifier.background(capture_method_strip_bg)
+    ) {
+        Text(
+            text = "SELECT GROUPS TO CAPTURE",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = capture_method_primary,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(capture_method_strip_bg)
+                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(SlapSubOption.LEFT_SLAP, SlapSubOption.RIGHT_SLAP).forEach { option ->
+                    SubOptionChip(
+                        option = option,
+                        isInteractive = isInteractive,
+                        isSelected = isInteractive && selectedOption == option,
+                        isCompleted = option in completedOptions,
+                        status = subOptionStatus[option] ?: FingerCaptureStatus.NOT_CAPTURED,
+                        onClick = { onSelectOption(option) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(SlapSubOption.LEFT_THUMB, SlapSubOption.RIGHT_THUMB).forEach { option ->
+                    SubOptionChip(
+                        option = option,
+                        isInteractive = isInteractive,
+                        isSelected = isInteractive && selectedOption == option,
+                        isCompleted = option in completedOptions,
+                        status = subOptionStatus[option] ?: FingerCaptureStatus.NOT_CAPTURED,
+                        onClick = { onSelectOption(option) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubOptionChip(
+    option: SlapSubOption,
+    isInteractive: Boolean,
+    isSelected: Boolean,
+    isCompleted: Boolean,
+    status: FingerCaptureStatus,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val (emoji, title, subtitle) = when (option) {
+        SlapSubOption.LEFT_SLAP -> Triple("\uD83D\uDC48", "Left slap", "4 fingers")
+        SlapSubOption.RIGHT_SLAP -> Triple("\uD83D\uDC49", "Right slap", "4 fingers")
+        SlapSubOption.LEFT_THUMB -> Triple("\uD83D\uDC4D", "Left thumb", "1 finger")
+        SlapSubOption.RIGHT_THUMB -> Triple("\uD83D\uDC4D", "Right thumb", "1 finger")
+    }
+
+    // PENDING/FAILED/UPLOADING stay clickable so the operator can retry --
+    // mirrors FingerItem's isClickable rule in RegistrationRoute.kt. Only
+    // NOT_CAPTURED (fresh) and CAPTURED (done, locked) follow the plain
+    // isCompleted gate.
+    val isClickable = when (status) {
+        FingerCaptureStatus.NOT_CAPTURED -> isInteractive
+        FingerCaptureStatus.CAPTURING, FingerCaptureStatus.UPLOADING, FingerCaptureStatus.CAPTURED -> false
+        FingerCaptureStatus.PENDING, FingerCaptureStatus.FAILED -> isInteractive
+    }
+
+    val bgColor = when {
+        isSelected -> capture_method_primary
+        status == FingerCaptureStatus.UPLOADING -> capture_method_warning_bg
+        status == FingerCaptureStatus.PENDING -> capture_method_warning_bg
+        status == FingerCaptureStatus.FAILED -> capture_method_warning_bg
+        isCompleted -> capture_method_locked_border
+        isInteractive -> Color.White
+        else -> capture_method_strip_bg
+    }
+    val contentColor = when {
+        isSelected -> Color.White
+        status == FingerCaptureStatus.UPLOADING -> capture_method_warning_text
+        status == FingerCaptureStatus.PENDING -> capture_method_warning_text
+        status == FingerCaptureStatus.FAILED -> capture_method_warning_text
+        isCompleted -> capture_method_locked_text
+        isInteractive -> capture_method_primary
+        else -> capture_method_text_muted
+    }
+
+    val statusLabel = when (status) {
+        FingerCaptureStatus.UPLOADING -> "Syncing…"
+        FingerCaptureStatus.PENDING -> "Pending sync"
+        FingerCaptureStatus.FAILED -> "Failed — retry"
+        FingerCaptureStatus.CAPTURED -> "Done"
+        else -> subtitle
+    }
+    val icon = when (status) {
+        FingerCaptureStatus.CAPTURED -> "✓"
+        FingerCaptureStatus.PENDING -> "⟳"
+        FingerCaptureStatus.FAILED -> "!"
+        else -> emoji
+    }
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .then(
+                if (isInteractive && !isSelected) {
+                    Modifier.border(1.dp, capture_method_primary, RoundedCornerShape(8.dp))
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(enabled = isClickable, onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (status == FingerCaptureStatus.UPLOADING) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = contentColor
+            )
+        } else {
+            Text(icon, fontSize = 16.sp)
+        }
+        Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
+        Text(statusLabel, fontSize = 9.sp, color = contentColor.copy(alpha = 0.85f))
+    }
+}
+
+@Composable
+private fun SubOptionChip(
+    option: SlapSubOption,
+    isInteractive: Boolean,
+    isSelected: Boolean,
+    isCompleted: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val (emoji, title, subtitle) = when (option) {
+        SlapSubOption.LEFT_SLAP -> Triple("\uD83D\uDC48", "Left slap", "4 fingers")
+        SlapSubOption.RIGHT_SLAP -> Triple("\uD83D\uDC49", "Right slap", "4 fingers")
+        SlapSubOption.LEFT_THUMB -> Triple("👍", "Left thumb", "1 finger")
+        SlapSubOption.RIGHT_THUMB -> Triple("👍", "Right thumb", "1 finger")
+    }
+    // Selectable once the Slap card itself is chosen — and only if this
+    // particular sub-capture hasn't already been done this session.
+    val isClickable = isInteractive && !isCompleted
+    val bgColor = when {
+        isSelected -> capture_method_primary
+        isCompleted -> capture_method_locked_border
+        isInteractive -> Color.White
+        else -> capture_method_strip_bg
+    }
+    val contentColor = when {
+        isSelected -> Color.White
+        isCompleted -> capture_method_locked_text
+        isInteractive -> capture_method_primary
+        else -> capture_method_text_muted
+    }
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .then(
+                if (isInteractive && !isSelected) {
+                    Modifier.border(1.dp, capture_method_primary, RoundedCornerShape(8.dp))
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(enabled = isClickable, onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(if (isCompleted) "✓" else emoji, fontSize = 16.sp)
+        Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = contentColor)
+        Text(
+            if (isCompleted) "Done" else subtitle,
+            fontSize = 9.sp,
+            color = contentColor.copy(alpha = 0.85f)
+        )
+    }
+}
+
+@Composable
+private fun SequentialCaptureCard(
+    isSelected: Boolean,
+    isLocked: Boolean,
+    isActive: Boolean,
+    fingersAlreadyCaptured: Int,
+    onClick: () -> Unit
+) {
+    val blocked = isLocked && !isActive
+
+    val borderColor = when {
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
+        isSelected -> capture_method_primary
+        else -> capture_method_border
+    }
+    val bgColor = when {
+        isActive -> capture_method_active_container
+        blocked -> capture_method_locked_bg
+        isSelected -> capture_method_primary_container
+        else -> Color.White
+    }
+    val iconChipBg = when {
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_border
+        isSelected -> capture_method_primary
+        else -> capture_method_icon_chip_bg
+    }
+    val textColor = when {
+        isActive -> capture_method_active
+        blocked -> capture_method_locked_text
+        isSelected -> capture_method_primary
+        else -> capture_method_text_primary
+    }
+    val descColor = when {
+        isActive -> capture_method_active.copy(alpha = 0.85f)
+        blocked -> capture_method_locked_text
+        isSelected -> capture_method_primary.copy(alpha = 0.8f)
+        else -> capture_method_text_muted
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (blocked) 0.5f else 1f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bgColor)
+            .border(2.dp, borderColor, RoundedCornerShape(14.dp))
+            .clickable(enabled = !isLocked, onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconChipBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("☝️", fontSize = 20.sp)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "Single finger — sequential",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = textColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                    when {
+                        blocked -> Text("🔒", fontSize = 16.sp)
+                        else -> RadioIndicator(
+                            isSelected = isSelected || isActive,
+                            fillColor = if (isActive) capture_method_active else capture_method_primary
+                        )
+                    }
+                }
+                Text(
+                    text = when {
+                        isActive -> "In progress — $fingersAlreadyCaptured fingers captured so far. Continue to add more."
+                        blocked -> "Not available — slap capture already in progress."
+                        else -> "Capture one finger at a time in a guided sequence. Minimum 4 fingers required. Better for residents with difficulty using slap."
+                    },
+                    fontSize = 12.sp,
+                    color = descColor
+                )
+            }
+        }
+        if (isActive) {
+            SessionProgressStrip(fingersAlreadyCaptured = fingersAlreadyCaptured)
+        } else if (isSelected && !blocked) {
+            SequentialFooterNote()
+        }
+    }
+}
+
+@Composable
+private fun SequentialFooterNote() {
+    Column {
+        HorizontalDivider(color = capture_method_strip_border, thickness = 1.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(capture_method_strip_bg)
+                .padding(12.dp)
+        ) {
+            Text(
+                text = "ⓘ Once the first finger is saved you cannot switch to slap mode. Complete the session sequentially.",
+                fontSize = 11.sp,
+                color = capture_method_info_footer_text
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionProgressStrip(fingersAlreadyCaptured: Int) {
+    val progress = (fingersAlreadyCaptured.toFloat() / 4f).coerceIn(0f, 1f)
+    Column {
+        HorizontalDivider(color = capture_method_progress_border, thickness = 1.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(capture_method_progress_bg)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "SESSION PROGRESS",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = capture_method_active,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = "$fingersAlreadyCaptured / min. 4",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = capture_method_active
+                )
+            }
+            Box(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(capture_method_progress_track_bg)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progress)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(capture_method_active)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CaptureLockedWarningNote(activeMethod: CaptureMethod?) {
+    val message = when (activeMethod) {
+        CaptureMethod.SLAP ->
+            "⚠ You cannot switch to sequential mode once slap capture has started. Please continue with the current session or finish and start a new collection."
+        CaptureMethod.SEQUENTIAL ->
+            "⚠ You cannot switch to slap mode once sequential capture has started. Please continue with the current session or finish and start a new collection."
+        null ->
+            "⚠ Capture method is locked for this session."
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(capture_method_warning_bg)
+            .border(1.dp, capture_method_warning_border, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = message,
+            fontSize = 12.sp,
+            color = capture_method_warning_text,
+            lineHeight = 18.sp
+        )
+    }
+}
+
+@Composable
+private fun RadioIndicator(
+    isSelected: Boolean,
+    fillColor: Color = capture_method_primary
+) {
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .clip(CircleShape)
+            .then(
+                if (isSelected) Modifier.background(fillColor)
+                else Modifier.border(2.dp, capture_method_border, CircleShape)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isSelected) {
+            Box(modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(Color.White))
+        }
+    }
+}
+
+@Composable
+private fun CaptureMethodBottomBar(
+    isLocked: Boolean,
+    isMethodReadyToContinue: Boolean,
+    onContinue: () -> Unit
+) {
+    val enabled = isMethodReadyToContinue
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(capture_method_bg)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+    ) {
+        Button(
+            onClick = onContinue,
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = capture_method_primary,
+                contentColor = Color.White,
+                disabledContainerColor = capture_method_disabled_bg,
+                disabledContentColor = capture_method_disabled_text
+            )
+        ) {
+            Text(
+                text = when {
+                    isLocked -> "Continue capture →"
+                    isMethodReadyToContinue -> "Continue to guidelines →"
+                    else -> "Continue"
+                },
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun UploadingDialog(stage: FingerCaptureStatus) {
+    val message = when (stage) {
+        FingerCaptureStatus.CAPTURING -> "Processing capture…"
+        FingerCaptureStatus.UPLOADING -> "Uploading…"
+        else -> "Processing…"
+    }
+    Dialog(
+        onDismissRequest = { },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.White)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(color = capture_method_primary)
+            Text(text = message, fontSize = 13.sp, color = capture_method_text_primary)
+        }
+    }
+}
+@Composable
+@Preview
+fun Preview() {}

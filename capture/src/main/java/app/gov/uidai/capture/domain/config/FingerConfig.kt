@@ -59,7 +59,7 @@ object FingerSettings : PreferenceGroup {
         "finger.good_area_min",
         "Good Area Min",
         PreferenceType.FLOAT,
-        0.7f
+        0.60f
     )
     val GOOD_AREA_MAX = PreferenceParam(
         "finger.good_area_max",

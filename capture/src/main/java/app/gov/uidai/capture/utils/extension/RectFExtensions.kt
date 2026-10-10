@@ -1,5 +1,6 @@
 package app.gov.uidai.capture.utils.extension
 
+import android.graphics.PointF
 import android.graphics.RectF
 import kotlin.math.abs
 
@@ -61,4 +62,25 @@ fun RectF.rotateACW(currentImageWidth: Int, currentImageHeight: Int, rotation: I
             this
         }
     }
+}
+
+/** Point analog of RectF.rotateACW() above -- same per-corner mapping, one point at a time. */
+fun PointF.rotateACW(currentImageWidth: Int, currentImageHeight: Int, rotation: Int): PointF {
+    return when (rotation) {
+        90 -> PointF(y, currentImageWidth - x)
+        180 -> PointF(currentImageWidth - x, currentImageHeight - y)
+        270 -> PointF(currentImageHeight - y, x)
+        else -> this
+    }
+}
+
+/**
+ * Expands this RectF on all sides by [percent] of its own width/height --
+ * used to pad a tight landmark bounding box (e.g. a slap capture's hand
+ * box) so the delivered crop isn't pixel-tight to the detected box.
+ */
+fun RectF.inflatedByPercent(percent: Float): RectF {
+    val dx = width() * percent
+    val dy = height() * percent
+    return RectF(left - dx, top - dy, right + dx, bottom + dy)
 }

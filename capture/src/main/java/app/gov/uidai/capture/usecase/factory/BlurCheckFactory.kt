@@ -1,6 +1,7 @@
 package app.gov.uidai.capture.usecase.factory
 
 import android.content.Context
+import android.graphics.Bitmap
 import app.gov.uidai.capture.domain.config.BlurConfig
 import app.gov.uidai.capture.domain.config.BlurSettings
 import app.gov.uidai.capture.domain.method.blur.DensenetBlurMethod
@@ -32,5 +33,20 @@ class BlurCheckFactory @Inject constructor(
             threshold = preferenceStore.get(BlurSettings.THRESHOLD)
         )
         return DensenetBlurMethod(context = context, blurConfig = blurConfig)
+    }
+
+    fun createWithDebugCallback(
+        onDebugCrop: (bitmap: Bitmap, callId: Int, label: String) -> Unit
+    ): DensenetBlurMethod {
+        val modelPath = when (preferenceStore.get(BlurSettings.MODEL)) {
+            BlurCheckMethodType.Densenet -> DENSENET_BLUR
+            BlurCheckMethodType.NewDensenet -> DENSENET_BLUR_NEW
+        }
+        val blurConfig = BlurConfig(
+            enabled = preferenceStore.get(BlurSettings.ENABLED),
+            modelPath = modelPath,
+            threshold = preferenceStore.get(BlurSettings.THRESHOLD)
+        )
+        return DensenetBlurMethod(context, blurConfig, onDebugCrop)
     }
 }

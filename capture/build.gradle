@@ -108,6 +108,8 @@ dependencies {
     // TFLite
     implementation libs.tensorflow.lite
     implementation libs.tensorflow.lite.support
+    implementation libs.tensorflow.lite.gpu
+    implementation libs.tensorflow.lite.gpu.api
 
     // Jackson
     implementation libs.jackson.module.kotlin

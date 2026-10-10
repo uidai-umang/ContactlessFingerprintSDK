@@ -26,7 +26,8 @@ class CaptureStateManager @Inject constructor() {
 
     // Live Stage 1 debug quality scores — independent of the capture state machine above,
     // since these update every Stage 1 cycle regardless of warn/success/fail state.
-    private val _stage1QualityScores = MutableStateFlow<LiveQualityScores?>(null)
+    private val _stage1QualityScores =
+        MutableStateFlow<LiveQualityScores?>(LiveQualityScores.defaultScores())
     val stage1QualityScores = _stage1QualityScores.asStateFlow()
 
     private val activeWarnings = mutableListOf<ActiveWarning>()
@@ -193,8 +194,8 @@ class CaptureStateManager @Inject constructor() {
 
     fun reportStage2ProcessingStage(
         processingStage: ProcessingStage
-    ){
-        val message = when(processingStage){
+    ) {
+        val message = when (processingStage) {
             ProcessingStage.BLUR -> Info.EvaluatingImageQuality
             ProcessingStage.SEGMENTATION -> Info.CheckingFingerPresence
             else -> null
@@ -234,7 +235,7 @@ class CaptureStateManager @Inject constructor() {
         isStage2Passed.set(null)
         stage2ResultValue.set(null)
         stage2ProcessingStageMessage.set(null)
-        _stage1QualityScores.value = null
+        _stage1QualityScores.value = LiveQualityScores.defaultScores()
         updateCaptureState()
     }
 }
