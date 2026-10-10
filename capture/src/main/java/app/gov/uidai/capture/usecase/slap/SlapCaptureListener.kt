@@ -51,7 +51,7 @@ class SlapCaptureListener(
     companion object {
         private val TAG = SlapCaptureListener::class.simpleName
         private const val THROTTLE_MS = 100L
-        private const val REQUIRED_CONSECUTIVE_PASSES = 4
+        private const val REQUIRED_CONSECUTIVE_PASSES = 4000
         private const val CROP_PADDING_PERCENT = 0.08f
     }
 

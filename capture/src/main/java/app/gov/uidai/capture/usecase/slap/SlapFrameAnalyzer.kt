@@ -1,5 +1,6 @@
 package app.gov.uidai.capture.usecase.slap
 
+import android.content.Context
 import android.graphics.RectF
 import android.util.Log
 import app.gov.uidai.capture.domain.model.CameraFrame
@@ -7,24 +8,37 @@ import app.gov.uidai.capture.domain.model.SlapFrameResult
 import app.gov.uidai.capture.slap.processing.SlapFingerBandDetector
 import app.gov.uidai.capture.utils.extension.rotate
 import app.gov.uidai.capture.utils.extension.toBitmap
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-class SlapFrameAnalyzer @Inject constructor() {
+class SlapFrameAnalyzer @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     companion object {
         private val TAG = SlapFrameAnalyzer::class.simpleName
         private const val LIVE_ANALYSIS_MAX_WIDTH = 320
+        private const val PROBE_EVERY_N_FRAMES = 2
     }
 
     private val bandDetector = SlapFingerBandDetector()
+
+    private val yoloProbe by lazy {
+        try { SlapYoloProbe(context) } catch (e: Throwable) {
+            Log.e(TAG, "SlapYoloProbe init failed", e); null
+        }
+    }
+    private var probeCounter = 0
 
     suspend fun analyze(frame: CameraFrame, expectedHandType: String): SlapFrameResult =
         withContext(Dispatchers.Default) {
             try {
                 val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
                 val bitmap = byteArray.toBitmap(size).rotate(frame.rotationDegrees)
+
+                if (probeCounter++ % PROBE_EVERY_N_FRAMES == 0) yoloProbe?.probe(bitmap)
 
                 val handType = if (expectedHandType.equals("Left", ignoreCase = true)) {
                     SlapFingerBandDetector.HandType.LEFT
