@@ -5,11 +5,22 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.dagger.hilt)
     alias(libs.plugins.navigation.safeargs)
+
+    id 'maven-publish'
 }
 
 android {
     namespace 'app.gov.uidai.registration'
     compileSdk 36
+
+    def localProperties = new Properties()
+    localProperties.load(
+            new FileInputStream(rootProject.file("local.properties"))
+    )
+
+    def backendUrl = providers.gradleProperty("BACKEND_URL")
+            .orElse("\"${localProperties['BACKEND_URL']}\"")
+            .get()
 
     defaultConfig {
         minSdk 24
@@ -17,10 +28,14 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
 
-        def localProperties = new Properties()
-        localProperties.load(new FileInputStream(rootProject.file("local.properties")))
-        buildConfigField "String", "BACKEND_URL", "\"${localProperties['BACKEND_URL']}\""
-    }
+//        def localProperties = new Properties()
+//        localProperties.load(new FileInputStream(rootProject.file("local.properties")))
+
+        buildConfigField(
+                "String",
+                "BACKEND_URL",
+                "\"${backendUrl}\""
+        )    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
@@ -32,6 +47,11 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+    }
+
+    publishing {
+        singleVariant("release")
+        singleVariant("debug")
     }
 
 }
@@ -88,4 +108,25 @@ dependencies {
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.remote.config)
+}
+
+
+afterEvaluate {
+    publishing {
+        publications {
+            debug(MavenPublication) {
+                from components.debug
+                groupId = "in.gov.uidai.sdk"
+                artifactId = "contactless-registration-sdk.debug"
+                version = rootProject.version.toString()
+            }
+
+            release(MavenPublication) {
+                from components.release
+                groupId = "in.gov.uidai.sdk"
+                artifactId = "contactless-registration-sdk"
+                version = rootProject.version.toString()
+            }
+        }
+    }
 }

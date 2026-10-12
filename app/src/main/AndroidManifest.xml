@@ -23,7 +23,6 @@
             android:exported="true">
 
             <intent-filter>
-                <action android:name="in.gov.uidai.contactlessfingersdk_sita.CAPTURE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>

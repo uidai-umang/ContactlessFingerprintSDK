@@ -1,55 +1,21 @@
+
 package `in`.gov.uidai.contactlessfingersdk
 
-import android.content.Intent
 import android.os.Bundle
-import android.util.Log
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import dagger.hilt.android.AndroidEntryPoint
-import `in`.gov.uidai.core.CaptureSDK
-import app.gov.uidai.registration.RegistrationActivity
-import kotlin.jvm.java
+import app.gov.uidai.registration.ContactlessRegistrationSdk
+import app.gov.uidai.registration.RegistrationConfig
 
-@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
-
-    private val coreActivityLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        setResult(result.resultCode, result.data)
-        finish()
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        startActivity(Intent(this, RegistrationActivity::class.java))
-        finish()
 
-//        // Launch the CameraActivity to start the capture process
-//        launchCoreActivity()
-    }
-
-    private fun launchCoreActivity() {
-        val intent = CaptureSDK.createIntent(
-            context = this,
-            requestXml = intent.getStringExtra("request"),
-            callingPackage = callingPackage
+        val intent = ContactlessRegistrationSdk.createIntent(
+            context = this
         )
-        Log.d(TAG, "Capture Activity Launched")
-        coreActivityLauncher.launch(intent)
-    }
 
-    private fun launchRegistrationFlow() {
-        startActivity(Intent(this, RegistrationActivity::class.java))
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.i(TAG, "onDestroy()")
-    }
-
-    companion object {
-        private val TAG = MainActivity::class.simpleName
+        startActivity(intent)
+        finish()
     }
 }
-
