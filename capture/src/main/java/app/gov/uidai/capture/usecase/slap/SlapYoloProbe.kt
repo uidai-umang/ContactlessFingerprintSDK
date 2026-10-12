@@ -8,6 +8,7 @@ import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.support.common.FileUtil
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -32,16 +33,22 @@ class SlapYoloProbe(context: Context) {
     private val yMap = IntArray(INPUT)
 
     private fun createInterpreter(context: Context): Interpreter {
+        val start = SystemClock.uptimeMillis()
         val model = FileUtil.loadMappedFile(context, MODEL)
         try {
             val compat = CompatibilityList()
             if (compat.isDelegateSupportedOnThisDevice) {
-                val options = Interpreter.Options().addDelegate(GpuDelegate(compat.bestOptionsForThisDevice))
-                return Interpreter(model, options)
+                val cacheDir = File(context.cacheDir, "tflite_gpu").apply { mkdirs() }
+                val gpuOptions = compat.bestOptionsForThisDevice
+                    .setSerializationParams(cacheDir.absolutePath, "slap_yolo_800_v1")
+                val interpreter = Interpreter(model, Interpreter.Options().addDelegate(GpuDelegate(gpuOptions)))
+                Log.i(TAG, "Using GPU delegate, init=${SystemClock.uptimeMillis() - start}ms")
+                return interpreter
             }
         } catch (e: Throwable) {
             Log.w(TAG, "GPU delegate failed -- using CPU", e)
         }
+        Log.i(TAG, "Using CPU, 4 threads")
         return Interpreter(model, Interpreter.Options().setNumThreads(4))
     }
 

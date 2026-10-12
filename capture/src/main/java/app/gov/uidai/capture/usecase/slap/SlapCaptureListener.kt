@@ -65,6 +65,12 @@ class SlapCaptureListener(
     private var consecutivePasses = 0
 
     @Volatile
+    private var firstFrameLogged = false
+
+    @Volatile
+    private var firstBoxesLogged = false
+
+    @Volatile
     private var lastAttemptBlurFailed = false
 
     private val _liveState = MutableStateFlow(SlapLiveState())
@@ -82,6 +88,11 @@ class SlapCaptureListener(
             Log.e(TAG, "Failed to acquire image", e)
             null
         } ?: return
+
+        if (!firstFrameLogged) {
+            firstFrameLogged = true
+            Log.d(TAG, "FIRST FRAME delivered")
+        }
 
         if (isCaptured.get()) {
             image.close()
@@ -137,6 +148,11 @@ class SlapCaptureListener(
         val uprightHeight = if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
 
         val detectedCount = result.fingerBoxes.size
+
+        if (detectedCount > 0 && !firstBoxesLogged) {
+            firstBoxesLogged = true
+            Log.d(TAG, "FIRST BOXES ready, count=$detectedCount")
+        }
 
         val frameSize = Size(uprightWidth, uprightHeight)
 
