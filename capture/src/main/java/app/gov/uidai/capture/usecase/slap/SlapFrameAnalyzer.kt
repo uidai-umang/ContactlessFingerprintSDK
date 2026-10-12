@@ -23,6 +23,7 @@ class SlapFrameAnalyzer @Inject constructor(
 
     private var yolo: SlapYoloProbe? = null
     private var yoloInitTried = false
+    private var warmedUp = false
 
     private fun yolo(): SlapYoloProbe? {
         if (!yoloInitTried) {
@@ -37,13 +38,18 @@ class SlapFrameAnalyzer @Inject constructor(
         return yolo
     }
 
-    suspend fun warmUp() = withContext(yoloDispatcher) {
+    private fun doWarmUp() {
+        if (warmedUp) return
         try {
             yolo()?.warmUp()
+            warmedUp = true
         } catch (e: Throwable) {
             Log.e(TAG, "YOLO warm-up failed", e)
         }
     }
+
+    suspend fun warmUp() = withContext(yoloDispatcher) { doWarmUp() }
+
 
     //    suspend fun analyze(frame: CameraFrame, expectedHandType: String): SlapFrameResult =
 //        withContext(Dispatchers.Default) {
