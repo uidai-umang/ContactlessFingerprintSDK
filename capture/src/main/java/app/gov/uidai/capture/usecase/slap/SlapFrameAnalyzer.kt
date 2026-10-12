@@ -10,7 +10,9 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton
 class SlapFrameAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
