@@ -53,6 +53,7 @@ class SlapCaptureListener(
         private const val THROTTLE_MS = 100L
         private const val REQUIRED_CONSECUTIVE_PASSES = 4
         private const val CROP_PADDING_PERCENT = 0.08f
+        private const val GATE_ON_DISTANCE = false
     }
 
     private val processingCounter = AtomicLong(0)
@@ -64,9 +65,15 @@ class SlapCaptureListener(
     private var consecutivePasses = 0
 
     @Volatile
+    private var firstFrameLogged = false
+
+    @Volatile
+    private var firstBoxesLogged = false
+
+    @Volatile
     private var lastAttemptBlurFailed = false
 
-    private val _liveState = MutableStateFlow(SlapLiveState())
+    private val _liveState = MutableStateFlow(SlapLiveState(statusMessage = "Getting ready..."))
     val liveState = _liveState.asStateFlow()
 
     private val _capturedBitmap = MutableStateFlow<Bitmap?>(null)
@@ -81,6 +88,11 @@ class SlapCaptureListener(
             Log.e(TAG, "Failed to acquire image", e)
             null
         } ?: return
+
+        if (!firstFrameLogged) {
+            firstFrameLogged = true
+            Log.d(TAG, "FIRST FRAME delivered")
+        }
 
         if (isCaptured.get()) {
             image.close()
@@ -136,28 +148,37 @@ class SlapCaptureListener(
         val uprightHeight = if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
 
         val detectedCount = result.fingerBoxes.size
-        val framePassed = result.handDetected
 
-        if (!framePassed) {
-            lastAttemptBlurFailed = false
+        if (detectedCount > 0 && !firstBoxesLogged) {
+            firstBoxesLogged = true
+            Log.d(TAG, "FIRST BOXES ready, count=$detectedCount")
         }
 
-        consecutivePasses = if (framePassed) consecutivePasses + 1 else 0
+        val frameSize = Size(uprightWidth, uprightHeight)
 
-        val handDistanceMM = result.fingerBoxes
-            .mapNotNull { box ->
-                try {
-                    getFingerDistanceMM(box, Size(uprightWidth, uprightHeight), rotationDegrees)
-                        .takeIf { it > 0f }
-                } catch (e: Exception) {
-                    Log.e(TAG, "getFingerDistanceMM failed for one finger box -- skipping it", e)
-                    null
-                }
+        val perFingerMM = result.fingerBoxes.map { box ->
+            try {
+                getFingerDistanceMM(box, frameSize, rotationDegrees)
+            } catch (e: Exception) {
+                Log.e(TAG, "getFingerDistanceMM failed for one finger box -- skipping it", e)
+                0f
             }
+        }
+
+        val handDistanceMM = perFingerMM
+            .filter { it > 0f }
             .sorted()
             .let { distances -> distances.getOrNull(distances.size / 2) }
 
-        Log.d(TAG, "SLAP HAND DISTANCE -- ${handDistanceMM}mm (target=${targetHandDistanceMM}mm ± ${handDistanceToleranceMM}mm, from $detectedCount finger(s))")
+        Log.d(
+            TAG,
+            "SLAP HAND DISTANCE -- median=${handDistanceMM?.toInt()}mm " +
+                    "target=${targetHandDistanceMM.toInt()}±${handDistanceToleranceMM.toInt()}mm " +
+                    "fingers=$detectedCount frame=${uprightWidth}x${uprightHeight} " +
+                    "perFinger=" + result.fingerBoxes.indices.joinToString { i ->
+                "[w=${result.fingerBoxes[i].height().toInt()}px d=${perFingerMM[i].toInt()}mm]"
+            }
+        )
 
         val distanceGuidance = handDistanceMM?.let { distanceMM ->
             when {
@@ -167,8 +188,18 @@ class SlapCaptureListener(
             }
         }
 
+        val distanceOk = !GATE_ON_DISTANCE || (handDistanceMM != null && distanceGuidance == null)
+        val framePassed = result.handDetected && distanceOk
+
+        if (!framePassed) {
+            lastAttemptBlurFailed = false
+        }
+
+        consecutivePasses = if (framePassed) consecutivePasses + 1 else 0
+
         val statusMessage = when {
             detectedCount == 0 -> "Place your hand in frame"
+            distanceGuidance != null -> distanceGuidance
             lastAttemptBlurFailed -> "Too blurry — hold steady"
             consecutivePasses < REQUIRED_CONSECUTIVE_PASSES -> "Hold steady"
             else -> "Capturing automatically..."
