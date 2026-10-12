@@ -73,7 +73,7 @@ class SlapCaptureListener(
     @Volatile
     private var lastAttemptBlurFailed = false
 
-    private val _liveState = MutableStateFlow(SlapLiveState())
+    private val _liveState = MutableStateFlow(SlapLiveState(statusMessage = "Getting ready..."))
     val liveState = _liveState.asStateFlow()
 
     private val _capturedBitmap = MutableStateFlow<Bitmap?>(null)

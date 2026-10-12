@@ -43,7 +43,8 @@ class SlapFrameAnalyzer @Inject constructor(
     private fun doWarmUp() {
         if (warmedUp) return
         try {
-            yolo()?.warmUp()
+            val detector = yolo() ?: return
+            detector.warmUp()
             warmedUp = true
         } catch (e: Throwable) {
             Log.e(TAG, "YOLO warm-up failed", e)
