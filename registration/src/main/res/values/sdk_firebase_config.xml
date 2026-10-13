@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sdk_firebase_app_id" translatable="false">1:624575312546:android:5035c8fb0506a6e58e9dfb</string>
+    <string name="sdk_firebase_api_key" translatable="false">AIzaSyD2-Tuc3-M18WJeRy9jXUpIyXjaozKP8kA</string>
+    <string name="sdk_firebase_project_id" translatable="false">contactlessfingerprintsdk</string>
+</resources>
