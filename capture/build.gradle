@@ -165,7 +165,7 @@ afterEvaluate {
             }
             debug(MavenPublication) {
                 from components.debug
-                artifactId = "capture"
+                artifactId = "capture.debug"
             }
         }
     }

@@ -73,7 +73,7 @@ afterEvaluate {
             }
             debug(MavenPublication) {
                 from components.debug
-                artifactId = "network"
+                artifactId = "network.debug"
             }
         }
     }

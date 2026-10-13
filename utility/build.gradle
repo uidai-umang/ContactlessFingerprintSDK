@@ -58,7 +58,7 @@ afterEvaluate {
             }
             debug(MavenPublication) {
                 from components.debug
-                artifactId = "utility"
+                artifactId = "utility.debug"
             }
         }
     }

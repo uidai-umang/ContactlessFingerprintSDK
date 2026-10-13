@@ -31,6 +31,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.gov.uidai.capture.ContactlessCaptureInitializer
+import app.gov.uidai.capture.usecase.slap.SlapFrameAnalyzer
 import app.gov.uidai.registration.connectivity.ConnectivityObserver
 import app.gov.uidai.registration.connectivity.ui.NoInternetScreen
 import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
@@ -77,6 +79,9 @@ class RegistrationActivity : ComponentActivity() {
     @Inject
     lateinit var maintenanceStatusProvider: MaintenanceStatusProvider
 
+    @Inject
+    lateinit var slapFrameAnalyzer: SlapFrameAnalyzer
+
     companion object {
         const val EXTRA_OPERATOR_REF_ID = "operator_ref_id"   // host app passes this
     }
@@ -97,6 +102,12 @@ class RegistrationActivity : ComponentActivity() {
                 darkScrim = md_theme_scrim.toArgb()
             )
         )
+
+        ContactlessCaptureInitializer.initialize(applicationContext)
+
+        lifecycleScope.launch(Dispatchers.Default) {
+            ContactlessCaptureInitializer.warmUp(slapFrameAnalyzer)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(

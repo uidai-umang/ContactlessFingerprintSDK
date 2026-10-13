@@ -14,13 +14,23 @@ android {
     compileSdk 36
 
     def localProperties = new Properties()
-    localProperties.load(
-            new FileInputStream(rootProject.file("local.properties"))
-    )
+    def localPropertiesFile = rootProject.file("local.properties")
+
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.withInputStream {
+            localProperties.load(it)
+        }
+    }
 
     def backendUrl = providers.gradleProperty("BACKEND_URL")
-            .orElse("\"${localProperties['BACKEND_URL']}\"")
+            .orElse(localProperties.getProperty("BACKEND_URL", ""))
             .get()
+
+    if (backendUrl.isBlank()) {
+        throw new GradleException(
+                "BACKEND_URL must be provided through Gradle properties or local.properties"
+        )
+    }
 
     defaultConfig {
         minSdk 24

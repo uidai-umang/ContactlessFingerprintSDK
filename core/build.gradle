@@ -62,7 +62,7 @@ afterEvaluate {
             }
             debug(MavenPublication) {
                 from components.debug
-                artifactId = "contactless-biometric"
+                artifactId = "contactless-biometric.debug"
             }
         }
     }
