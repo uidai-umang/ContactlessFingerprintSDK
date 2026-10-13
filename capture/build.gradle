@@ -78,7 +78,7 @@ android {
 
     publishing {
         singleVariant("release")
-        singleVariant("debug")
+//        singleVariant("debug")
     }
 }
 
@@ -163,10 +163,10 @@ afterEvaluate {
                 from components.release
                 artifactId = "capture"
             }
-            debug(MavenPublication) {
-                from components.debug
-                artifactId = "capture.debug"
-            }
+//            debug(MavenPublication) {
+//                from components.debug
+//                artifactId = "capture.debug"
+//            }
         }
     }
 }

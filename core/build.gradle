@@ -31,7 +31,7 @@ android {
 
     publishing {
         singleVariant("release")
-        singleVariant("debug")
+//        singleVariant("debug")
     }
 }
 
@@ -60,10 +60,10 @@ afterEvaluate {
                 from components.release
                 artifactId = "contactless-biometric"
             }
-            debug(MavenPublication) {
-                from components.debug
-                artifactId = "contactless-biometric.debug"
-            }
+//            debug(MavenPublication) {
+//                from components.debug
+//                artifactId = "contactless-biometric.debug"
+//            }
         }
     }
 }

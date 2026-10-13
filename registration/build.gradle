@@ -61,7 +61,7 @@ android {
 
     publishing {
         singleVariant("release")
-        singleVariant("debug")
+//        singleVariant("debug")
     }
 
 }
@@ -124,12 +124,12 @@ dependencies {
 afterEvaluate {
     publishing {
         publications {
-            debug(MavenPublication) {
-                from components.debug
-                groupId = "in.gov.uidai.sdk"
-                artifactId = "contactless-registration-sdk.debug"
-                version = rootProject.version.toString()
-            }
+//            debug(MavenPublication) {
+//                from components.debug
+//                groupId = "in.gov.uidai.sdk"
+//                artifactId = "contactless-registration-sdk.debug"
+//                version = rootProject.version.toString()
+//            }
 
             release(MavenPublication) {
                 from components.release
