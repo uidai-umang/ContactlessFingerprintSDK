@@ -1,5 +1,7 @@
 package app.gov.uidai.registration.maintenance
 
+import android.nfc.Tag
+import android.util.Log
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
 import kotlinx.coroutines.tasks.await
@@ -18,6 +20,7 @@ class FirebaseMaintenanceStatusProvider @Inject constructor(
     companion object {
         private const val KEY_UNDER_MAINTENANCE = "under_maintenance"
         private const val MIN_FETCH_INTERVAL_SECONDS = 300L
+        private val TAG = FirebaseMaintenanceStatusProvider::class.simpleName
     }
 
     override suspend fun isUnderMaintenance(): Boolean {
@@ -29,6 +32,7 @@ class FirebaseMaintenanceStatusProvider @Inject constructor(
             remoteConfig.fetchAndActivate().await()
             remoteConfig.getBoolean(KEY_UNDER_MAINTENANCE)
         } catch (e: Exception) {
+            Log.e(TAG, e.message.toString())
             false
         }
     }
