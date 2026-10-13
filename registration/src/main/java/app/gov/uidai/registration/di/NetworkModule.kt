@@ -45,6 +45,7 @@ object NetworkModule {
     // Main client: adds Bearer token, refreshes and retries on 401.
     @Provides
     @Singleton
+    @Named("registrationOkHttpClient")
     fun provideOkHttpClient(
         @ApplicationContext context: Context,
         bearerTokenInterceptor: BearerTokenInterceptor,
@@ -54,16 +55,26 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit =
+    @Named("registrationRetrofit")
+    fun provideRetrofit(
+        @Named("registrationOkHttpClient")
+        okHttpClient: OkHttpClient
+    ): Retrofit =
         RetrofitClient.buildRetrofit(okHttpClient)
 
     @Provides
     @Singleton
-    fun provideClfApiService(retrofit: Retrofit): ClfApiService =
+    fun provideClfApiService(
+        @Named("registrationRetrofit")
+        retrofit: Retrofit
+    ): ClfApiService =
         RetrofitClient.buildApiService(retrofit)
 
     @Provides
     @Singleton
-    fun provideOperatorApi(retrofit: Retrofit): OperatorApi =
+    fun provideOperatorApi(
+        @Named("registrationRetrofit")
+        retrofit: Retrofit
+    ): OperatorApi =
         retrofit.create(OperatorApi::class.java)
 }
