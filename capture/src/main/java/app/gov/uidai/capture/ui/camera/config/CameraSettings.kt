@@ -35,7 +35,7 @@ object CameraSettings : PreferenceGroup {
         "camera.manual_focus_distance",
         "Manual Focus Distance (m)",
         PreferenceType.FLOAT,
-        0.1f
+        0.12f
     )
 
     val TARGET_HAND_DISTANCE_MM = PreferenceParam(
