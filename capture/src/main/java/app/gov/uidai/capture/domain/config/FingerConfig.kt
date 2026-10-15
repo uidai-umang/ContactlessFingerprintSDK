@@ -59,13 +59,13 @@ object FingerSettings : PreferenceGroup {
         "finger.good_area_min",
         "Good Area Min",
         PreferenceType.FLOAT,
-        0.60f
+        0.20f
     )
     val GOOD_AREA_MAX = PreferenceParam(
         "finger.good_area_max",
         "Good Area Max",
         PreferenceType.FLOAT,
-        0.85f
+        0.90f
     )
     val TEXTURE_THRESHOLD_MIN = PreferenceParam(
         "finger.texture_threshold_min",

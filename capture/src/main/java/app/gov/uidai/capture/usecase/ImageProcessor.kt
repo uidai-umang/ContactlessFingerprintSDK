@@ -726,7 +726,7 @@ abstract class ImageProcessor(
 
     open fun close() {
         stage1Job?.cancel(); fingerCheckJob?.cancel(); mediapipeCheckJob?.cancel(); blurCheckJob?.cancel()
-        accumulatorJob?.cancel(); stage2Job?.cancel()
+        accumulatorJob?.cancel(); stage2Job?.cancel(); yoloTestJob?.cancel()
         stage1LoopsDispatcher.close()
         latestRawFrame0.get()?.clearCroppedCache()
         latestRawFrame1.get()?.clearCroppedCache()
