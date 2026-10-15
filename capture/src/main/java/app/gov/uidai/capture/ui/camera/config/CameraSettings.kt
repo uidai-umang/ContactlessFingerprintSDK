@@ -69,7 +69,7 @@ object CameraSettings : PreferenceGroup {
         "camera.average_finger_width",
         "Average Finger Width (mm)",
         PreferenceType.FLOAT,
-        9.5f
+        14f
     )
 
     val AVERAGE_HAND_WIDTH_MM = PreferenceParam(

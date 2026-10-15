@@ -741,6 +741,17 @@ class CameraController @Inject constructor(
                 (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
     }
 
+    fun getSingleYoloDistanceMM(fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float {
+        val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
+        val sensorPhysical = getSensorPhysicalSize()
+        val sensorWidthMMForUprightWidthAxis = if (axesSwapped) sensorPhysical.height else sensorPhysical.width
+        // A finger box is elongated, so its SHORT side is the finger's physical width.
+        val perceivedWidthPixels = minOf(fingerBoxUpright.width(), fingerBoxUpright.height())
+        if (perceivedWidthPixels <= 0) return 0f
+        return 2 * (getFocalLengthInMM() * averageFingerWidthMM * uprightImageSize.width.toFloat()) /
+                (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
+    }
+
 
     fun closeCamera() {
         Log.i(TAG, "closeCamera()")
