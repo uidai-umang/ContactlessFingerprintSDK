@@ -5,6 +5,8 @@ import app.gov.uidai.registration.auth.BearerTokenInterceptor
 import app.gov.uidai.registration.auth.TokenAuthenticator
 import app.gov.uidai.registration.data.remote.api.ClfApiService
 import app.gov.uidai.registration.data.remote.api.OperatorApi
+import app.gov.uidai.registration.data.remote.api.ResidentApi
+import app.gov.uidai.registration.data.remote.api.ResidentConfig
 import app.gov.uidai.registration.data.remote.network.RetrofitClient
 import dagger.Module
 import dagger.Provides
@@ -66,4 +68,12 @@ object NetworkModule {
     @Singleton
     fun provideOperatorApi(retrofit: Retrofit): OperatorApi =
         retrofit.create(OperatorApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideResidentApi(retrofit: Retrofit): ResidentApi =
+        retrofit.newBuilder()
+            .baseUrl(ResidentConfig.BASE_URL)
+            .build()
+            .create(ResidentApi::class.java)
 }

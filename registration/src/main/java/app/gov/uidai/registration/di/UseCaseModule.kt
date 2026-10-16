@@ -5,12 +5,14 @@ import app.gov.uidai.registration.data.dao.PendingCaptureDao
 import app.gov.uidai.registration.repository.ClfRepository
 import app.gov.uidai.registration.repository.DashboardRepository
 import app.gov.uidai.registration.repository.FingerprintRepository
+import app.gov.uidai.registration.repository.ResidentSearchRepository
 import app.gov.uidai.registration.repository.UserRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
 import app.gov.uidai.registration.usecase.CaptureUseCase
 import app.gov.uidai.registration.usecase.DashboardUseCase
 import app.gov.uidai.registration.usecase.DeviceUseCase
 import app.gov.uidai.registration.usecase.FingerSDKManager
+import app.gov.uidai.registration.usecase.ResidentSearchUseCase
 import app.gov.uidai.registration.usecase.ResidentUseCase
 import app.gov.uidai.registration.usecase.UIDManager
 import app.gov.uidai.registration.usecase.UserUseCase
@@ -20,6 +22,7 @@ import app.gov.uidai.registration.usecase.impl.CaptureUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.DashboardUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.DeviceUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.FingerSDKManagerImpl
+import app.gov.uidai.registration.usecase.impl.ResidentSearchUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.ResidentUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.UIDManagerImpl
 import app.gov.uidai.registration.usecase.impl.UserUseCaseImpl
@@ -108,4 +111,10 @@ object UseCaseModule {
     ): DashboardUseCase = DashboardUseCaseImpl(
         dashboardRepository = dashboardRepository
     )
+
+    @Provides
+    @Singleton
+    fun provideResidentSearchUseCase(
+        repository: ResidentSearchRepository
+    ): ResidentSearchUseCase = ResidentSearchUseCaseImpl(repository)
 }
