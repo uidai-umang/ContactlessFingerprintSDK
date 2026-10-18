@@ -131,14 +131,16 @@ abstract class ImageProcessor(
         )
     }
 
-    private val glareCheck = GlareCheck(glareConfig)
-    private val brightnessCheckMethod = BrightnessCheck(brightnessConfig)
-    protected val stage1Methods: Map<String, ImageProcessingMethod<*>> = mapOf(
-        GLARE_CHECK to glareCheck,
-        BRIGHTNESS_CHECK to brightnessCheckMethod
-    )
-    private val glareRunner = GlareCheckRunner(glareCheck)
-    private val brightnessRunner = BrightnessCheckRunner(brightnessCheckMethod)
+    private val glareCheck by lazy { GlareCheck(glareConfig) }
+    private val brightnessCheckMethod by lazy { BrightnessCheck(brightnessConfig) }
+    protected val stage1Methods: Map<String, ImageProcessingMethod<*>> by lazy {
+        mapOf(
+            GLARE_CHECK to glareCheck,
+            BRIGHTNESS_CHECK to brightnessCheckMethod
+        )
+    }
+    private val glareRunner by lazy { GlareCheckRunner(glareCheck) }
+    private val brightnessRunner by lazy { BrightnessCheckRunner(brightnessCheckMethod) }
     private val blurRunner: BlurCheckRunner by lazy {
         BlurCheckRunner(
             laplacianBlur = laplacianBlurCheck,

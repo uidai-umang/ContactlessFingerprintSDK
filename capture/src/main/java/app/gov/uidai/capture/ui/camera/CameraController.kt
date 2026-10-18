@@ -53,7 +53,7 @@ class CameraController @Inject constructor(
 
     companion object {
         private val TAG = CameraController::class.simpleName
-        private const val IMAGE_BUFFER_SIZE: Int = 1
+        private const val IMAGE_BUFFER_SIZE: Int = 3
         private const val IMAGE_FORMAT = ImageFormat.YUV_420_888
         private const val DESIRED_UPPER_FPS = 24
 
