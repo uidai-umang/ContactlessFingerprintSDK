@@ -28,7 +28,7 @@ object CameraSettings : PreferenceGroup {
         "camera.focus_type",
         "Focus Type",
         PreferenceType.CHOICE(options = FocusType.entries),
-        FocusType.ManualFocusAtFingerDistance
+        FocusType.ManualFocusAtFixedDistance
     )
 
     val MANUAL_FOCUS_DISTANCE = PreferenceParam(
