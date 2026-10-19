@@ -22,6 +22,7 @@ import app.gov.uidai.capture.ui.camera.model.Error
 import app.gov.uidai.capture.usecase.factory.BlurCheckFactory
 import app.gov.uidai.capture.usecase.factory.FingerCheckFactory
 import app.gov.uidai.capture.usecase.factory.SegmentationFactory
+import app.gov.uidai.capture.usecase.single.FingerYoloAnalyzer
 import app.gov.uidai.capture.utils.extension.rotate
 import app.gov.uidai.capture.utils.extension.toBitmap
 import dagger.assisted.Assisted
@@ -46,6 +47,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     brightnessConfig: BrightnessConfig,
     glareConfig: GlareConfig,
     settingsManager: PreferenceStore,
+    yoloAnalyzer: FingerYoloAnalyzer,
     @Assisted coroutineScope: CoroutineScope,
     @Assisted provider: Provider,
     @Assisted controller: Controller,
@@ -74,6 +76,10 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
 
     companion object {
         private val TAG = AutoCaptureImageProcessor::class.simpleName
+    }
+
+    init {
+        fingerYoloAnalyzer = yoloAnalyzer
     }
 
     private val blurExecutor = Executors.newFixedThreadPool(4) { r ->
