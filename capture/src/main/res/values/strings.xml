@@ -45,13 +45,13 @@
     <string name="warning_title_finger_misaligned">Finger Misaligned</string>
     <string name="warning_desc_finger_misaligned">Make sure the finger is flat, centered, and within the oval.</string>
 
-    <string name="warning_title_finger_too_close">Finger Too Close</string>
+    <string name="warning_title_finger_too_close">Finger Too Close | Move your finger slightly back</string>
     <string name="warning_desc_finger_too_close">Move your finger slightly back to fit the frame.</string>
 
     <string name="warning_title_finger_too_much_close">Finger Too Much Close / Background Issue</string>
     <string name="warning_desc_finger_too_much_close">Move your finger back to fit the frame or change the background.</string>
 
-    <string name="warning_title_finger_too_far">Finger Too Far</string>
+    <string name="warning_title_finger_too_far">Finger Too Far | Move your finger closer</string>
     <string name="warning_desc_finger_too_far">Move your finger closer to fit inside the overlay.</string>
 
     <string name="warning_title_focus_not_locked">Focus Not Locked</string>

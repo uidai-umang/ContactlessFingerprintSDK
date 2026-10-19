@@ -32,6 +32,7 @@ import app.gov.uidai.capture.domain.model.ProcessingResult
 import app.gov.uidai.capture.domain.model.ProcessingStage
 import app.gov.uidai.capture.domain.model.SegmentedFrame
 import app.gov.uidai.capture.pref.PreferenceStore
+import app.gov.uidai.capture.ui.camera.config.CameraSettings
 import app.gov.uidai.capture.ui.camera.mapper.toUiFailureCause
 import app.gov.uidai.capture.ui.camera.model.Error
 import app.gov.uidai.capture.ui.camera.model.Stage2ResultValue
@@ -43,15 +44,15 @@ import app.gov.uidai.capture.usecase.runner.BlurCheckRunner
 import app.gov.uidai.capture.usecase.runner.BrightnessCheckRunner
 import app.gov.uidai.capture.usecase.runner.FingerCheckRunner
 import app.gov.uidai.capture.usecase.runner.GlareCheckRunner
+import app.gov.uidai.capture.usecase.single.FingerDistanceTracker
+import app.gov.uidai.capture.usecase.single.FingerYoloAnalyzer
 import app.gov.uidai.capture.utils.extension.toByteArray
 import app.gov.uidai.capture.utils.logExecutionTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -84,6 +85,9 @@ abstract class ImageProcessor(
         private const val REQUIRED_SUCCESSFUL_IMAGES = 1
         internal const val GLARE_CHECK = "GlareCheck"
         internal const val BRIGHTNESS_CHECK = "BrightnessCheck"
+
+        private const val USE_YOLO_DISTANCE = true
+        private const val YOLO_DISTANCE_TOLERANCE_MM = 15f
     }
 
     protected val blurCheck by lazy { blurCheckFactory.create() }
@@ -127,14 +131,16 @@ abstract class ImageProcessor(
         )
     }
 
-    private val glareCheck = GlareCheck(glareConfig)
-    private val brightnessCheckMethod = BrightnessCheck(brightnessConfig)
-    protected val stage1Methods: Map<String, ImageProcessingMethod<*>> = mapOf(
-        GLARE_CHECK to glareCheck,
-        BRIGHTNESS_CHECK to brightnessCheckMethod
-    )
-    private val glareRunner = GlareCheckRunner(glareCheck)
-    private val brightnessRunner = BrightnessCheckRunner(brightnessCheckMethod)
+    private val glareCheck by lazy { GlareCheck(glareConfig) }
+    private val brightnessCheckMethod by lazy { BrightnessCheck(brightnessConfig) }
+    protected val stage1Methods: Map<String, ImageProcessingMethod<*>> by lazy {
+        mapOf(
+            GLARE_CHECK to glareCheck,
+            BRIGHTNESS_CHECK to brightnessCheckMethod
+        )
+    }
+    private val glareRunner by lazy { GlareCheckRunner(glareCheck) }
+    private val brightnessRunner by lazy { BrightnessCheckRunner(brightnessCheckMethod) }
     private val blurRunner: BlurCheckRunner by lazy {
         BlurCheckRunner(
             laplacianBlur = laplacianBlurCheck,
@@ -162,6 +168,9 @@ abstract class ImageProcessor(
     private val latestRawFrame2 = AtomicReference<CameraFrame?>()
     private val latestRawFrame3 = AtomicReference<CameraFrame?>()
     private val latestRawFrame4 = AtomicReference<CameraFrame?>()
+    private val latestRawFrame5 = AtomicReference<CameraFrame?>()
+    protected var fingerYoloAnalyzer: FingerYoloAnalyzer? = null
+    private var yoloTestJob: Job? = null
     private val capturedFrameBuffer = Collections.synchronizedList(mutableListOf<CameraFrame>())
     private val _capturedFrameFlow = MutableStateFlow<List<CameraFrame>?>(null)
     private val capturedFrameFlow = _capturedFrameFlow.asStateFlow()
@@ -175,11 +184,6 @@ abstract class ImageProcessor(
     private val isCaptured = AtomicBoolean(false)
     protected val isStage1Passed = AtomicBoolean(false)
     private val firstScoreEmitted = AtomicBoolean(false)
-    private var stage1Skips = 0
-    private var fingerSkips = 0
-    private var mediapipeSkips = 0
-    private var blurSkips = 0
-    private var accumSkips = 0
 
     private data class BestFrameCandidate(val frame: CameraFrame, val stage1BlurConfidence: Float)
 
@@ -209,6 +213,13 @@ abstract class ImageProcessor(
         Thread(r, "Stage1LoopThread").apply { priority = Thread.NORM_PRIORITY }
     }.asCoroutineDispatcher()
 
+    private val fingerDistanceTracker by lazy {
+        FingerDistanceTracker(
+            targetMM = preferenceStore.get(CameraSettings.MANUAL_FOCUS_DISTANCE) * 1000f,
+            toleranceMM = YOLO_DISTANCE_TOLERANCE_MM
+        )
+    }
+
     init {
         startProcessingLoop()
         Log.i(TAG, "Image Processor Initialized")
@@ -234,12 +245,7 @@ abstract class ImageProcessor(
     private fun startProcessingLoop() {
         stage1Job = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
-                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame0.getAndSet(null)
-                if (frame == null) {
-                    stage1Skips++
-                    if (stage1Skips % 30 == 0) Log.d("FREEZE_DEBUG", "STAGE1_LOOP skippedTicks=$stage1Skips")
-                }
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get() && isStage1Processing.compareAndSet(
                         false,
@@ -253,31 +259,16 @@ abstract class ImageProcessor(
                         isStage1Processing.set(false)
                     }
                 }
-                val workDuration = SystemClock.uptimeMillis() - loopTickStart
-                Log.d(
-                    "FREEZE_DEBUG",
-                    "STAGE1_LOOP tick @ $loopTickStart workDuration=${workDuration}ms"
-                )
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
-//        // HSV -- fast, primary, ticks every frame.
+        // HSV -- fast, primary, ticks every frame.
         fingerCheckJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
-                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame3.getAndSet(null)
-                if (frame == null) {
-                    fingerSkips++
-                    if (fingerSkips % 30 == 0) Log.d("FREEZE_DEBUG", "FINGER_LOOP skippedTicks=$fingerSkips")
-                }
                 val startTime = System.currentTimeMillis()
                 if (frame != null) fingerRunner.runHsv(frame, isCaptured.get())
-                val workDuration = SystemClock.uptimeMillis() - loopTickStart
-                Log.d(
-                    "FREEZE_DEBUG",
-                    "FINGER_LOOP tick @ $loopTickStart workDuration=${workDuration}ms"
-                )
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
@@ -286,12 +277,7 @@ abstract class ImageProcessor(
         // when it PASSES, or when it fails and HSV agrees -- see FingerCheckRunner.
         mediapipeCheckJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
-                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame4.getAndSet(null)
-                if (frame == null) {
-                    mediapipeSkips++
-                    if (mediapipeSkips % 30 == 0) Log.d("FREEZE_DEBUG", "MEDIAPIPE_LOOP skippedTicks=$mediapipeSkips")
-                }
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get() && isMediapipeProcessing.compareAndSet(
                         false,
@@ -304,44 +290,24 @@ abstract class ImageProcessor(
                         isMediapipeProcessing.set(false)
                     }
                 }
-                val workDuration = SystemClock.uptimeMillis() - loopTickStart
-                Log.d(
-                    "FREEZE_DEBUG",
-                    "MEDIAPIPE_LOOP tick @ $loopTickStart workDuration=${workDuration}ms"
-                )
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
         blurCheckJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
-                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame2.getAndSet(null)
-                if (frame == null) {
-                    blurSkips++
-                    if (blurSkips % 30 == 0) Log.d("FREEZE_DEBUG", "BLUR_LOOP skippedTicks=$blurSkips")
-                }
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get()) {
                     logExecutionTime(TAG, "Blur") { blurRunner.run(frame) }
                 }
-                val workDuration = SystemClock.uptimeMillis() - loopTickStart
-                Log.d(
-                    "FREEZE_DEBUG",
-                    "BLUR_LOOP tick @ $loopTickStart workDuration=${workDuration}ms"
-                )
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
             }
         }
 
         accumulatorJob = coroutineScope.launch(stage1LoopsDispatcher) {
             while (true) {
-                val loopTickStart = SystemClock.uptimeMillis()
                 val frame = latestRawFrame1.getAndSet(null)
-                if (frame == null) {
-                    accumSkips++
-                    if (accumSkips % 30 == 0) Log.d("FREEZE_DEBUG", "ACCUM_LOOP skippedTicks=$accumSkips")
-                }
                 val startTime = System.currentTimeMillis()
                 if (frame != null && !isCaptured.get() && isReadyForAccumulation &&
                     isAccumulatingFrames.compareAndSet(false, true)
@@ -353,12 +319,55 @@ abstract class ImageProcessor(
                         isAccumulatingFrames.set(false)
                     }
                 }
-                val workDuration = SystemClock.uptimeMillis() - loopTickStart
-                Log.d(
-                    "FREEZE_DEBUG",
-                    "ACCUM_LOOP tick @ $loopTickStart workDuration=${workDuration}ms"
-                )
                 delay(max(1, 33 - (System.currentTimeMillis() - startTime)))
+            }
+        }
+
+        yoloTestJob = coroutineScope.launch(stage1LoopsDispatcher) {
+            while (true) {
+                val frame = latestRawFrame5.getAndSet(null)
+                val analyzer = fingerYoloAnalyzer
+                if (frame != null && analyzer != null && !isCaptured.get()) {
+                    try {
+                        val t0 = SystemClock.uptimeMillis()
+                        val boxes = analyzer.detect(frame)
+                        val swapped = frame.rotationDegrees == 90 || frame.rotationDegrees == 270
+                        val upright = if (swapped) Size(frame.height, frame.width) else Size(
+                            frame.width,
+                            frame.height
+                        )
+                        val distances = boxes.map {
+                            controller.getYoloFingerDistanceMM(
+                                it,
+                                upright,
+                                frame.rotationDegrees
+                            )
+                        }
+                        val largest =
+                            boxes.indices.maxByOrNull { boxes[it].width() * boxes[it].height() }
+                        fingerDistanceTracker.record(largest?.let { distances[it] })
+                        val parts = boxes.mapIndexed { i, b ->
+                            "w=${b.width().toInt()}px h=${
+                                b.height().toInt()
+                            }px d=${distances[i].toInt()}mm"
+                        }
+                        Log.i(
+                            "YOLO_SINGLE",
+                            "boxes=${boxes.size} frame=${upright.width}x${upright.height} " +
+                                    "took=${SystemClock.uptimeMillis() - t0}ms [${
+                                        parts.joinToString(
+                                            " | "
+                                        )
+                                    }] " +
+                                    "verdict=${fingerDistanceTracker.verdict()} gate=${fingerDistanceTracker.isGoodAndStable()}"
+                        )
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w("YOLO_SINGLE", "test failed", e)
+                    }
+                }
+                delay(100)
             }
         }
 
@@ -384,7 +393,10 @@ abstract class ImageProcessor(
     private suspend fun processStage1(frame: CameraFrame) = coroutineScope {
         try {
             if (System.currentTimeMillis() - frame.timestamp > 500) {
-                Log.w(TAG, "STAGE1_SKIP -- stale frame, age=${System.currentTimeMillis() - frame.timestamp}ms")
+                Log.w(
+                    TAG,
+                    "STAGE1_SKIP -- stale frame, age=${System.currentTimeMillis() - frame.timestamp}ms"
+                )
                 return@coroutineScope
             }
             val cutoutRect = provider.getCutoutRectInImageCoordinates(
@@ -392,7 +404,10 @@ abstract class ImageProcessor(
                 frame.rotationDegrees
             )
             if (!CutoutRectUtils.isValid(cutoutRect)) {
-                Log.w(TAG, "STAGE1_SKIP -- invalid cutout=$cutoutRect previewSize=${provider.previewSize}")
+                Log.w(
+                    TAG,
+                    "STAGE1_SKIP -- invalid cutout=$cutoutRect previewSize=${provider.previewSize}"
+                )
                 return@coroutineScope
             }
             val (croppedByteArray, croppedByteArraySize) = frame.getByteArray(
@@ -443,17 +458,37 @@ abstract class ImageProcessor(
                     )
                 }
             } ?: warnings.add(Warning.NoFinger)
-            if (!provider.isFocusLockedForCapture) warnings.add(Warning.FocusNotLocked)
-            else passedProcessingStages.add(ProcessingStage.NA)
+
+            if (!provider.isFocusLockedForCapture) {
+                warnings.add(Warning.FocusNotLocked)
+            } else {
+                passedProcessingStages.add(ProcessingStage.NA)
+            }
+            val distanceVerdict =
+                if (USE_YOLO_DISTANCE) fingerDistanceTracker.verdict() else FingerDistanceTracker.Verdict.UNKNOWN
+            when (distanceVerdict) {
+                FingerDistanceTracker.Verdict.TOO_CLOSE ->
+                    if (Warning.FingerTooClose !in warnings) warnings.add(Warning.FingerTooClose)
+
+                FingerDistanceTracker.Verdict.TOO_FAR ->
+                    if (Warning.FingerTooFar !in warnings) warnings.add(Warning.FingerTooFar)
+
+                else -> Unit
+            }
+
+            val distanceOk = !USE_YOLO_DISTANCE || fingerDistanceTracker.isGoodAndStable()
+
             val isStage1PassedGate = if (strategyConfig.useRollingConfidence) {
                 blurRunner.isConfident() && fingerRunner.isConfident() &&
                         glareRunner.isConfident() && brightnessRunner.isConfident() &&
-                        provider.isFocusLockedForCapture
+                        provider.isFocusLockedForCapture && distanceOk
             } else {
                 glare.passed && brightness.passed && blurRunner.isPassed &&
-                        fingerRunner.passed && provider.isFocusLockedForCapture
+                        fingerRunner.passed && provider.isFocusLockedForCapture && distanceOk
             }
+
             isStage1Passed.set(isStage1PassedGate)
+
             if (isStage1PassedGate) {
                 stage1PassedTime.compareAndSet(null, SystemClock.uptimeMillis())
             } else {
@@ -461,6 +496,7 @@ abstract class ImageProcessor(
                 stage1PassedTime.set(null)
                 synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
             }
+
             val liveScores = LiveQualityScores(
                 blur = LiveCheckScore(
                     label = "Blur",
@@ -504,7 +540,10 @@ abstract class ImageProcessor(
                 )
             )
             if (firstScoreEmitted.compareAndSet(false, true)) {
-                Log.i("UX_BENCHMARK", "TIME_TO_FIRST_SCORE = ${SystemClock.elapsedRealtime() - captureStartTime.get()}ms")
+                Log.i(
+                    "UX_BENCHMARK",
+                    "TIME_TO_FIRST_SCORE = ${SystemClock.elapsedRealtime() - captureStartTime.get()}ms"
+                )
             }
             listener.onStage1ResultValues(liveScores)
             listener.onStage1Result(isStage1Passed.get(), warnings, passedProcessingStages)
@@ -543,9 +582,7 @@ abstract class ImageProcessor(
     abstract suspend fun processStage2(candidateBatch: List<CameraFrame>)
 
     override fun onImageAvailable(reader: ImageReader) {
-        Log.d("FREEZE_DEBUG", "onImageAvailable TICK @ ${SystemClock.uptimeMillis()}")
         if (isCollectingImage.compareAndSet(false, true)) {
-            val tickStart = SystemClock.uptimeMillis()
             try {
                 val image = reader.acquireLatestImage() ?: return
                 startCaptureTimer()
@@ -560,8 +597,7 @@ abstract class ImageProcessor(
                         rotationDegrees = provider.totalRotation,
                         yRowStride = it.planes[0].rowStride
                     )
-                    val convMs = SystemClock.uptimeMillis() - tickStart   // set tickStart at method entry
-                    Log.d("FREEZE_DEBUG", "FRAME_BUILT id=$processingId convertMs=$convMs size=${it.width}x${it.height}")
+                    latestRawFrame5.set(cameraFrame)
                     latestRawFrame4.set(cameraFrame)
                     latestRawFrame3.set(cameraFrame)
                     latestRawFrame2.set(cameraFrame)
@@ -590,6 +626,7 @@ abstract class ImageProcessor(
         latestRawFrame2.get()?.clearCroppedCache(); latestRawFrame2.set(null)
         latestRawFrame3.get()?.clearCroppedCache(); latestRawFrame3.set(null)
         latestRawFrame4.get()?.clearCroppedCache(); latestRawFrame4.set(null)
+        latestRawFrame5.get()?.clearCroppedCache(); latestRawFrame5.set(null)
         synchronized(finalBuffer) { finalBuffer.clear() }
         synchronized(capturedFrameBuffer) { capturedFrameBuffer.clear() }
         _capturedFrameFlow.update { null }
@@ -603,13 +640,14 @@ abstract class ImageProcessor(
 
     open fun close() {
         stage1Job?.cancel(); fingerCheckJob?.cancel(); mediapipeCheckJob?.cancel(); blurCheckJob?.cancel()
-        accumulatorJob?.cancel(); stage2Job?.cancel()
+        accumulatorJob?.cancel(); stage2Job?.cancel(); yoloTestJob?.cancel()
         stage1LoopsDispatcher.close()
         latestRawFrame0.get()?.clearCroppedCache()
         latestRawFrame1.get()?.clearCroppedCache()
         latestRawFrame2.get()?.clearCroppedCache()
         latestRawFrame3.get()?.clearCroppedCache()
         latestRawFrame4.get()?.clearCroppedCache()
+        latestRawFrame5.get()?.clearCroppedCache()
         synchronized(capturedFrameBuffer) { capturedFrameBuffer.forEach { it.clearCroppedCache() } }
         bestStage1Frame.get()?.frame?.clearCroppedCache()
     }
@@ -625,6 +663,12 @@ abstract class ImageProcessor(
         fun triggerFocusLock(fingerRect: RectF, cutoutRect: RectF, imageSize: Size)
         fun triggerFocusUnlock()
         fun triggerCapture()
+        fun getYoloFingerDistanceMM(
+            fingerBoxUpright: RectF,
+            uprightImageSize: Size,
+            rotationDegrees: Int
+        ): Float = -1f
+
         suspend fun saveBitmap(bitmap: Bitmap, fileName: String): Uri
     }
 

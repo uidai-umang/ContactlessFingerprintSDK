@@ -53,7 +53,7 @@ class CameraController @Inject constructor(
 
     companion object {
         private val TAG = CameraController::class.simpleName
-        private const val IMAGE_BUFFER_SIZE: Int = 1
+        private const val IMAGE_BUFFER_SIZE: Int = 3
         private const val IMAGE_FORMAT = ImageFormat.YUV_420_888
         private const val DESIRED_UPPER_FPS = 24
 
@@ -738,6 +738,17 @@ class CameraController @Inject constructor(
         if (perceivedWidthPixels <= 0) return 0f
 
         return 2 * (getFocalLengthInMM() * slapAverageFingerWidthMM * imageWidthPixels) /
+                (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
+    }
+
+    fun getSingleYoloDistanceMM(fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float {
+        val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
+        val sensorPhysical = getSensorPhysicalSize()
+        val sensorWidthMMForUprightWidthAxis = if (axesSwapped) sensorPhysical.height else sensorPhysical.width
+        // A finger box is elongated, so its SHORT side is the finger's physical width.
+        val perceivedWidthPixels = minOf(fingerBoxUpright.width(), fingerBoxUpright.height())
+        if (perceivedWidthPixels <= 0) return 0f
+        return 2 * (getFocalLengthInMM() * averageFingerWidthMM * uprightImageSize.width.toFloat()) /
                 (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
     }
 

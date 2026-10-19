@@ -42,6 +42,7 @@ import app.gov.uidai.capture.ui.guideline.GuidelineScreen
 import app.gov.uidai.capture.ui.settings.DebugSettingsScreen
 import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
+import app.gov.uidai.capture.utils.MainThreadWatchdog
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import dagger.hilt.android.AndroidEntryPoint
@@ -95,6 +96,7 @@ class CaptureActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) MainThreadWatchdog.start()
         enableEdgeToEdge()
 
         if (!Python.isStarted()) {
