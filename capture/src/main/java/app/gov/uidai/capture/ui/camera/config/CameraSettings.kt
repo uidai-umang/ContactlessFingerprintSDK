@@ -28,14 +28,14 @@ object CameraSettings : PreferenceGroup {
         "camera.focus_type",
         "Focus Type",
         PreferenceType.CHOICE(options = FocusType.entries),
-        FocusType.ManualFocusAtFingerDistance
+        FocusType.ManualFocusAtFixedDistance
     )
 
     val MANUAL_FOCUS_DISTANCE = PreferenceParam(
         "camera.manual_focus_distance",
         "Manual Focus Distance (m)",
         PreferenceType.FLOAT,
-        0.1f
+        0.12f
     )
 
     val TARGET_HAND_DISTANCE_MM = PreferenceParam(
@@ -69,7 +69,7 @@ object CameraSettings : PreferenceGroup {
         "camera.average_finger_width",
         "Average Finger Width (mm)",
         PreferenceType.FLOAT,
-        9.5f
+        14f
     )
 
     val AVERAGE_HAND_WIDTH_MM = PreferenceParam(
