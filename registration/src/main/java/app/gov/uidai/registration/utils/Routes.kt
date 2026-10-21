@@ -12,6 +12,14 @@ sealed class Routes(val route: String) {
 
     data object UidEntry : Routes(PATH_UID_ENTRY)
 
+    data object Guideline :
+        Routes("$PATH_GUIDELINE/{$ARG_REF_ID}/{$ARG_DOB}/{$ARG_GENDER}") {
+        fun createRoute(resident: ResidentInput) =
+            "$PATH_GUIDELINE/${resident.refId}/${resident.dob}/${resident.gender}"
+    }
+
+    data object DebugSettings : Routes(PATH_DEBUG_SETTINGS)
+
     data object CaptureMethod :
         Routes("$PATH_CAPTURE_METHOD/{$ARG_REF_ID}/{$ARG_DOB}/{$ARG_GENDER}") {
         fun createRoute(resident: ResidentInput) =
@@ -37,6 +45,8 @@ sealed class Routes(val route: String) {
     companion object {
         private const val PATH_REGISTER_OPERATOR = "register_operator"
         private const val PATH_UID_ENTRY = "uid_entry"
+        private const val PATH_GUIDELINE = "guideline"
+        private const val PATH_DEBUG_SETTINGS = "debug_settings"
         private const val PATH_CAPTURE_METHOD = "capture_method"
         private const val PATH_REGISTRATION = "registration"
         private const val PATH_USER_INFO = "user_info"

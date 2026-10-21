@@ -31,6 +31,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.gov.uidai.capture.ui.guideline.GuidelineScreen
+import app.gov.uidai.capture.ui.settings.DebugSettingsScreen
 import app.gov.uidai.registration.connectivity.ConnectivityObserver
 import app.gov.uidai.registration.connectivity.ui.NoInternetScreen
 import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
@@ -152,9 +154,30 @@ class RegistrationActivity : ComponentActivity() {
                                     sharedUiState = sharedUiState,
                                     onClearSharedMessage = sharedViewModel::clearError,
                                     onNavigateToRegistration = { resident ->
-                                        navController.navigate(Routes.CaptureMethod.createRoute(resident))
+                                        navController.navigate(Routes.Guideline.createRoute(resident))
                                     }
                                 )
+                            }
+                            composable(
+                                route = Routes.Guideline.route,
+                                arguments = residentNavArguments
+                            ) { backStackEntry ->
+                                val resident = backStackEntry.residentInput()
+                                GuidelineScreen(
+                                    txnId = "",
+                                    onBack = { navController.navigateUp() },
+                                    onProceed = {
+                                        // GuidelineScreen sets isLoading on proceed and never
+                                        // resets it, so it must not stay on the back stack.
+                                        navController.navigate(Routes.CaptureMethod.createRoute(resident)) {
+                                            popUpTo(Routes.Guideline.route) { inclusive = true }
+                                        }
+                                    },
+                                    onDebugSettings = { navController.navigate(Routes.DebugSettings.route) }
+                                )
+                            }
+                            composable(Routes.DebugSettings.route) {
+                                DebugSettingsScreen(onNavigateUp = { navController.navigateUp() })
                             }
                             composable(
                                 route = Routes.CaptureMethod.route,

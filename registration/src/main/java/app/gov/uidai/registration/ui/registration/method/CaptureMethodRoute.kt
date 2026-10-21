@@ -838,7 +838,7 @@ private fun CaptureMethodBottomBar(
             Text(
                 text = when {
                     isLocked -> "Continue capture →"
-                    isMethodReadyToContinue -> "Continue to guidelines →"
+                    isMethodReadyToContinue -> "Start capture →"
                     else -> "Continue"
                 },
                 fontSize = 14.sp,
