@@ -40,7 +40,8 @@ class FingerSDKManagerImpl(
     override fun captureFingerprint(
         activityResultLauncher: ActivityResultLauncher<Intent>,
         purpose: String,
-        fingerPosition: FingerPosition
+        fingerPosition: FingerPosition,
+        skipGuideline: Boolean
     ) {
         val txnId = UUID.randomUUID().toString()
         try {
@@ -58,7 +59,8 @@ class FingerSDKManagerImpl(
                     purpose = purpose,
                     wantFullImage = true,
                     wantCroppedImage = true,
-                    fingerType = fingerPosition.name
+                    fingerType = fingerPosition.name,
+                    skipGuideline = skipGuideline
                 ),
                 callingPackage = context.packageName
             )
@@ -80,6 +82,7 @@ class FingerSDKManagerImpl(
                         context.contentResolver.openInputStream(it)?.bufferedReader()
                             ?.use { reader -> reader.readText() }
                     }
+                    uri?.let { runCatching { context.contentResolver.delete(it, null, null) } }
                     val responseExtra = data?.getStringExtra(RESPONSE_KEY)
                     Log.d(TAG, "SDK Response - Extra: $responseExtra")
                     val (blurScore, brightnessScore, glareScore) = parseScoresFromResponseXml(responseExtra)
@@ -129,7 +132,8 @@ class FingerSDKManagerImpl(
         purpose: String,
         wantFullImage: Boolean,
         wantCroppedImage: Boolean,
-        fingerType: String
+        fingerType: String,
+        skipGuideline: Boolean
     ): String {
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                 "<PidOptions ver=\"1.0\" env=\"S\">\n" +
@@ -141,6 +145,7 @@ class FingerSDKManagerImpl(
                 "      <Param name=\"fullImage\" value=\"${wantFullImage}\"/>\n" +
                 "      <Param name=\"croppedImage\" value=\"${wantCroppedImage}\"/>\n" +
                 "      <Param name=\"fingerType\" value=\"${fingerType}\"/>\n" +
+                "      <Param name=\"skipGuideLine\" value=\"${skipGuideline}\"/>\n" +
                 "   </CustOpts>\n" +
                 "</PidOptions>".trimIndent()
     }

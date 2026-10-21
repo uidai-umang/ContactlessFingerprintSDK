@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.domain.method.final_processing.FinalProcessingU2Net
 import app.gov.uidai.capture.domain.model.SegmentedFrame
 import app.gov.uidai.capture.pref.PreferenceStore
@@ -171,12 +172,16 @@ class CameraViewModel @Inject constructor(
         bitmap: Bitmap,
         captureName: String
     ): Uri {
+        if (!BuildConfig.DEBUG) return Uri.EMPTY
         return fileRepository.saveBitmapAndGetUri(bitmap, captureName)
     }
 
     suspend fun processImageAfterSuccess(segmentedFrame: SegmentedFrame): String =
         withContext(Dispatchers.Default) {
             sessionTimerManager.stopSessionTimer()
+
+            if (!BuildConfig.DEBUG) return@withContext segmentedFrame.finalBitmap.toBase64()
+
             delay(300)
             val startTime = SystemClock.uptimeMillis()
 

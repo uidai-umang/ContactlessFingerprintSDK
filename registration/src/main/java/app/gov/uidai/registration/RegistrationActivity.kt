@@ -37,6 +37,7 @@ import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
 import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
 import app.gov.uidai.registration.model.CaptureMode
+import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
 import app.gov.uidai.registration.ui.operator.RegisterOperatorRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
@@ -178,28 +179,24 @@ class RegistrationActivity : ComponentActivity() {
                                 val slapCaptureLauncher = rememberLauncherForActivityResult(
                                     ActivityResultContracts.StartActivityForResult()
                                 ) { result ->
-                                    val handType = pendingSlapSubOption?.let {
-                                        if (it == SlapSubOption.LEFT_SLAP) "Left" else "Right"
-                                    }
+                                    val handType = pendingSlapSubOption?.let { if (it == SlapSubOption.LEFT_SLAP) "Left" else "Right" }
                                     when (result.resultCode) {
                                         ResultCode.SDK_SUCCESS -> {
                                             val uri = result.data?.data
                                             val responseXml = result.data?.getStringExtra(JourneyConstant.RESPONSE)
-
-                                            if (handType != null) {
-                                                registrationViewModel.markSlapProcessing(handType)
-                                            }
+                                            if (handType != null) registrationViewModel.markSlapProcessing(handType)
 
                                             lifecycleScope.launch(Dispatchers.Default) {
                                                 val base64String = uri?.let {
                                                     context.contentResolver.openInputStream(it)?.bufferedReader()
                                                         ?.use { reader -> reader.readText() }
                                                 }
+                                                uri?.let { runCatching { context.contentResolver.delete(it, null, null) } }
                                                 if (base64String != null && handType != null) {
                                                     val bitmap = base64String.toBitmap()
                                                     val jp2ByteArray = JP2Encoder(bitmap).encode()
-                                                    val (blurScore, brightnessScore, glareScore) =
-                                                        parseSlapScoresFromResponseXml(responseXml)
+                                                    val (blurScore, brightnessScore, glareScore) = parseSlapScoresFromResponseXml(responseXml)
+                                                    // starts the background upload AND advances the sequence
                                                     registrationViewModel.uploadSlapResult(
                                                         handType = handType,
                                                         imageBytes = jp2ByteArray,
@@ -209,20 +206,39 @@ class RegistrationActivity : ComponentActivity() {
                                                     )
                                                 } else {
                                                     Log.w("SlapCapture", "No image data in slap capture result")
+                                                    registrationViewModel.cancelSequence()
                                                 }
                                             }
                                         }
-                                        else -> Log.d(
-                                            "SlapCapture",
-                                            "Slap capture activity result: resultCode=${result.resultCode}"
-                                        )
+                                        else -> {
+                                            Log.d("SlapCapture", "Slap capture activity result: resultCode=${result.resultCode}")
+                                            registrationViewModel.cancelSequence()
+                                        }
                                     }
                                 }
 
                                 val thumbCaptureLauncher = rememberLauncherForActivityResult(
                                     ActivityResultContracts.StartActivityForResult()
-                                ) { result ->
-                                    registrationViewModel.handleSdkActivityResult(result.resultCode, result.data)
+                                ) { result -> registrationViewModel.handleSdkActivityResult(result.resultCode, result.data) }
+
+                                val launchPosition: (FingerPosition) -> Unit = { position ->
+                                    val slapOption = when (position) {
+                                        FingerPosition.LEFT_SLAP -> SlapSubOption.LEFT_SLAP
+                                        FingerPosition.RIGHT_SLAP -> SlapSubOption.RIGHT_SLAP
+                                        else -> null
+                                    }
+                                    if (slapOption != null) {
+                                        pendingSlapSubOption = slapOption
+                                        slapCaptureLauncher.launch(
+                                            SlapCaptureLauncher.createIntent(context, purpose = "register", slapSubOption = slapOption)
+                                        )
+                                    } else {
+                                        registrationViewModel.captureFingerprint(position, thumbCaptureLauncher)
+                                    }
+                                }
+
+                                LaunchedEffect(registrationViewModel) {
+                                    registrationViewModel.nextCapture.collect { launchPosition(it) }
                                 }
 
                                 CaptureMethodRoute(
@@ -234,18 +250,7 @@ class RegistrationActivity : ComponentActivity() {
                                     },
                                     onContinueSlap = { slapSubOption ->
                                         registrationViewModel.setSelectedCaptureMode(CaptureMode.SLAP)
-                                        if (slapSubOption.usesSingleFingerCapture) {
-                                            val fingerPosition = slapSubOption.toFingerPositionOrNull()!!
-                                            registrationViewModel.captureFingerprint(fingerPosition, thumbCaptureLauncher)
-                                        } else {
-                                            pendingSlapSubOption = slapSubOption
-                                            val intent = SlapCaptureLauncher.createIntent(
-                                                context = context,
-                                                purpose = "register",
-                                                slapSubOption = slapSubOption
-                                            )
-                                            slapCaptureLauncher.launch(intent)
-                                        }
+                                        registrationViewModel.startSlapSequence(slapSubOption.toFingerPositionOrNull()!!)
                                     }
                                 )
                             }

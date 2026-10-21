@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.domain.model.LiveCheckScore
 import app.gov.uidai.capture.domain.model.LiveQualityScores
 import app.gov.uidai.capture.domain.model.ProcessingStage
@@ -304,24 +305,31 @@ fun CameraScreen(
 
     LaunchedEffect(captureState) {
         if (captureState is CaptureState.Success) {
-            showReviewScreen = true
-            reviewBitmap = null
             val segmentedFrame = imageProcessor?.getFinalFrame()
-            if (segmentedFrame != null) {
-                val encodedBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
-                pendingCaptureResult = CaptureResult(
-                    resultCode = ResultCode.CAPTURE_SUCCESS,
-                    finalImage = encodedBitmap,
-                    fullImage = segmentedFrame.fullBitmap.toBase64(),
-                    croppedImage = segmentedFrame.croppedBitmap.toBase64(),
-                    blurScore = segmentedFrame.blurScore,
-                    brightnessScore = segmentedFrame.brightnessScore,
-                    glareScore = segmentedFrame.glareScore
-                )
-                reviewBitmap = segmentedFrame.croppedBitmap
-            } else {
+            if (segmentedFrame == null) {
                 showReviewScreen = false
                 finish(CaptureResult(resultCode = ResultCode.CAPTURE_FAILED))
+                return@LaunchedEffect
+            }
+            if (BuildConfig.DEBUG) {
+                showReviewScreen = true
+                reviewBitmap = null
+            }
+            val encodedBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
+            val result = CaptureResult(
+                resultCode = ResultCode.CAPTURE_SUCCESS,
+                finalImage = encodedBitmap,
+                fullImage = segmentedFrame.fullBitmap.toBase64(),
+                croppedImage = segmentedFrame.croppedBitmap.toBase64(),
+                blurScore = segmentedFrame.blurScore,
+                brightnessScore = segmentedFrame.brightnessScore,
+                glareScore = segmentedFrame.glareScore
+            )
+            if (BuildConfig.DEBUG) {
+                pendingCaptureResult = result
+                reviewBitmap = segmentedFrame.croppedBitmap
+            } else {
+                finish(result)   // release: straight back to the sequence driver
             }
         }
     }

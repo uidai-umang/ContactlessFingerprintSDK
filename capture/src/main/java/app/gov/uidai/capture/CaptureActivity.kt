@@ -65,6 +65,8 @@ class CaptureActivity : ComponentActivity() {
     private var returnCroppedImage: Boolean = false
     private var fingerType: String = ""
 
+    private var skipGuideline: Boolean = false
+
     companion object {
         private val TAG = CaptureActivity::class.simpleName
 
@@ -114,6 +116,7 @@ class CaptureActivity : ComponentActivity() {
             returnFullImage = pidOptions.custOpts?.param?.find { it.name == "fullImage" }?.value == "true"
             returnCroppedImage = pidOptions.custOpts?.param?.find { it.name == "croppedImage" }?.value == "true"
             fingerType = pidOptions.custOpts?.param?.find { it.name == "fingerType" }?.value.orEmpty()
+            skipGuideline = pidOptions.custOpts?.param?.find { it.name == "skipGuideline" }?.value == "true"
             Log.d(TAG, "Transaction Id: $txnId")
         } catch (_: Exception) {
             Toast.makeText(this, "Wrong Input PID Options Provided!", Toast.LENGTH_LONG).show()
@@ -197,12 +200,15 @@ class CaptureActivity : ComponentActivity() {
         // Guideline screen entirely -- there's no slap variant of it in
         // scope, and SlapCaptureRoute's own hand label already gives the
         // operator the context Guideline would have.
+
         val isSlapCapture = fingerType == "Left" || fingerType == "Right"
-        val startDestination = if (isSlapCapture) {
-            CaptureRoutes.SlapCamera.createRoute(txnId, fingerType)
-        } else {
-            CaptureRoutes.Guideline.createRoute(txnId)
+
+        val startDestination = when {
+            isSlapCapture -> CaptureRoutes.SlapCamera.createRoute(txnId, fingerType)
+            skipGuideline -> CaptureRoutes.Camera.createRoute(txnId, fingerType)
+            else -> CaptureRoutes.Guideline.createRoute(txnId)
         }
+
         NavHost(navController = navController, startDestination = startDestination) {
             composable(
                 route = CaptureRoutes.Guideline.route,

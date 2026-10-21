@@ -161,21 +161,23 @@ fun SlapCaptureRoute(
 
     LaunchedEffect(capturedBitmap) {
         val bitmap = capturedBitmap ?: return@LaunchedEffect
-        // Show the review screen IMMEDIATELY with a null bitmap so
-        // CaptureReviewScreen renders its spinner, then fill both in once
-        // segmentation + ridge processing finish.
-        showReviewScreen = true
-        reviewBitmap = null
+        if (BuildConfig.DEBUG) {
+            showReviewScreen = true
+            reviewBitmap = null
+        }
         val ridgeBase64 = viewModel.processCapturedImage(bitmap, handType)
-        pendingResult = CaptureResult(
+        val result = CaptureResult(
             resultCode = ResultCode.CAPTURE_SUCCESS,
             finalImage = ridgeBase64,
             fullImage = ridgeBase64,
             croppedImage = ridgeBase64
         )
-        // Review shows the COLOUR crop; the ridge image is what gets
-        // saved and uploaded -- same split as single capture.
-        reviewBitmap = bitmap
+        if (BuildConfig.DEBUG) {
+            pendingResult = result
+            reviewBitmap = bitmap
+        } else {
+            onFinish(result)
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(PageBackground)) {

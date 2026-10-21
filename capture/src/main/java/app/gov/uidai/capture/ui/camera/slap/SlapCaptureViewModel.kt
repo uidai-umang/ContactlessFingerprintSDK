@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.camera.config.CameraSettings
@@ -121,7 +122,7 @@ class SlapCaptureViewModel @Inject constructor(
      * is null.
      */
 
-    private val slapFingerprintProcessor = SlapFingerprintProcessor(context = appContext)
+    private val slapFingerprintProcessor by lazy { SlapFingerprintProcessor(context = appContext) }
 
     suspend fun processCapturedImage(
         colourCrop: Bitmap,
@@ -129,6 +130,8 @@ class SlapCaptureViewModel @Inject constructor(
     ): String = withContext(Dispatchers.Default) {
 
         setTorch(false)
+
+        if (!BuildConfig.DEBUG) return@withContext colourCrop.toBase64()
 
         try {
             val slapHandType = if (handType.equals("LEFT", ignoreCase = true)) {

@@ -32,6 +32,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import `in`.gov.uidai.utility.constants.ResultCode
+import app.gov.uidai.registration.BuildConfig
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 // Hoisted to Activity scope (see RegistrationActivity: `by viewModels()`,
 // passed into both CaptureMethodRoute and RegistrationRoute) instead of
@@ -64,6 +70,50 @@ class RegistrationViewModel @Inject constructor(
 
     private val testDeviceId = "00000000-0000-0000-0000-000000000002"
     private val testCentreId = "00000000-0000-0000-0000-000000000003"
+
+
+    // ---- Auto-advance capture sequence ----
+    private val captureSequence = ArrayDeque<FingerPosition>()
+    private var guidelineShownInSequence = false
+    private val uploadMutex = Mutex()
+    private val _nextCapture = Channel<FingerPosition>(Channel.BUFFERED)
+    val nextCapture = _nextCapture.receiveAsFlow()
+
+    private fun FingerPosition.isDone() = when (_uiState.value.fingerUploadStatus[this]) {
+        FingerCaptureStatus.CAPTURED, FingerCaptureStatus.PENDING, FingerCaptureStatus.UPLOADING -> true
+        else -> false
+    }
+
+    /** Sequential mode: tapped finger first, then the rest of that hand, thumb -> little. */
+    fun startHandSequence(start: FingerPosition) {
+        val hand = if (start.name.startsWith("LEFT")) "LEFT" else "RIGHT"
+        val order = listOf("THUMB", "INDEX", "MIDDLE", "RING", "LITTLE")
+            .map { FingerPosition.valueOf("${hand}_$it") }
+        beginSequence(listOf(start) + order.filter { it != start && !it.isDone() })
+    }
+
+    /** Slap mode: chosen option first, then LEFT_SLAP, RIGHT_SLAP, LEFT_THUMB, RIGHT_THUMB. */
+    fun startSlapSequence(start: FingerPosition) {
+        val canonical = listOf(
+            FingerPosition.LEFT_SLAP, FingerPosition.RIGHT_SLAP,
+            FingerPosition.LEFT_THUMB, FingerPosition.RIGHT_THUMB
+        )
+        beginSequence(listOf(start) + canonical.filter { it != start && !it.isDone() })
+    }
+
+    private fun beginSequence(positions: List<FingerPosition>) {
+        captureSequence.clear()
+        captureSequence.addAll(positions)
+        guidelineShownInSequence = false
+        advanceSequence()
+    }
+
+    private fun advanceSequence() {
+        captureSequence.removeFirstOrNull()?.let { _nextCapture.trySend(it) }
+    }
+
+    fun cancelSequence() = captureSequence.clear()
+
 
     init {
         sdkManager.setResultListener { result -> onSDKResult(result) }
@@ -219,9 +269,11 @@ class RegistrationViewModel @Inject constructor(
                         glareScore = data.glareScore
                     )
                 }
+                advanceSequence()
             }
 
             is SDKResult.Error -> {
+                cancelSequence()
                 _uiState.update {
                     currentState.copy(
                         loadingFinger = null,
@@ -275,6 +327,7 @@ class RegistrationViewModel @Inject constructor(
                 glareScore = glareScore
             )
         }
+        advanceSequence()
     }
 
     private suspend fun uploadCapture(
@@ -308,7 +361,7 @@ class RegistrationViewModel @Inject constructor(
             thumbprint = encrypted.thumbprint
         )
 
-        val result = captureQueueManager.uploadOrQueue(request)
+        val result = uploadMutex.withLock { captureQueueManager.uploadOrQueue(request) }
 
         when (result) {
             is ApiResult.Success -> {
@@ -408,7 +461,7 @@ class RegistrationViewModel @Inject constructor(
                     fingerprints = fingerprints
                 )
 
-                saveRegisteredImagesToGallery(fingerprints = fingerprints)
+                if (BuildConfig.DEBUG) saveRegisteredImagesToGallery(fingerprints = fingerprints)
 
                 _registrationResult.update { RegistrationResult.Success }
 
@@ -443,17 +496,20 @@ class RegistrationViewModel @Inject constructor(
         }
 
     fun handleSdkActivityResult(resultCode: Int, data: Intent?) {
-        viewModelScope.launch {
-            sdkManager.parseResponse(resultCode, data)
-        }
+        if (resultCode != ResultCode.SDK_SUCCESS) cancelSequence()   // abort/fail/timeout stops the chain
+        viewModelScope.launch { sdkManager.parseResponse(resultCode, data) }
     }
 
-    fun captureFingerprint(
-        fingerPosition: FingerPosition,
-        launcher: ActivityResultLauncher<Intent>
-    ) {
+    fun captureFingerprint(fingerPosition: FingerPosition, launcher: ActivityResultLauncher<Intent>) {
         startFingerprintCapture(fingerPosition) {
-            sdkManager.captureFingerprint(activityResultLauncher = launcher, purpose = "register", fingerPosition = fingerPosition)
+            val skipGuideline = guidelineShownInSequence   // guideline once per sequence
+            guidelineShownInSequence = true
+            sdkManager.captureFingerprint(
+                activityResultLauncher = launcher,
+                purpose = "register",
+                fingerPosition = fingerPosition,
+                skipGuideline = skipGuideline
+            )
         }
     }
 

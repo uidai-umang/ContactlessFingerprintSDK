@@ -87,6 +87,9 @@ fun RegistrationRoute(
     ) { result -> viewModel.handleSdkActivityResult(result.resultCode, result.data) }
 
     LaunchedEffect(resident) { viewModel.setResident(resident) }
+    LaunchedEffect(viewModel) {
+        viewModel.nextCapture.collect { position -> viewModel.captureFingerprint(position, sdkLauncher) }
+    }
 
     Scaffold(
         topBar = {
@@ -107,7 +110,7 @@ fun RegistrationRoute(
             uiState = uiState,
             onAddFingerprint = {
                 keyboardController?.hide()
-                viewModel.captureFingerprint(it, sdkLauncher)
+                viewModel.startHandSequence(it)
             },
             onRemoveFingerprint = viewModel::removeFingerprint,
             onSaveRegistration = viewModel::registerUser,
