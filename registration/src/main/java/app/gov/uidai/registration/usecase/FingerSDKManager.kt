@@ -36,8 +36,7 @@ interface FingerSDKManager {
     fun captureFingerprint(
         activityResultLauncher: ActivityResultLauncher<Intent>,
         purpose: String,
-        fingerPosition: FingerPosition,
-        skipGuideline: Boolean = false
+        fingerPosition: FingerPosition
     )
 
     /**

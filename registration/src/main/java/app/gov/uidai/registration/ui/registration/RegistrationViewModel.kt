@@ -74,7 +74,6 @@ class RegistrationViewModel @Inject constructor(
 
     // ---- Auto-advance capture sequence ----
     private val captureSequence = ArrayDeque<FingerPosition>()
-    private var guidelineShownInSequence = false
     private val uploadMutex = Mutex()
     private val _nextCapture = Channel<FingerPosition>(Channel.BUFFERED)
     val nextCapture = _nextCapture.receiveAsFlow()
@@ -104,7 +103,6 @@ class RegistrationViewModel @Inject constructor(
     private fun beginSequence(positions: List<FingerPosition>) {
         captureSequence.clear()
         captureSequence.addAll(positions)
-        guidelineShownInSequence = false
         advanceSequence()
     }
 
@@ -502,13 +500,10 @@ class RegistrationViewModel @Inject constructor(
 
     fun captureFingerprint(fingerPosition: FingerPosition, launcher: ActivityResultLauncher<Intent>) {
         startFingerprintCapture(fingerPosition) {
-            val skipGuideline = guidelineShownInSequence   // guideline once per sequence
-            guidelineShownInSequence = true
             sdkManager.captureFingerprint(
                 activityResultLauncher = launcher,
                 purpose = "register",
-                fingerPosition = fingerPosition,
-                skipGuideline = skipGuideline
+                fingerPosition = fingerPosition
             )
         }
     }

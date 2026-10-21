@@ -38,7 +38,6 @@ import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.camera.CameraScreen
 import app.gov.uidai.capture.ui.camera.CaptureResult
 import app.gov.uidai.capture.ui.camera.slap.SlapCaptureRoute
-import app.gov.uidai.capture.ui.guideline.GuidelineScreen
 import app.gov.uidai.capture.ui.settings.DebugSettingsScreen
 import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
@@ -65,7 +64,6 @@ class CaptureActivity : ComponentActivity() {
     private var returnCroppedImage: Boolean = false
     private var fingerType: String = ""
 
-    private var skipGuideline: Boolean = false
 
     companion object {
         private val TAG = CaptureActivity::class.simpleName
@@ -116,7 +114,6 @@ class CaptureActivity : ComponentActivity() {
             returnFullImage = pidOptions.custOpts?.param?.find { it.name == "fullImage" }?.value == "true"
             returnCroppedImage = pidOptions.custOpts?.param?.find { it.name == "croppedImage" }?.value == "true"
             fingerType = pidOptions.custOpts?.param?.find { it.name == "fingerType" }?.value.orEmpty()
-            skipGuideline = pidOptions.custOpts?.param?.find { it.name == "skipGuideline" }?.value == "true"
             Log.d(TAG, "Transaction Id: $txnId")
         } catch (_: Exception) {
             Toast.makeText(this, "Wrong Input PID Options Provided!", Toast.LENGTH_LONG).show()
@@ -203,27 +200,11 @@ class CaptureActivity : ComponentActivity() {
 
         val isSlapCapture = fingerType == "Left" || fingerType == "Right"
 
-        val startDestination = when {
-            isSlapCapture -> CaptureRoutes.SlapCamera.createRoute(txnId, fingerType)
-            skipGuideline -> CaptureRoutes.Camera.createRoute(txnId, fingerType)
-            else -> CaptureRoutes.Guideline.createRoute(txnId)
-        }
+        val startDestination =
+            if (isSlapCapture) CaptureRoutes.SlapCamera.createRoute(txnId, fingerType)
+            else CaptureRoutes.Camera.createRoute(txnId, fingerType)
 
         NavHost(navController = navController, startDestination = startDestination) {
-            composable(
-                route = CaptureRoutes.Guideline.route,
-                arguments = listOf(navArgument(CaptureRoutes.ARG_TXN_ID) { type = NavType.StringType })
-            ) { backStackEntry ->
-                val id = backStackEntry.arguments?.getString(CaptureRoutes.ARG_TXN_ID).orEmpty()
-                GuidelineScreen(
-                    txnId = id,
-                    onBack = { handleCaptureResult(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) },
-                    onProceed = { proceedTxnId ->
-                        navController.navigate(CaptureRoutes.Camera.createRoute(proceedTxnId, fingerType))
-                    },
-                    onDebugSettings = { navController.navigate(CaptureRoutes.DebugSettings.route) }
-                )
-            }
             composable(
                 route = CaptureRoutes.Camera.route,
                 arguments = listOf(navArgument(CaptureRoutes.ARG_TXN_ID) { type = NavType.StringType })
@@ -236,7 +217,7 @@ class CaptureActivity : ComponentActivity() {
                     cameraController = cameraController,
                     imageProcessorFactory = imageProcessorFactory,
                     preferenceStore = preferenceStore,
-                    onPopBackStack = { navController.popBackStack() },
+                    onPopBackStack = { handleCaptureResult(CaptureResult(resultCode = ResultCode.CAPTURE_FAILED)) },
                     onFinish = { result -> handleCaptureResult(result) }
                 )
             }
@@ -247,7 +228,7 @@ class CaptureActivity : ComponentActivity() {
                 val handType = backStackEntry.arguments?.getString(CaptureRoutes.ARG_HAND_TYPE).orEmpty()
                 SlapCaptureRoute(
                     handType = handType,
-                    onPopBackStack = { navController.popBackStack() },
+                    onPopBackStack = { handleCaptureResult(CaptureResult(resultCode = ResultCode.CAPTURE_FAILED)) },
                     onFinish = { result -> handleCaptureResult(result) }
                 )
             }
