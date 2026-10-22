@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -132,12 +133,12 @@ fun UidEntryScreen(
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
 
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
     ) {
-        val halfHeight = maxHeight * 0.30f
+        val halfHeight = LocalConfiguration.current.screenHeightDp.dp * 0.30f
 
         BackgroundWithGradient()
 

@@ -1,7 +1,7 @@
 package app.gov.uidai.registration.ui.operator
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -27,10 +28,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.registration.model.RegisterOperatorUiState
 import app.gov.uidai.registration.ui.composable.LoadingDialog
 import app.gov.uidai.registration.ui.theme.AppButton
-import app.gov.uidai.registration.ui.theme.Spacer
-import app.gov.uidai.registration.ui.uidentry.BackgroundWithGradient
 import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacer
 import app.gov.uidai.registration.ui.theme.Spacing
+import app.gov.uidai.registration.ui.uidentry.BackgroundWithGradient
 
 @Composable
 fun RegisterOperatorRoute(
@@ -63,8 +64,10 @@ fun RegisterOperatorScreen(
     onOperatorRefIdChanged: (String) -> Unit,
     onRegister: () -> Unit
 ) {
+    val topOffset = LocalConfiguration.current.screenHeightDp.dp * 0.30f
+
     Scaffold { paddingValues ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
@@ -76,7 +79,7 @@ fun RegisterOperatorScreen(
                     .matchParentSize()
                     .verticalScroll(rememberScrollState())
                     .padding(Spacing.Xxl)
-                    .padding(top = maxHeight * 0.30f),
+                    .padding(top = topOffset),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
