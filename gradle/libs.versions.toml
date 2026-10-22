@@ -39,7 +39,6 @@ coilCompose = "2.5.0"
 commonsCodec = "1.16.0"
 androidxHilt = "1.2.0"
 lifecycleViewmodelCompose = "2.9.1"
-legacySupportV4 = "1.0.0"
 okhttp = "4.12.0"
 
 [libraries]
@@ -115,7 +114,6 @@ androidx-hilt-common = { group = "androidx.hilt", name = "hilt-common", version.
 androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "androidxHilt" }
 androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
-androidx-legacy-support-v4 = { group = "androidx.legacy", name = "legacy-support-v4", version.ref = "legacySupportV4" }
 
 
 [plugins]
