@@ -1,15 +1,15 @@
 [versions]
-agp = "8.11.2"
+agp = "9.2.1"
 cameraCore = "1.4.2"
 firebaseBom = "34.4.0"
 firebaseCrashlytics = "3.0.6"
 googleServices = "4.4.4"
 gson = "2.13.1"
-hilt = "2.57"
+hilt = "2.59.2"
 jacksonDataformatXml = "2.19.2"
 jacksonModuleKotlin = "2.19.2"
-kotlin = "2.0.21"
-ksp = "2.0.21-1.0.25"
+kotlin = "2.2.10"
+ksp = "2.2.10-2.0.2"
 coreKtx = "1.16.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -21,11 +21,11 @@ constraintlayout = "2.2.1"
 lifecycleLivedataKtx = "2.9.1"
 lifecycleViewmodelKtx = "2.9.1"
 fragmentKtx = "1.8.8"
-navigationSafeArgs = "2.9.4"
+navigationSafeArgs = "2.9.6"
 preferenceKtx = "1.2.1"
 retrofit = "3.0.0"
 staxApi = "1.0-2"
-chaquopy = "16.1.0"
+chaquopy = "17.0.0"
 tasksVision = "0.20230731"
 tensorflowLite = "2.17.0"
 tensorflowLiteSupport = "0.5.0"
@@ -120,7 +120,6 @@ androidx-legacy-support-v4 = { group = "androidx.legacy", name = "legacy-support
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlytics"}
