@@ -45,7 +45,7 @@ import app.gov.uidai.registration.ui.theme.Spacer
 // from the capture module's design tokens; kept local here same as the
 // capture module's finger-list screen was, until the two get unified.
 private object FingerListColors {
-    val Background = Color(0xFFF5F0EC)
+    val Background = Color(0xFFFFFFFF)
     val ContainerBase = Color(0xFFEDE8E3)
     val Border = Color(0xFFD8D0C8)
     val Primary = Color(0xFF1A56A0)
