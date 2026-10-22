@@ -1,6 +1,7 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.dagger.hilt)
@@ -8,38 +9,35 @@ plugins {
 }
 
 android {
-    namespace 'app.gov.uidai.registration'
-    compileSdk 36
+    namespace = "app.gov.uidai.registration"
+    compileSdk = 36
 
     defaultConfig {
-        minSdk 24
+        minSdk = 24
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles "consumer-rules.pro"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
 
-        def localProperties = new Properties()
-        localProperties.load(new FileInputStream(rootProject.file("local.properties")))
-        buildConfigField "String", "BACKEND_URL", "\"${localProperties['BACKEND_URL']}\""
+        val localProperties = Properties().apply {
+            rootProject.file("local.properties").inputStream().use { load(it) }
+        }
+        buildConfigField("String", "BACKEND_URL", "\"${localProperties.getProperty("BACKEND_URL")}\"")
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = '11'
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     buildFeatures {
         buildConfig = true
         compose = true
     }
-
 }
-// registration/build.gradle
+
 configurations.all {
     resolutionStrategy {
-        force "androidx.compose.foundation:foundation:1.7.6"   // matches compose-bom 2024.12.01
-        force "androidx.compose.foundation:foundation-android:1.7.6"
+        force("androidx.compose.foundation:foundation:1.7.6")   // matches compose-bom 2024.12.01
+        force("androidx.compose.foundation:foundation-android:1.7.6")
     }
 }
 
@@ -80,11 +78,10 @@ dependencies {
     implementation("dev.keiji.jp2:jp2-android:1.0.5")
     implementation(libs.commons.codec)
     implementation(libs.coil.compose)
-    implementation(libs.gson)   // SDK toml already has this — reuse, don't duplicate
+    implementation(libs.gson)
 
     debugImplementation(libs.chucker.debug)
     releaseImplementation(libs.chucker.release)
-
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.remote.config)

@@ -9,8 +9,8 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
-        maven { url = "https://chaquo.com/maven" }
-        maven { url 'https://jitpack.io' }
+        maven("https://chaquo.com/maven")
+        maven("https://jitpack.io")
     }
 }
 dependencyResolutionManagement {
@@ -23,9 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "ContactlessFingerSDK_SITA"
-include ':app'
-include ':network'
-include ':utility'
-include ':capture'
-include ':core'
-include ':registration'
+include(":app", ":network", ":utility", ":capture", ":core", ":registration")
