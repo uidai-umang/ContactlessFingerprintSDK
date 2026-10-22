@@ -1,0 +1,60 @@
+plugins {
+    alias(libs.plugins.android.library)
+    id("maven-publish")
+}
+
+android {
+    namespace = "in.gov.uidai.utility"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 28
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    publishing {
+        singleVariant("release")
+        singleVariant("debug")
+    }
+}
+
+dependencies {
+    // Jackson
+    implementation(libs.jackson.module.kotlin)
+    implementation(libs.jackson.dataformat.xml)
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register<MavenPublication>("release") {
+                from(components["release"])
+                artifactId = "utility"
+            }
+            register<MavenPublication>("debug") {
+                from(components["debug"])
+                artifactId = "utility"
+            }
+        }
+    }
+}
