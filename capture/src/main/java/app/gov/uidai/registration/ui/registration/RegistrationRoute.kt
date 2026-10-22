@@ -2,8 +2,6 @@ package app.gov.uidai.registration.ui.registration
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,34 +38,8 @@ import app.gov.uidai.registration.model.SharedUiState
 import app.gov.uidai.registration.model.resident.ResidentInput
 import app.gov.uidai.registration.ui.composable.LoadingDialog
 import app.gov.uidai.registration.ui.theme.Spacer
-
-// Mockup-exact colors — host app has its own AttendanceAppTheme, separate
-// from the capture module's design tokens; kept local here same as the
-// capture module's finger-list screen was, until the two get unified.
-private object FingerListColors {
-    val Background = Color(0xFFFFFFFF)
-    val ContainerBase = Color(0xFFEDE8E3)
-    val Border = Color(0xFFD8D0C8)
-    val Primary = Color(0xFF1A56A0)
-    val TextPrimary = Color(0xFF1A1A1A)
-    val TextMuted = Color(0xFF8A7F78)
-
-    val SyncingBg = Color(0xFFFFFBEB)
-    val SyncingContainer = Color(0xFFFEF3C7)
-    val SyncingBorder = Color(0xFFFCD34D)
-    val SyncingText = Color(0xFFD97706)
-    val SyncingBadgeText = Color(0xFF92400E)
-
-    val InfoContainer = Color(0xFFEBF3FD)
-    val InfoBorder = Color(0xFF93C5FD)
-
-    val Positive = Color(0xFF16A34A)
-    val PositiveContainer = Color(0xFFF0FDF4)
-    val PositiveBorder = Color(0xFF86EFAC)
-
-    val Negative = Color(0xFFE53935)
-    val NegativeContainer = Color(0xFFFFEBEE)
-}
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +47,7 @@ fun RegistrationRoute(
     resident: ResidentInput,
     sharedUiState: SharedUiState,
     onNavigateUp: () -> Unit,
+    onStartCaptureLoop: () -> Unit,
     viewModel: RegistrationViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -82,14 +55,7 @@ fun RegistrationRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    val sdkLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result -> viewModel.handleSdkActivityResult(result.resultCode, result.data) }
-
     LaunchedEffect(resident) { viewModel.setResident(resident) }
-    LaunchedEffect(viewModel) {
-        viewModel.nextCapture.collect { position -> viewModel.captureFingerprint(position, sdkLauncher) }
-    }
 
     Scaffold(
         topBar = {
@@ -100,10 +66,10 @@ fun RegistrationRoute(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = FingerListColors.Background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Colors.Background.Primary)
             )
         },
-        containerColor = FingerListColors.Background,
+        containerColor = Colors.Background.Primary,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
         RegistrationScreen(
@@ -111,6 +77,7 @@ fun RegistrationRoute(
             onAddFingerprint = {
                 keyboardController?.hide()
                 viewModel.startHandSequence(it)
+                onStartCaptureLoop()
             },
             onRemoveFingerprint = viewModel::removeFingerprint,
             onSaveRegistration = viewModel::registerUser,
@@ -165,8 +132,8 @@ fun RegistrationScreen(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(Spacing.L),
+                verticalArrangement = Arrangement.spacedBy(Spacing.L)
             ) {
                 if (totalCapturedOverall < 4) {
                     MinRequirementBanner()
@@ -208,23 +175,23 @@ fun RegistrationScreen(
             val fingerQuality = uiState.fingerprints[it]?.fingerQuality
             Dialog(onDismissRequest = { selectedImage = null }) {
                 Card(shape = MaterialTheme.shapes.extraLarge) {
-                    Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                    Column(modifier = Modifier.padding(bottom = Spacing.L)) {
                         Image(
                             bitmap = bitmap,
                             contentDescription = null,
                             contentScale = ContentScale.FillWidth,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(8.dp)
+                        Spacer(Spacing.S)
                         fingerQuality?.attributes?.forEach { attribute ->
                             Text(
                                 text = "${attribute.getFormatedName()}: ${String.format("%.1f", attribute.score)}",
                                 style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier.padding(horizontal = Spacing.L)
                             )
-                            Spacer(4.dp)
+                            Spacer(Spacing.Xxs)
                         }
-                        Spacer(4.dp)
+                        Spacer(Spacing.Xxs)
                         TextButton(onClick = { selectedImage = null }, modifier = Modifier.fillMaxWidth()) {
                             Text("Okay")
                         }
@@ -245,16 +212,16 @@ private fun MinRequirementBanner() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(FingerListColors.InfoContainer)
-            .border(1.dp, FingerListColors.InfoBorder, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
+            .background(Colors.Info.Container)
+            .border(1.dp, Colors.Info.Border, RoundedCornerShape(8.dp))
+            .padding(horizontal = Spacing.M, vertical = Spacing.S),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)
     ) {
-        Icon(Icons.Default.Info, contentDescription = null, tint = FingerListColors.Primary, modifier = Modifier.size(16.dp))
+        Icon(Icons.Default.Info, contentDescription = null, tint = Colors.Brand.Blue, modifier = Modifier.size(16.dp))
         Text(
             text = "Capture minimum 4 fingers from either hand to complete registration. Tap any finger to start.",
             fontSize = 12.sp,
-            color = FingerListColors.Primary,
+            color = Colors.Brand.Blue,
             lineHeight = 17.sp
         )
     }
@@ -276,17 +243,17 @@ fun FingerprintSection(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, FingerListColors.Border, RoundedCornerShape(12.dp))
+            .border(1.dp, Colors.Border.Primary, RoundedCornerShape(12.dp))
     ) {
-        Row(modifier = Modifier.fillMaxWidth().background(FingerListColors.ContainerBase)) {
+        Row(modifier = Modifier.fillMaxWidth().background(Colors.Background.Secondary)) {
             listOf("Left", "Right").forEachIndexed { index, title ->
                 val isActive = selectedTabIndex == index
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .background(if (isActive) FingerListColors.Background else Color.Transparent)
+                        .background(if (isActive) Colors.Background.Primary else Color.Transparent)
                         .clickable { onTabSelected(index) }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = Spacing.S),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -294,11 +261,11 @@ fun FingerprintSection(
                             text = title,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isActive) FingerListColors.TextPrimary else FingerListColors.TextMuted
+                            color = if (isActive) Colors.Text.Primary else Colors.Text.Tertiary
                         )
                         if (isActive) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Box(modifier = Modifier.height(2.dp).width(24.dp).background(FingerListColors.Primary))
+                            Spacer(modifier = Modifier.height(Spacing.Xxxs))
+                            Box(modifier = Modifier.height(2.dp).width(24.dp).background(Colors.Brand.Blue))
                         }
                     }
                 }
@@ -327,7 +294,7 @@ fun FingerList(
     onClickFingerprint: (FingerPosition) -> Unit,
     onRemoveFingerprint: (FingerPosition) -> Unit
 ) {
-    Column(modifier = Modifier.background(FingerListColors.Background)) {
+    Column(modifier = Modifier.background(Colors.Background.Primary)) {
         items.entries.forEachIndexed { index, item ->
             FingerItem(
                 position = item.key,
@@ -340,7 +307,7 @@ fun FingerList(
                 onAdd = { onAddFingerprint(item.key) }
             )
             if (index < items.size - 1) {
-                HorizontalDivider(color = FingerListColors.ContainerBase, thickness = 1.dp)
+                HorizontalDivider(color = Colors.Background.Secondary, thickness = 1.dp)
             }
         }
     }
@@ -364,7 +331,7 @@ fun FingerItem(
         FingerCaptureStatus.CAPTURING, FingerCaptureStatus.UPLOADING, FingerCaptureStatus.CAPTURED -> false
         FingerCaptureStatus.PENDING, FingerCaptureStatus.FAILED -> isItemAdded
     }
-    val rowBackground = if (uploadStatus == FingerCaptureStatus.UPLOADING) FingerListColors.SyncingBg else Color.Transparent
+    val rowBackground = if (uploadStatus == FingerCaptureStatus.UPLOADING) Colors.Warning.Container.copy(alpha = 0.4f) else Color.Transparent
     val fingerName = position.name.replace('_', ' ')
 
     Row(
@@ -381,73 +348,73 @@ fun FingerItem(
                     }
                 }
             )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = Spacing.L, vertical = Spacing.L),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.L)
     ) {
         Box(modifier = Modifier.size(36.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
             when {
                 uploadStatus == FingerCaptureStatus.UPLOADING -> {
                     Box(
                         modifier = Modifier.fillMaxSize()
-                            .background(FingerListColors.SyncingContainer)
-                            .border(2.dp, FingerListColors.SyncingText, CircleShape),
+                            .background(Colors.Warning.Container)
+                            .border(2.dp, Colors.Warning.Main, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = FingerListColors.SyncingText)
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Colors.Warning.Main)
                     }
                 }
                 uploadStatus == FingerCaptureStatus.PENDING -> {
-                    Box(modifier = Modifier.fillMaxSize().background(FingerListColors.SyncingContainer), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Refresh, "Pending sync", tint = FingerListColors.SyncingText, modifier = Modifier.size(20.dp))
+                    Box(modifier = Modifier.fillMaxSize().background(Colors.Warning.Container), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Refresh, "Pending sync", tint = Colors.Warning.Main, modifier = Modifier.size(20.dp))
                     }
                 }
                 uploadStatus == FingerCaptureStatus.FAILED -> {
-                    Box(modifier = Modifier.fillMaxSize().background(FingerListColors.NegativeContainer), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Warning, "Failed", tint = FingerListColors.Negative, modifier = Modifier.size(20.dp))
+                    Box(modifier = Modifier.fillMaxSize().background(Colors.Failure.Container), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Warning, "Failed", tint = Colors.Failure.Main, modifier = Modifier.size(20.dp))
                     }
                 }
                 isItemAdded || uploadStatus == FingerCaptureStatus.CAPTURED -> {
-                    Box(modifier = Modifier.fillMaxSize().background(FingerListColors.Positive), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxSize().background(Colors.Success.Main), contentAlignment = Alignment.Center) {
                         Icon(Icons.Default.Check, "Captured", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
                 uploadStatus == FingerCaptureStatus.CAPTURING -> {
-                    Box(modifier = Modifier.fillMaxSize().background(FingerListColors.InfoContainer), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = FingerListColors.Primary)
+                    Box(modifier = Modifier.fillMaxSize().background(Colors.Info.Container), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Colors.Brand.Blue)
                     }
                 }
                 else -> {
                     Box(
                         modifier = Modifier.fillMaxSize()
-                            .background(FingerListColors.InfoContainer)
-                            .border(2.dp, FingerListColors.Primary, CircleShape),
+                            .background(Colors.Info.Container)
+                            .border(2.dp, Colors.Brand.Blue, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Add, "Add $fingerName", tint = FingerListColors.Primary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Add, "Add $fingerName", tint = Colors.Brand.Blue, modifier = Modifier.size(18.dp))
                     }
                 }
             }
         }
 
         val nameColor = when (uploadStatus) {
-            FingerCaptureStatus.UPLOADING -> FingerListColors.SyncingText
-            FingerCaptureStatus.NOT_CAPTURED -> FingerListColors.TextMuted
-            else -> FingerListColors.TextPrimary
+            FingerCaptureStatus.UPLOADING -> Colors.Warning.Main
+            FingerCaptureStatus.NOT_CAPTURED -> Colors.Text.Tertiary
+            else -> Colors.Text.Primary
         }
 
         Column(modifier = Modifier.weight(1f)) {
             Text(text = fingerName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = nameColor)
             if (minutiaCount != null && (isItemAdded || uploadStatus == FingerCaptureStatus.CAPTURED)) {
-                Text(text = "Minutia: ${minutiaCount.toInt()}", fontSize = 11.sp, color = FingerListColors.TextMuted)
+                Text(text = "Minutia: ${minutiaCount.toInt()}", fontSize = 11.sp, color = Colors.Text.Tertiary)
             }
         }
 
         when (uploadStatus) {
-            FingerCaptureStatus.UPLOADING -> StatusBadge("Syncing…", FingerListColors.SyncingContainer, FingerListColors.SyncingBadgeText, FingerListColors.SyncingBorder)
-            FingerCaptureStatus.PENDING -> StatusBadge("Pending", FingerListColors.SyncingContainer, FingerListColors.SyncingBadgeText, FingerListColors.SyncingBorder)
-            FingerCaptureStatus.FAILED -> StatusBadge("Failed", FingerListColors.NegativeContainer, FingerListColors.Negative, FingerListColors.Negative)
-            FingerCaptureStatus.CAPTURED -> StatusBadge("Synced", FingerListColors.PositiveContainer, FingerListColors.Positive, FingerListColors.PositiveBorder)
+            FingerCaptureStatus.UPLOADING -> StatusBadge("Syncing…", Colors.Warning.Container, Colors.Warning.Text, Colors.Warning.Border)
+            FingerCaptureStatus.PENDING -> StatusBadge("Pending", Colors.Warning.Container, Colors.Warning.Text, Colors.Warning.Border)
+            FingerCaptureStatus.FAILED -> StatusBadge("Failed", Colors.Failure.Container, Colors.Failure.Main, Colors.Failure.Main)
+            FingerCaptureStatus.CAPTURED -> StatusBadge("Synced", Colors.Success.Container, Colors.Success.Main, Colors.Success.Border)
             else -> {}
         }
     }
@@ -460,7 +427,7 @@ private fun StatusBadge(text: String, bg: Color, textColor: Color, border: Color
             .clip(RoundedCornerShape(20.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(20.dp))
-            .padding(horizontal = 9.dp, vertical = 3.dp)
+            .padding(horizontal = Spacing.S, vertical = Spacing.Xxs)
     ) {
         Text(text = text, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = textColor)
     }
@@ -473,35 +440,35 @@ private fun ProgressCard(captured: Int, total: Int, isComplete: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(if (isComplete) FingerListColors.PositiveContainer else Color.White)
-            .border(1.dp, if (isComplete) FingerListColors.PositiveBorder else FingerListColors.Border, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .background(if (isComplete) Colors.Success.Container else Color.White)
+            .border(1.dp, if (isComplete) Colors.Success.Border else Colors.Border.Primary, RoundedCornerShape(10.dp))
+            .padding(horizontal = Spacing.L, vertical = Spacing.M)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = if (isComplete) "HAND COMPLETE" else "PROGRESS",
                 fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                color = if (isComplete) FingerListColors.Positive else FingerListColors.TextMuted
+                color = if (isComplete) Colors.Success.Main else Colors.Text.Tertiary
             )
             Text(
                 text = if (isComplete) "$captured / $total \u2713" else "$captured / $total captured",
                 fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                color = if (isComplete) FingerListColors.Positive else FingerListColors.Primary
+                color = if (isComplete) Colors.Success.Main else Colors.Brand.Blue
             )
         }
-        Spacer(modifier = Modifier.height(7.dp))
+        Spacer(modifier = Modifier.height(Spacing.Xs))
         Box(
             modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(20.dp))
-                .background(if (isComplete) FingerListColors.PositiveBorder else FingerListColors.ContainerBase)
+                .background(if (isComplete) Colors.Success.Border else Colors.Background.Secondary)
         ) {
-            Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(progress).background(if (isComplete) FingerListColors.Positive else FingerListColors.Primary))
+            Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(progress).background(if (isComplete) Colors.Success.Main else Colors.Brand.Blue))
         }
-        Spacer(modifier = Modifier.height(5.dp))
+        Spacer(modifier = Modifier.height(Spacing.Xs))
         Text(
             text = if (isComplete) "All fingers synced. You can add the other hand or finish registration."
             else "Capture ${total - captured} more finger${if (total - captured != 1) "s" else ""} to complete this hand.",
             fontSize = 10.sp,
-            color = if (isComplete) FingerListColors.Positive else FingerListColors.TextMuted
+            color = if (isComplete) Colors.Success.Main else Colors.Text.Tertiary
         )
     }
 }
@@ -516,15 +483,15 @@ private fun BottomActionBar(
     onSwitchToOtherHand: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().background(FingerListColors.Background).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier.fillMaxWidth().background(Colors.Background.Primary).padding(horizontal = Spacing.L, vertical = Spacing.M),
+        verticalArrangement = Arrangement.spacedBy(Spacing.S)
     ) {
         if (currentHandComplete) {
             Button(
                 onClick = onFinishRegistration,
                 enabled = canSave,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = FingerListColors.Positive),
+                colors = ButtonDefaults.buttonColors(containerColor = Colors.Success.Main),
                 shape = RoundedCornerShape(10.dp)
             ) { Text("\u2713 Finish registration", fontWeight = FontWeight.Bold) }
             OutlinedButton(onClick = onSwitchToOtherHand, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(10.dp)) {

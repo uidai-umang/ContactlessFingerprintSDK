@@ -29,6 +29,8 @@ import app.gov.uidai.registration.ui.composable.LoadingDialog
 import app.gov.uidai.registration.ui.theme.AppButton
 import app.gov.uidai.registration.ui.theme.Spacer
 import app.gov.uidai.registration.ui.uidentry.BackgroundWithGradient
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 
 @Composable
 fun RegisterOperatorRoute(
@@ -73,18 +75,18 @@ fun RegisterOperatorScreen(
                 modifier = Modifier
                     .matchParentSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(24.dp)
+                    .padding(Spacing.Xxl)
                     .padding(top = maxHeight * 0.30f),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Register Operator",
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = Colors.Text.Primary,
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(16.dp)
+                Spacer(Spacing.L)
 
                 OutlinedTextField(
                     value = uiState.operatorRefId,
@@ -103,11 +105,11 @@ fun RegisterOperatorScreen(
                         text = uiState.errorMessage.orEmpty(),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = Spacing.S)
                     )
                 }
 
-                Spacer(16.dp)
+                Spacer(Spacing.L)
 
                 AppButton(
                     text = "Continue",

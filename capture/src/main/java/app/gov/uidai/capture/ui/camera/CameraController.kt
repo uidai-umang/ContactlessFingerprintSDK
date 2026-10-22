@@ -756,7 +756,7 @@ class CameraController @Inject constructor(
     fun closeCamera() {
         Log.i(TAG, "closeCamera()")
         isCameraInitialized = false
-        captureSession.close()
+        if (::captureSession.isInitialized) captureSession.close()
         cameraDevice?.close()
         sessionExecutor.shutdown()
         imageReaderThread.quitSafely()

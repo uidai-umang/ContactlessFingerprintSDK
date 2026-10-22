@@ -97,7 +97,6 @@ import app.gov.uidai.capture.utils.CameraUtils
 import app.gov.uidai.capture.utils.KotlinUtils.RoundedCornerShapeCompat
 import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
 import app.gov.uidai.capture.utils.KotlinUtils.headingTextFor
-import app.gov.uidai.capture.utils.extension.toBase64
 import `in`.gov.uidai.utility.constants.ResultCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -106,12 +105,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.sample
+import app.gov.uidai.registration.ui.theme.Spacing
 
+/** Handed to the capture loop in memory -- no Intent / file hand-off. */
 data class CaptureResult(
     val resultCode: Int,
-    val finalImage: String? = null,
-    val fullImage: String? = null,
-    val croppedImage: String? = null,
+    val finalImage: Bitmap? = null,
     val blurScore: Float = 0f,
     val brightnessScore: Float = 0f,
     val glareScore: Float = 0f
@@ -121,6 +120,7 @@ data class CaptureResult(
 fun CameraScreen(
     txnId: String,
     fingerType: String,
+    captureId: Int,
     cameraController: CameraController,
     imageProcessorFactory: ImageProcessorFactory,
     preferenceStore: PreferenceStore,
@@ -303,6 +303,19 @@ fun CameraScreen(
 
     BackHandler { finish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
 
+    // Next capture in the sequence: reset camera/processor state in place
+    // instead of leaving the screen. The first capture needs no reset.
+    var lastCaptureId by remember { mutableStateOf(captureId) }
+    LaunchedEffect(captureId) {
+        if (captureId == lastCaptureId) return@LaunchedEffect
+        lastCaptureId = captureId
+        showReviewScreen = false
+        reviewBitmap = null
+        pendingCaptureResult = null
+        viewModel.reset()
+        restartCapture()
+    }
+
     LaunchedEffect(captureState) {
         if (captureState is CaptureState.Success) {
             val segmentedFrame = imageProcessor?.getFinalFrame()
@@ -315,12 +328,10 @@ fun CameraScreen(
                 showReviewScreen = true
                 reviewBitmap = null
             }
-            val encodedBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
+            val finalBitmap = viewModel.processImageAfterSuccess(segmentedFrame)
             val result = CaptureResult(
                 resultCode = ResultCode.CAPTURE_SUCCESS,
-                finalImage = encodedBitmap,
-                fullImage = segmentedFrame.fullBitmap.toBase64(),
-                croppedImage = segmentedFrame.croppedBitmap.toBase64(),
+                finalImage = finalBitmap,
                 blurScore = segmentedFrame.blurScore,
                 brightnessScore = segmentedFrame.brightnessScore,
                 glareScore = segmentedFrame.glareScore
@@ -416,7 +427,7 @@ fun CameraScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(Spacing.L)
                     ) {
                         Box(
                             modifier = Modifier
@@ -438,7 +449,7 @@ fun CameraScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 24.dp),
+                            .padding(top = Spacing.Xxl),
                         contentAlignment = Alignment.Center
                     ) {
                         Surface(
@@ -447,7 +458,7 @@ fun CameraScreen(
                         ) {
                             Text(
                                 text = headingTextFor(captureState, viewModel),
-                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Xxl, vertical = Spacing.S),
                                 color = captureState.toOverlayVisualState().color
                             )
                         }
@@ -457,7 +468,7 @@ fun CameraScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 8.dp, bottom = 8.dp),
+                                .padding(start = Spacing.S, bottom = Spacing.S),
                             contentAlignment = Alignment.BottomStart
                         ) {
                             LiveQualityScoresPanel(scoresFlow = viewModel.captureStateManager.stage1QualityScores)
@@ -469,7 +480,7 @@ fun CameraScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 16.dp)
+                        .padding(bottom = Spacing.L)
                 ) {
                     Box(
                         modifier = Modifier
@@ -478,7 +489,7 @@ fun CameraScreen(
                                 Color.White.copy(alpha = 0.6f),
                                 shape = RoundedCornerShape(8.dp)
                             )
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .padding(horizontal = Spacing.L, vertical = Spacing.S)
                     ) {
                         Text(
                             text = fingerType.replace("_", " "),
@@ -599,10 +610,10 @@ fun BottomCameraController(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(0xFF1A1A1A))
-            .padding(20.dp)
+            .padding(Spacing.Xl)
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.M, Alignment.CenterHorizontally),
             modifier = Modifier.fillMaxWidth()
         ) {
             Button(
@@ -633,7 +644,7 @@ fun BottomCameraController(
         }
 
         if (showManualCaptureOption) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(Spacing.M))
             Button(
                 onClick = onCaptureClick,
                 enabled = isCaptureEnabled,
@@ -648,7 +659,7 @@ fun BottomCameraController(
             ) { Text("Capture", fontWeight = FontWeight.Bold) }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Spacing.S))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onTorchClick) {
                 Icon(
@@ -704,8 +715,8 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
                     Color(0xFF1A56A0),
                     RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
                 )
-                .padding(20.dp)
-                .padding(bottom = 24.dp),
+                .padding(Spacing.Xl)
+                .padding(bottom = Spacing.Xxl),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
@@ -714,7 +725,7 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
                 tint = Color(0xFF1A56A0),
                 modifier = Modifier.size(40.dp)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Spacing.S))
             Text(
                 text = titleText,
                 color = Color(0xFF1A56A0),
@@ -723,7 +734,7 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
             )
             // NEW — description line, only shown for failures where one exists
             descriptionText?.let {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(Spacing.Xxs))
                 Text(
                     text = it,
                     color = Color(0xFF1A56A0).copy(alpha = 0.75f),
@@ -731,10 +742,10 @@ fun BottomSheetResult(captureState: CaptureState, onRetake: () -> Unit, onGoBack
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.L))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.M)
             ) {
                 if (!isSuccess) {
                     OutlinedButton(
@@ -780,8 +791,8 @@ fun LiveQualityScoresPanel(
             modifier = modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color.Black.copy(alpha = 0.6f))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+                .padding(horizontal = Spacing.S, vertical = Spacing.S),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Xxs)
         ) {
             LiveScoreRow(s.blur)
             LiveScoreRow(s.brightness)
@@ -795,7 +806,7 @@ fun LiveQualityScoresPanel(
 private fun LiveScoreRow(score: LiveCheckScore) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)
     ) {
         Box(
             modifier = Modifier
@@ -894,7 +905,7 @@ fun CaptureReviewScreen(
                             onClick = { scale = 1f; offset = Offset.Zero },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(12.dp)
+                                .padding(Spacing.M)
                                 .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                         ) {
                             Icon(
@@ -910,7 +921,7 @@ fun CaptureReviewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF1A1A1A))
-                    .padding(20.dp)
+                    .padding(Spacing.Xl)
             ) {
                 Text(
                     "Review Capture",
@@ -918,7 +929,7 @@ fun CaptureReviewScreen(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.S))
                 Text(
                     "Blur: %.2f".format(blurScore),
                     color = Color.White.copy(alpha = 0.7f),
@@ -934,10 +945,10 @@ fun CaptureReviewScreen(
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 12.sp
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(Spacing.L))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.M),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -947,7 +958,7 @@ fun CaptureReviewScreen(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                             border = BorderStroke(1.dp, Color.White)
                         ) { Text("Retry") }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(Spacing.Xxs))
                         Text(
                             text = "Retry in ${secondsLeft}s",
                             color = Color.White.copy(alpha = 0.5f),

@@ -29,32 +29,8 @@ import androidx.compose.ui.unit.sp
 import app.gov.uidai.registration.model.dashboard.DashboardOverviewResponse
 import app.gov.uidai.registration.ui.dashboard.components.TileColors
 import app.gov.uidai.registration.ui.theme.Spacer
-import app.gov.uidai.registration.ui.theme.dash_age1_bg
-import app.gov.uidai.registration.ui.theme.dash_age1_border
-import app.gov.uidai.registration.ui.theme.dash_age1_text
-import app.gov.uidai.registration.ui.theme.dash_age2_bg
-import app.gov.uidai.registration.ui.theme.dash_age2_border
-import app.gov.uidai.registration.ui.theme.dash_age2_text
-import app.gov.uidai.registration.ui.theme.dash_age3_bg
-import app.gov.uidai.registration.ui.theme.dash_age3_border
-import app.gov.uidai.registration.ui.theme.dash_age3_text
-import app.gov.uidai.registration.ui.theme.dash_age4_bg
-import app.gov.uidai.registration.ui.theme.dash_age4_border
-import app.gov.uidai.registration.ui.theme.dash_age4_text
-import app.gov.uidai.registration.ui.theme.dash_card_border
-import app.gov.uidai.registration.ui.theme.dash_female_bg
-import app.gov.uidai.registration.ui.theme.dash_female_border
-import app.gov.uidai.registration.ui.theme.dash_female_text
-import app.gov.uidai.registration.ui.theme.dash_hero_gradient_end
-import app.gov.uidai.registration.ui.theme.dash_hero_gradient_start
-import app.gov.uidai.registration.ui.theme.dash_male_bg
-import app.gov.uidai.registration.ui.theme.dash_male_border
-import app.gov.uidai.registration.ui.theme.dash_male_text
-import app.gov.uidai.registration.ui.theme.dash_other_bg
-import app.gov.uidai.registration.ui.theme.dash_other_border
-import app.gov.uidai.registration.ui.theme.dash_other_text
-import app.gov.uidai.registration.ui.theme.dash_sec_title
-
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 @Composable
 fun OverviewTab(
     overview: DashboardOverviewResponse?,
@@ -65,10 +41,10 @@ fun OverviewTab(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(Spacing.L)
             .verticalScroll(scrollState)
         ,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(Spacing.L)
     ) {
         if (isLoading && overview == null) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -84,24 +60,24 @@ fun OverviewTab(
         DashboardCard(title = "By gender") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.M)
             ) {
                 CountTile(
                     label = "Male",
                     count = overview.byGender["MALE"] ?: 0,
-                    colors = TileColors(dash_male_bg, dash_male_border, dash_male_text),
+                    colors = TileColors(Colors.Info.Container, Colors.Info.Border, Colors.Info.Main),
                     modifier = Modifier.weight(1f)
                 )
                 CountTile(
                     label = "Female",
                     count = overview.byGender["FEMALE"] ?: 0,
-                    colors = TileColors(dash_female_bg, dash_female_border, dash_female_text),
+                    colors = TileColors(Colors.Success.Container, Colors.Success.Border, Colors.Success.Main),
                     modifier = Modifier.weight(1f)
                 )
                 CountTile(
                     label = "Other",
                     count = overview.byGender["OTHER"] ?: 0,
-                    colors = TileColors(dash_other_bg, dash_other_border, dash_other_text),
+                    colors = TileColors(Colors.Accent.PurpleContainer, Colors.Accent.Purple, Colors.Accent.Purple),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -109,16 +85,16 @@ fun OverviewTab(
 
         DashboardCard(title = "By age group") {
             val ageTiles = listOf(
-                Triple("5-17", "5-17", TileColors(dash_age1_bg, dash_age1_border, dash_age1_text)),
-                Triple("18-40", "18-40", TileColors(dash_age2_bg, dash_age2_border, dash_age2_text)),
-                Triple("41-60", "41-60", TileColors(dash_age3_bg, dash_age3_border, dash_age3_text)),
-                Triple("60+", "60+", TileColors(dash_age4_bg, dash_age4_border, dash_age4_text))
+                Triple("5-17", "5-17", TileColors(Colors.Accent.PurpleContainer, Colors.Accent.Purple, Colors.Accent.Purple)),
+                Triple("18-40", "18-40", TileColors(Colors.Info.Container, Colors.Info.Border, Colors.Info.Main)),
+                Triple("41-60", "41-60", TileColors(Colors.Success.Container, Colors.Success.Border, Colors.Success.Main)),
+                Triple("60+", "60+", TileColors(Colors.Warning.Container, Colors.Warning.Border, Colors.Warning.Main))
             )
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
                 ageTiles.chunked(2).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.M)
                     ) {
                         row.forEach { (key, label, colors) ->
                             CountTile(
@@ -142,8 +118,8 @@ private fun HeroCard(overview: DashboardOverviewResponse) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Brush.linearGradient(listOf(dash_hero_gradient_start, dash_hero_gradient_end)))
-            .padding(20.dp)
+            .background(Brush.linearGradient(listOf(Colors.Brand.BlueDark, Colors.Brand.Blue)))
+            .padding(Spacing.Xl)
     ) {
         Text(
             text = "MY TOTAL CAPTURED",
@@ -151,7 +127,7 @@ private fun HeroCard(overview: DashboardOverviewResponse) {
             fontWeight = FontWeight.Bold,
             color = Color.White.copy(alpha = 0.5f)
         )
-        Spacer(6.dp)
+        Spacer(Spacing.Xs)
         Text(
             text = "${overview.totalCaptured}",
             fontSize = 48.sp,
@@ -163,14 +139,14 @@ private fun HeroCard(overview: DashboardOverviewResponse) {
             fontSize = 13.sp,
             color = Color.White.copy(alpha = 0.55f)
         )
-        Spacer(16.dp)
+        Spacer(Spacing.L)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color.White.copy(alpha = 0.1f))
                 .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = Spacing.L, vertical = Spacing.M)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -204,11 +180,11 @@ fun DashboardCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(Color.White)
-            .border(1.dp, dash_card_border, RoundedCornerShape(14.dp))
-            .padding(16.dp)
+            .border(1.dp, Colors.Border.Primary, RoundedCornerShape(14.dp))
+            .padding(Spacing.L)
     ) {
         SectionTitle(title)
-        Spacer(12.dp)
+        Spacer(Spacing.M)
         content()
     }
 }
@@ -221,7 +197,7 @@ fun SectionTitle(text: String) {
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.sp,
-        color = dash_sec_title
+        color = Colors.Text.Tertiary
     )
 }
 
@@ -238,7 +214,7 @@ private fun CountTile(
             .clip(RoundedCornerShape(10.dp))
             .background(colors.background)
             .border(1.dp, colors.border, RoundedCornerShape(10.dp))
-            .padding(vertical = 14.dp, horizontal = 8.dp),
+            .padding(vertical = Spacing.L, horizontal = Spacing.S),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -247,7 +223,7 @@ private fun CountTile(
             fontWeight = FontWeight.Bold,
             color = colors.text
         )
-        Spacer(4.dp)
+        Spacer(Spacing.Xxs)
         Text(
             text = label.uppercase(),
             fontSize = 10.sp,

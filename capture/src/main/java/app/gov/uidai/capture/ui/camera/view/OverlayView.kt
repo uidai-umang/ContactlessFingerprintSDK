@@ -1,5 +1,8 @@
 package app.gov.uidai.capture.ui.camera.view
 
+import androidx.annotation.ColorInt
+import androidx.compose.ui.graphics.toArgb
+import app.gov.uidai.registration.ui.theme.Colors
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
@@ -35,15 +38,15 @@ class OverlayView @JvmOverloads constructor(
     // --- State Management ---
     // Defines the visual style and animation behavior of the overlay
     sealed class State(
-        @ColorRes val colorRes: Int,
+        @ColorInt val color: Int,
         val hasThinBase: Boolean
     ) {
-        data object INITIAL : State(R.color.md_theme_surface, false)
-        data object WARNING : State(R.color.md_theme_error, false)
-        data object PRE_AUTO_CAPTURE : State(R.color.colorWarningContainer, true)
-        data object AUTO_CAPTURE_SUCCESS : State(R.color.colorSuccess, true)
-        data object SUCCESS : State(R.color.colorSuccess, false)
-        data object FAILURE : State(R.color.md_theme_error, false)
+        data object INITIAL : State(Colors.Background.Primary.toArgb(), false)
+        data object WARNING : State(Colors.Failure.Main.toArgb(), false)
+        data object PRE_AUTO_CAPTURE : State(Colors.Warning.Main.toArgb(), true)
+        data object AUTO_CAPTURE_SUCCESS : State(Colors.Success.Main.toArgb(), true)
+        data object SUCCESS : State(Colors.Success.Main.toArgb(), false)
+        data object FAILURE : State(Colors.Failure.Main.toArgb(), false)
     }
 
     // --- Configuration ---
@@ -64,7 +67,7 @@ class OverlayView @JvmOverloads constructor(
 
     // --- State & Drawing Objects ---
     private var currentState: State = State.INITIAL
-    private var currentColor: Int = ContextCompat.getColor(context, currentState.colorRes)
+    private var currentColor: Int = currentState.color
 
     private val path = Path()
     private val segmentPath = Path()
@@ -177,7 +180,7 @@ class OverlayView @JvmOverloads constructor(
         currentState = newState
 
         currentAnimatorSet?.cancel()
-        animateColor(newState.colorRes, animate)
+        animateColor(newState.color, animate)
 
         if (animate) {
             animateVisualTransition(oldState, newState, progressAnimationDuration)
@@ -272,8 +275,7 @@ class OverlayView @JvmOverloads constructor(
         }
     }
 
-    private fun animateColor(@ColorRes colorRes: Int, animate: Boolean) {
-        val targetColor = ContextCompat.getColor(context, colorRes)
+    private fun animateColor(@ColorInt targetColor: Int, animate: Boolean) {
         if (currentColor == targetColor) return
         ValueAnimator.ofObject(ArgbEvaluator(), currentColor, targetColor).apply {
             duration = if (animate) COLOR_ANIMATION_DURATION else 0

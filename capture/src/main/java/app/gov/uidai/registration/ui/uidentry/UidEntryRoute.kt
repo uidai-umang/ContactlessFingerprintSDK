@@ -67,6 +67,8 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 
 private val DobDisplayFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
@@ -143,18 +145,18 @@ fun UidEntryScreen(
             modifier = Modifier
                 .matchParentSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp)
+                .padding(Spacing.Xxl)
                 .padding(top = halfHeight),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "Enter Resident Details",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.secondary,
+                color = Colors.Text.Primary,
                 fontWeight = FontWeight.Bold,
             )
 
-            Spacer(16.dp)
+            Spacer(Spacing.L)
 
             OutlinedTextField(
                 value = uiState.refId,
@@ -169,7 +171,7 @@ fun UidEntryScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(12.dp)
+            Spacer(Spacing.M)
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -189,7 +191,7 @@ fun UidEntryScreen(
                 )
             }
 
-            Spacer(12.dp)
+            Spacer(Spacing.M)
 
             Text(
                 text = "Gender",
@@ -197,7 +199,7 @@ fun UidEntryScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(4.dp)
+            Spacer(Spacing.Xxs)
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 Gender.entries.forEachIndexed { index, gender ->
                     SegmentedButton(
@@ -216,11 +218,11 @@ fun UidEntryScreen(
                 Text(
                     text = "Checking Registration...",
                     style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = Spacing.S)
                 )
             }
 
-            Spacer(16.dp)
+            Spacer(Spacing.L)
 
             if (uiState.isUserRegistered == true) {
                 RegisteredUserButtons(onNavigateToMatchFingers = onNavigateToMatchFingers)
@@ -279,14 +281,14 @@ fun RegisteredUserButtons(
     Column(
         modifier = Modifier.fillMaxSize(),
     ) {
-        Spacer(8.dp)
+        Spacer(Spacing.S)
         AppButton(
             text = "Check Matching Scores",
             icon = ImageVector.vectorResource(R.drawable.ic_match_finger),
             onClick = onNavigateToMatchFingers,
             isOutlined = true
         )
-        Spacer(8.dp)
+        Spacer(Spacing.S)
     }
 }
 
@@ -305,7 +307,11 @@ fun UnregisteredUserButtons(
 
 @Composable
 fun BackgroundWithGradient() {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Colors.Background.Primary)
+    ) {
         // Background image
         Box(
             modifier = Modifier
@@ -331,7 +337,7 @@ fun BackgroundWithGradient() {
                         brush = Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                MaterialTheme.colorScheme.surface
+                                Colors.Background.Primary
                             )
                         )
                     )

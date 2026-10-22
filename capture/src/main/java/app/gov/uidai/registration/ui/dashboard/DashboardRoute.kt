@@ -51,14 +51,8 @@ import app.gov.uidai.registration.ui.dashboard.components.QuotaTicker
 import app.gov.uidai.registration.ui.dashboard.screens.DiversityTab
 import app.gov.uidai.registration.ui.dashboard.screens.FingersTab
 import app.gov.uidai.registration.ui.dashboard.screens.OverviewTab
-import app.gov.uidai.registration.ui.theme.dash_avatar_bg
-import app.gov.uidai.registration.ui.theme.dash_avatar_border
-import app.gov.uidai.registration.ui.theme.dash_avatar_text
-import app.gov.uidai.registration.ui.theme.dash_navy
-import app.gov.uidai.registration.ui.theme.dash_screen_bg
-import app.gov.uidai.registration.ui.theme.dash_tab_active
-import app.gov.uidai.registration.ui.theme.dash_tab_inactive
-
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardRoute(
@@ -111,11 +105,11 @@ fun DashboardRoute(
                     }
                 },
                 actions = { OperatorAvatar(operatorId) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = dash_navy)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Colors.Brand.Navy)
             )
         },
         bottomBar = { BottomActionBar(onNewCollection = onNewCollection) },
-        containerColor = dash_screen_bg,
+        containerColor = Colors.Background.Secondary,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
@@ -135,7 +129,7 @@ fun DashboardRoute(
                             .offset(x = indicatorOffset)
                             .width(indicatorWidth)
                             .height(2.5.dp)
-                            .background(dash_tab_active)
+                            .background(Colors.Brand.Blue)
                     )
                 }
             ) {
@@ -143,8 +137,8 @@ fun DashboardRoute(
                     Tab(
                         selected = uiState.selectedTab == tab,
                         onClick = { viewModel.onTabSelected(tab) },
-                        selectedContentColor = dash_tab_active,
-                        unselectedContentColor = dash_tab_inactive,
+                        selectedContentColor = Colors.Brand.Blue,
+                        unselectedContentColor = Colors.Text.Tertiary,
                         text = {
                             Text(
                                 text = titleForTab(tab),
@@ -176,14 +170,14 @@ private fun OperatorAvatar(operatorId: String) {
     val initials = remember(operatorId) { operatorInitials(operatorId) }
     Box(
         modifier = Modifier
-            .padding(end = 12.dp)
+            .padding(end = Spacing.M)
             .size(36.dp)
             .clip(CircleShape)
-            .background(dash_avatar_bg)
-            .border(1.5.dp, dash_avatar_border, CircleShape),
+            .background(Colors.Accent.Teal.copy(alpha = 0.2f))
+            .border(1.5.dp, Colors.Accent.Teal.copy(alpha = 0.4f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = initials, color = dash_avatar_text, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Text(text = initials, color = Colors.Accent.Teal, fontWeight = FontWeight.Bold, fontSize = 13.sp)
     }
 }
 

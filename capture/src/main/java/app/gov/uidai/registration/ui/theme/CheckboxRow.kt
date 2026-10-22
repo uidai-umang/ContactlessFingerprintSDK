@@ -37,7 +37,7 @@ fun CheckboxRow(
                 role = Role.Checkbox,
                 enabled = enabled
             )
-            .padding(8.dp),
+            .padding(Spacing.S),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(spaceBetween)
     ) {

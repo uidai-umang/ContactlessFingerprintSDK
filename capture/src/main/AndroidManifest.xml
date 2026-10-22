@@ -13,24 +13,9 @@
 
     <application android:largeHeap="true">
         <activity
-            android:theme="@style/Base.Theme.ContactlessFingerSDK"
-            android:name="app.gov.uidai.capture.CaptureActivity"
-            android:exported="false" />
-
-        <activity
             android:name="app.gov.uidai.registration.RegistrationActivity"
             android:exported="false"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
-
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.file_provider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_path" />
-        </provider>
     </application>
 
 </manifest>

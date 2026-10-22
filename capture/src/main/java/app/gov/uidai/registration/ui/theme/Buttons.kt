@@ -39,7 +39,7 @@ val ButtonTextStyle = TextStyle(
     fontSize = 18.sp
 )
 
-val ButtonContentPadding = PaddingValues(16.dp)
+val ButtonContentPadding = PaddingValues(Spacing.L)
 
 @Composable
 fun AppButton(
@@ -68,7 +68,7 @@ fun AppButton(
                 color = MaterialTheme.colorScheme.onPrimary,
                 modifier = iconModifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(Spacing.M))
             if (loadingText != null) {
                 Text(loadingText, style = ButtonTextStyle, modifier = textModifier)
             } else {
@@ -81,7 +81,7 @@ fun AppButton(
                     contentDescription = iconDescription,
                     modifier = iconModifier.size(24.dp)
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(Spacing.M))
             }
             Text(text = text, style = ButtonTextStyle, modifier = textModifier)
         }
@@ -136,7 +136,7 @@ fun BoxButton(
     ) {
         Column(
             modifier = Modifier
-                .padding(8.dp)
+                .padding(Spacing.S)
                 .defaultMinSize(minHeight = 56.dp)
                 .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -149,7 +149,7 @@ fun BoxButton(
                     color = if (enabled) MaterialTheme.colorScheme.onSecondaryContainer
                     else MaterialTheme.colorScheme.scrim.copy(0.7f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.S))
                 Text(
                     text = loadingText ?: text,
                     style = MaterialTheme.typography.bodyMedium,
@@ -165,7 +165,7 @@ fun BoxButton(
                         tint = if (enabled) MaterialTheme.colorScheme.onSecondaryContainer
                         else MaterialTheme.colorScheme.scrim.copy(0.7f)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Spacing.S))
                 }
                 Text(
                     text = text,

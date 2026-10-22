@@ -22,10 +22,8 @@ import androidx.compose.ui.unit.sp
 import app.gov.uidai.registration.model.dashboard.DashboardFingersResponse
 import app.gov.uidai.registration.ui.dashboard.components.fingerCountBandFor
 import app.gov.uidai.registration.ui.theme.Spacer
-import app.gov.uidai.registration.ui.theme.dash_finger_hero_end
-import app.gov.uidai.registration.ui.theme.dash_navy
-import app.gov.uidai.registration.ui.theme.dash_text_muted
-
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 private const val GRID_COLUMNS = 5
 
 @Composable
@@ -37,8 +35,8 @@ fun FingersTab(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(Spacing.L),
+        verticalArrangement = Arrangement.spacedBy(Spacing.L)
     ) {
         if (isLoading && fingers == null) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -55,15 +53,15 @@ fun FingersTab(
             Text(
                 text = "Number of residents who shared that many fingers during collection.",
                 fontSize = 11.sp,
-                color = dash_text_muted
+                color = Colors.Text.Tertiary
             )
-            Spacer(12.dp)
+            Spacer(Spacing.M)
             val bandCounts = (1..10).map { it to (fingers.residentsByFingerCount["$it"] ?: 0) }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
                 bandCounts.chunked(GRID_COLUMNS).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.S)
                     ) {
                         row.forEach { (fingerCount, residentCount) ->
                             FingerCountTile(
@@ -85,8 +83,8 @@ private fun HeroCard(fingers: DashboardFingersResponse) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Brush.linearGradient(listOf(dash_navy, dash_finger_hero_end)))
-            .padding(20.dp)
+            .background(Brush.linearGradient(listOf(Colors.Brand.Navy, Colors.Brand.BlueDark)))
+            .padding(Spacing.Xl)
     ) {
         Text(
             text = "TOTAL FINGERS SYNCED BY ME",
@@ -94,7 +92,7 @@ private fun HeroCard(fingers: DashboardFingersResponse) {
             fontWeight = FontWeight.Bold,
             color = Color.White.copy(alpha = 0.5f)
         )
-        Spacer(6.dp)
+        Spacer(Spacing.Xs)
         Text(
             text = "${fingers.totalFingers}",
             fontSize = 48.sp,
@@ -117,7 +115,7 @@ private fun FingerCountTile(fingerCount: Int, residentCount: Int, modifier: Modi
             .clip(RoundedCornerShape(10.dp))
             .background(band.background)
             .border(1.dp, band.border, RoundedCornerShape(10.dp))
-            .padding(vertical = 10.dp, horizontal = 4.dp),
+            .padding(vertical = Spacing.S, horizontal = Spacing.Xxs),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -126,7 +124,7 @@ private fun FingerCountTile(fingerCount: Int, residentCount: Int, modifier: Modi
             fontWeight = FontWeight.Bold,
             color = band.text
         )
-        Spacer(2.dp)
+        Spacer(Spacing.Xxxs)
         Text(
             text = "$residentCount",
             fontSize = 22.sp,

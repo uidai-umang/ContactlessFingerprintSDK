@@ -10,7 +10,6 @@ import app.gov.uidai.registration.usecase.CaptureQueueManager
 import app.gov.uidai.registration.usecase.CaptureUseCase
 import app.gov.uidai.registration.usecase.DashboardUseCase
 import app.gov.uidai.registration.usecase.DeviceUseCase
-import app.gov.uidai.registration.usecase.FingerSDKManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
 import app.gov.uidai.registration.usecase.UIDManager
 import app.gov.uidai.registration.usecase.UserUseCase
@@ -19,7 +18,6 @@ import app.gov.uidai.registration.usecase.impl.CaptureQueueManagerImpl
 import app.gov.uidai.registration.usecase.impl.CaptureUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.DashboardUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.DeviceUseCaseImpl
-import app.gov.uidai.registration.usecase.impl.FingerSDKManagerImpl
 import app.gov.uidai.registration.usecase.impl.ResidentUseCaseImpl
 import app.gov.uidai.registration.usecase.impl.UIDManagerImpl
 import app.gov.uidai.registration.usecase.impl.UserUseCaseImpl
@@ -28,7 +26,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import `in`.gov.uidai.embedding.FingerEmbedder
 import javax.inject.Singleton
 
 @Module
@@ -44,18 +41,6 @@ object UseCaseModule {
         return UserUseCaseImpl(
             userRepository = userRepository,
             fingerprintRepository = fingerprintRepository
-        )
-    }
-
-    @Singleton
-    @Provides
-    fun provideFingerSDKManager(
-        @ApplicationContext context: Context,
-        fingerEmbedder: FingerEmbedder
-    ): FingerSDKManager {
-        return FingerSDKManagerImpl(
-            context = context,
-            fingerEmbedder =  fingerEmbedder
         )
     }
 

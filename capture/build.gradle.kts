@@ -124,11 +124,6 @@ dependencies {
     implementation(libs.tensorflow.lite.gpu)
     implementation(libs.tensorflow.lite.gpu.api)
 
-    // Jackson
-    implementation(libs.jackson.module.kotlin)
-    implementation(libs.jackson.dataformat.xml)
-    implementation(libs.stax.api)
-
     // Preference
     implementation(libs.androidx.preference.ktx)
 

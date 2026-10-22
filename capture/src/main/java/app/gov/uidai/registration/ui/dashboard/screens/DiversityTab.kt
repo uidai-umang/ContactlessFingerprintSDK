@@ -29,11 +29,8 @@ import app.gov.uidai.registration.ui.dashboard.components.ageGroupDotColor
 import app.gov.uidai.registration.ui.dashboard.components.genderDotColor
 import app.gov.uidai.registration.ui.dashboard.components.quotaStatusColor
 import app.gov.uidai.registration.ui.theme.Spacer
-import app.gov.uidai.registration.ui.theme.dash_override_note_bg
-import app.gov.uidai.registration.ui.theme.dash_override_note_border
-import app.gov.uidai.registration.ui.theme.dash_override_note_text
-import app.gov.uidai.registration.ui.theme.dash_text_primary
-
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 private val DIVIDER_COLOR = Color(0xFFEEF2F8)
 
 @Composable
@@ -45,8 +42,8 @@ fun DiversityTab(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(Spacing.L),
+        verticalArrangement = Arrangement.spacedBy(Spacing.L)
     ) {
         if (isLoading && diversity == null) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -71,10 +68,10 @@ fun DiversityTab(
 private fun QuotaLineList(lines: List<QuotaLine>, dotColorFor: (Int, String) -> Color) {
     Column {
         lines.forEachIndexed { index, line ->
-            Column(modifier = Modifier.padding(vertical = 10.dp)) {
+            Column(modifier = Modifier.padding(vertical = Spacing.S)) {
                 QuotaLineRow(line, dotColorFor(index, line.key))
                 if (line.overridesTotal > 0) {
-                    Spacer(6.dp)
+                    Spacer(Spacing.Xs)
                     OverridesNote(line)
                 }
             }
@@ -99,12 +96,12 @@ private fun QuotaLineRow(line: QuotaLine, dotColor: Color) {
                     .clip(CircleShape)
                     .background(dotColor)
             )
-            Spacer(8.dp)
+            Spacer(Spacing.S)
             Text(
                 text = line.key,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = dash_text_primary
+                color = Colors.Text.Primary
             )
         }
         Text(
@@ -121,16 +118,16 @@ private fun OverridesNote(line: QuotaLine) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 22.dp)
+            .padding(start = Spacing.Xxl)
             .clip(RoundedCornerShape(7.dp))
-            .background(dash_override_note_bg)
-            .border(1.dp, dash_override_note_border, RoundedCornerShape(7.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .background(Colors.Accent.PurpleContainer)
+            .border(1.dp, Colors.Accent.Purple, RoundedCornerShape(7.dp))
+            .padding(horizontal = Spacing.S, vertical = Spacing.Xs)
     ) {
         Text(
             text = "${line.overridesTotal} overrides total · ${line.overridesByOperator} by you",
             fontSize = 11.sp,
-            color = dash_override_note_text
+            color = Colors.Accent.Purple
         )
     }
 }

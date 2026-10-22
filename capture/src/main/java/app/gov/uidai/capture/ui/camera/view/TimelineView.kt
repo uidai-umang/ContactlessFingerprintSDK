@@ -1,5 +1,7 @@
 package app.gov.uidai.capture.ui.camera.view
 
+import androidx.compose.ui.graphics.toArgb
+import app.gov.uidai.registration.ui.theme.Colors
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
@@ -47,22 +49,22 @@ class TimelineView @JvmOverloads constructor(
             style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
         })
         put(SegmentType.FAILURE, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = ContextCompat.getColor(context, R.color.md_theme_error); strokeWidth =
+            color = Colors.Failure.Main.toArgb(); strokeWidth =
             lineStroke
             style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
         })
     }
 
     private val currentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = ContextCompat.getColor(context, R.color.md_theme_inverseOnSurface)
+        color = Colors.Text.OnDark.toArgb()
         strokeWidth = dp(2f)
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = ContextCompat.getColor(context, R.color.md_theme_inverseOnSurface)
+        color = Colors.Text.OnDark.toArgb()
         textSize = labelTextSize
     }
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = ContextCompat.getColor(context, R.color.md_theme_inverseOnSurface)
+        color = Colors.Text.OnDark.toArgb()
         textSize = titleTextSize; textAlign = Paint.Align.LEFT
     }
 

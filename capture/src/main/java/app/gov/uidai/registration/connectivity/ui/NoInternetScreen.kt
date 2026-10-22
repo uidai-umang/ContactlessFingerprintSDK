@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.gov.uidai.registration.ui.theme.Spacing
 
 @Composable
 fun NoInternetScreen(
@@ -29,7 +30,7 @@ fun NoInternetScreen(
         modifier = modifier
             .background(color = Color.White)
             .fillMaxSize()
-            .padding(24.dp)
+            .padding(Spacing.Xxl)
         ,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -37,7 +38,7 @@ fun NoInternetScreen(
         Icon(
             imageVector = Icons.Outlined.Close,
             contentDescription = null,
-            modifier = Modifier.padding(bottom = 24.dp),
+            modifier = Modifier.padding(bottom = Spacing.Xxl),
             tint = MaterialTheme.colorScheme.error
         )
         Text(
@@ -51,7 +52,7 @@ fun NoInternetScreen(
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
+            modifier = Modifier.padding(top = Spacing.S, bottom = Spacing.Xxl)
         )
         TextButton(onClick = onRetry) {
             Text(text = "Retry")

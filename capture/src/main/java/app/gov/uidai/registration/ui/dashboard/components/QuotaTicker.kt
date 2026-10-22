@@ -16,11 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import app.gov.uidai.registration.model.dashboard.QuotaAlert
-import app.gov.uidai.registration.ui.theme.dash_ticker_bg
-import app.gov.uidai.registration.ui.theme.dash_ticker_dot
-import app.gov.uidai.registration.ui.theme.dash_ticker_sep
-import app.gov.uidai.registration.ui.theme.dash_ticker_text
-
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 @Composable
 fun QuotaTicker(alerts: List<QuotaAlert>, modifier: Modifier = Modifier) {
     if (alerts.isEmpty()) return
@@ -28,8 +25,8 @@ fun QuotaTicker(alerts: List<QuotaAlert>, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(dash_ticker_bg)
-            .padding(vertical = 8.dp)
+            .background(Colors.Failure.Text)
+            .padding(vertical = Spacing.S)
     ) {
         Row(
             modifier = Modifier.basicMarquee(),
@@ -38,7 +35,7 @@ fun QuotaTicker(alerts: List<QuotaAlert>, modifier: Modifier = Modifier) {
             alerts.forEachIndexed { index, alert ->
                 TickerItem(alert)
                 if (index < alerts.lastIndex) {
-                    Text(text = "  |  ", color = dash_ticker_sep, style = MaterialTheme.typography.bodySmall)
+                    Text(text = "  |  ", color = Colors.Failure.Main.copy(alpha = 0.4f), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -50,14 +47,14 @@ private fun TickerItem(alert: QuotaAlert) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .padding(horizontal = 6.dp)
+                .padding(horizontal = Spacing.Xs)
                 .size(6.dp)
                 .clip(CircleShape)
-                .background(dash_ticker_dot)
+                .background(Colors.Failure.Main)
         )
         Text(
             text = alert.message,
-            color = dash_ticker_text,
+            color = Colors.Failure.Container,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 1
         )

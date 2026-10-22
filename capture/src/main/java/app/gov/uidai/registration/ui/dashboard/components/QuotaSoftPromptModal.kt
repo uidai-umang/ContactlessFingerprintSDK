@@ -36,39 +36,8 @@ import app.gov.uidai.registration.model.dashboard.QuotaCheckResponse
 import app.gov.uidai.registration.model.dashboard.QuotaStatus
 import app.gov.uidai.registration.ui.dashboard.screens.SectionTitle
 import app.gov.uidai.registration.ui.theme.Spacer
-import app.gov.uidai.registration.ui.theme.dash_alt_row_bg
-import app.gov.uidai.registration.ui.theme.dash_alt_row_border
-import app.gov.uidai.registration.ui.theme.dash_alt_slots_text
-import app.gov.uidai.registration.ui.theme.dash_alt_tag_bg
-import app.gov.uidai.registration.ui.theme.dash_alt_tag_border
-import app.gov.uidai.registration.ui.theme.dash_alt_tag_text
-import app.gov.uidai.registration.ui.theme.dash_modal_ack_bg
-import app.gov.uidai.registration.ui.theme.dash_modal_ack_border
-import app.gov.uidai.registration.ui.theme.dash_modal_ack_text
-import app.gov.uidai.registration.ui.theme.dash_modal_back_border
-import app.gov.uidai.registration.ui.theme.dash_modal_back_text
-import app.gov.uidai.registration.ui.theme.dash_modal_full_bar_fill
-import app.gov.uidai.registration.ui.theme.dash_modal_full_bar_track
-import app.gov.uidai.registration.ui.theme.dash_modal_full_button
-import app.gov.uidai.registration.ui.theme.dash_modal_full_icon_bg
-import app.gov.uidai.registration.ui.theme.dash_modal_full_label
-import app.gov.uidai.registration.ui.theme.dash_modal_full_note
-import app.gov.uidai.registration.ui.theme.dash_modal_full_snapshot_bg
-import app.gov.uidai.registration.ui.theme.dash_modal_full_snapshot_border
-import app.gov.uidai.registration.ui.theme.dash_modal_full_title
-import app.gov.uidai.registration.ui.theme.dash_modal_full_value
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_bar_fill
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_bar_track
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_button
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_icon_bg
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_label
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_note
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_snapshot_bg
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_snapshot_border
-import app.gov.uidai.registration.ui.theme.dash_modal_warn_value
-import app.gov.uidai.registration.ui.theme.dash_text_muted
-import app.gov.uidai.registration.ui.theme.dash_text_primary
-
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuotaSoftPromptModal(
@@ -89,16 +58,16 @@ fun QuotaSoftPromptModal(
         containerColor = Color.White,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
+        Column(modifier = Modifier.padding(horizontal = Spacing.Xl).padding(bottom = Spacing.Xl)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconChip(isFull)
-                Spacer(12.dp)
+                Spacer(Spacing.M)
                 Column {
                     Text(
                         text = if (isFull) "Quota is full" else "${critical.key} quota nearly full",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isFull) dash_modal_full_title else dash_text_primary
+                        color = if (isFull) Colors.Failure.Text else Colors.Text.Primary
                     )
                     Text(
                         text = if (isFull) {
@@ -107,37 +76,37 @@ fun QuotaSoftPromptModal(
                             "You can still proceed, or choose an open slot instead."
                         },
                         fontSize = 12.sp,
-                        color = dash_text_muted
+                        color = Colors.Text.Tertiary
                     )
                 }
             }
-            Spacer(16.dp)
+            Spacer(Spacing.L)
 
             SnapshotBox(critical = critical, isFull = isFull)
 
             if (isFull) {
-                Spacer(16.dp)
+                Spacer(Spacing.L)
                 AckBox(operatorId)
             }
 
             if (quotaCheck.alternatives.isNotEmpty()) {
-                Spacer(16.dp)
+                Spacer(Spacing.L)
                 SectionTitle("Demographics with open quota")
-                Spacer(8.dp)
+                Spacer(Spacing.S)
                 quotaCheck.alternatives.forEach { alternative ->
                     AlternativeRow(alternative)
-                    Spacer(8.dp)
+                    Spacer(Spacing.S)
                 }
             }
 
-            Spacer(8.dp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Spacer(Spacing.S)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
                 OutlinedButton(
                     onClick = onChange,
                     modifier = Modifier.weight(1f),
-                    border = BorderStroke(1.dp, dash_modal_back_border)
+                    border = BorderStroke(1.dp, Colors.Border.Primary)
                 ) {
-                    Text("Change", color = dash_modal_back_text)
+                    Text("Change", color = Colors.Text.Secondary)
                 }
                 Button(
                     onClick = {
@@ -145,7 +114,7 @@ fun QuotaSoftPromptModal(
                     },
                     modifier = Modifier.weight(2f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isFull) dash_modal_full_button else dash_modal_warn_button
+                        containerColor = if (isFull) Colors.Failure.Main else Colors.Warning.Main
                     )
                 ) {
                     Text(if (isFull) "Override & save ➤" else "Proceed with resident ›", color = Color.White)
@@ -161,26 +130,26 @@ private fun IconChip(isFull: Boolean) {
         modifier = Modifier
             .size(44.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isFull) dash_modal_full_icon_bg else dash_modal_warn_icon_bg),
+            .background(if (isFull) Colors.Failure.Container else Colors.Warning.Container),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.Warning,
             contentDescription = null,
-            tint = if (isFull) dash_modal_full_title else dash_modal_warn_value
+            tint = if (isFull) Colors.Failure.Text else Colors.Warning.Main
         )
     }
 }
 
 @Composable
 private fun SnapshotBox(critical: QuotaCheckLine, isFull: Boolean) {
-    val bg = if (isFull) dash_modal_full_snapshot_bg else dash_modal_warn_snapshot_bg
-    val border = if (isFull) dash_modal_full_snapshot_border else dash_modal_warn_snapshot_border
-    val labelColor = if (isFull) dash_modal_full_label else dash_modal_warn_label
-    val valueColor = if (isFull) dash_modal_full_value else dash_modal_warn_value
-    val barTrack = if (isFull) dash_modal_full_bar_track else dash_modal_warn_bar_track
-    val barFill = if (isFull) dash_modal_full_bar_fill else dash_modal_warn_bar_fill
-    val noteColor = if (isFull) dash_modal_full_note else dash_modal_warn_note
+    val bg = if (isFull) Colors.Failure.Container else Colors.Warning.Container
+    val border = if (isFull) Colors.Failure.Border else Colors.Warning.Border
+    val labelColor = if (isFull) Colors.Failure.Text else Colors.Warning.Text
+    val valueColor = if (isFull) Colors.Failure.Main else Colors.Warning.Main
+    val barTrack = if (isFull) Colors.Failure.Border else Colors.Warning.Container
+    val barFill = if (isFull) Colors.Failure.Main else Colors.Warning.Main
+    val noteColor = if (isFull) Colors.Failure.Text else Colors.Warning.Text
 
     // quota/check only returns slots_open (not total capacity), so the fill amount
     // is a status-based approximation rather than an exact percentage — 100% for FULL.
@@ -196,7 +165,7 @@ private fun SnapshotBox(critical: QuotaCheckLine, isFull: Boolean) {
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(10.dp))
-            .padding(14.dp)
+            .padding(Spacing.L)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(text = critical.key, fontSize = 12.sp, color = labelColor)
@@ -207,7 +176,7 @@ private fun SnapshotBox(critical: QuotaCheckLine, isFull: Boolean) {
                 color = valueColor
             )
         }
-        Spacer(8.dp)
+        Spacer(Spacing.S)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -222,7 +191,7 @@ private fun SnapshotBox(critical: QuotaCheckLine, isFull: Boolean) {
                     .background(barFill)
             )
         }
-        Spacer(8.dp)
+        Spacer(Spacing.S)
         Text(
             text = if (isFull) {
                 "This demographic has reached its collection target."
@@ -241,23 +210,23 @@ private fun AckBox(operatorId: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(dash_modal_ack_bg)
-            .border(1.dp, dash_modal_ack_border, RoundedCornerShape(8.dp))
-            .padding(10.dp),
+            .background(Colors.Warning.Container)
+            .border(1.dp, Colors.Warning.Border, RoundedCornerShape(8.dp))
+            .padding(Spacing.S),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.Warning,
             contentDescription = null,
-            tint = dash_modal_ack_text,
+            tint = Colors.Warning.Text,
             modifier = Modifier.size(14.dp)
         )
-        Spacer(8.dp)
+        Spacer(Spacing.S)
         Text(
             text = "This capture will be flagged as an override with operator $operatorId attached — " +
                 "biometric data is still saved.",
             fontSize = 11.sp,
-            color = dash_modal_ack_text
+            color = Colors.Warning.Text
         )
     }
 }
@@ -268,29 +237,29 @@ private fun AlternativeRow(alternative: Alternative) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(9.dp))
-            .background(dash_alt_row_bg)
-            .border(1.dp, dash_alt_row_border, RoundedCornerShape(9.dp))
-            .padding(10.dp),
+            .background(Colors.Success.Container)
+            .border(1.dp, Colors.Success.Border, RoundedCornerShape(9.dp))
+            .padding(Spacing.S),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
-                .background(dash_alt_tag_bg)
-                .border(1.dp, dash_alt_tag_border, RoundedCornerShape(6.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .background(Colors.Success.Container)
+                .border(1.dp, Colors.Success.Border, RoundedCornerShape(6.dp))
+                .padding(horizontal = Spacing.S, vertical = Spacing.Xxs)
         ) {
-            Text(text = alternative.key, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = dash_alt_tag_text)
+            Text(text = alternative.key, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Colors.Success.Text)
         }
-        Spacer(10.dp)
+        Spacer(Spacing.S)
         Column {
             Text(
                 text = alternative.label,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = dash_text_primary
+                color = Colors.Text.Primary
             )
-            Text(text = "${alternative.slotsOpen} slots open", fontSize = 10.sp, color = dash_alt_slots_text)
+            Text(text = "${alternative.slotsOpen} slots open", fontSize = 10.sp, color = Colors.Success.Main)
         }
     }
 }

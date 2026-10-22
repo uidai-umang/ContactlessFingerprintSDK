@@ -68,6 +68,7 @@ import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
 import app.gov.uidai.capture.utils.extension.toBase64
 import `in`.gov.uidai.utility.constants.ResultCode
 import kotlinx.coroutines.launch
+import app.gov.uidai.registration.ui.theme.Spacing
 
 private val PageBackground = Color(0xFF0A0D14)
 private val IdleBorder = Color(0xFF253447)
@@ -84,6 +85,7 @@ private enum class SlapButtonState { IDLE, CHECKING, READY }
 @Composable
 fun SlapCaptureRoute(
     handType: String,
+    captureId: Int,
     onFinish: (CaptureResult) -> Unit,
     onPopBackStack: () -> Unit,
     viewModel: SlapCaptureViewModel = hiltViewModel()
@@ -159,18 +161,27 @@ fun SlapCaptureRoute(
 
     BackHandler { onFinish(CaptureResult(resultCode = ResultCode.CAPTURE_USER_ABORT)) }
 
+    // Next capture in the sequence: reset detector state in place.
+    var lastCaptureId by remember { mutableStateOf(captureId) }
+    LaunchedEffect(captureId) {
+        if (captureId == lastCaptureId) return@LaunchedEffect
+        lastCaptureId = captureId
+        showReviewScreen = false
+        reviewBitmap = null
+        pendingResult = null
+        viewModel.reset()
+    }
+
     LaunchedEffect(capturedBitmap) {
         val bitmap = capturedBitmap ?: return@LaunchedEffect
         if (BuildConfig.DEBUG) {
             showReviewScreen = true
             reviewBitmap = null
         }
-        val ridgeBase64 = viewModel.processCapturedImage(bitmap, handType)
+        val finalBitmap = viewModel.processCapturedImage(bitmap, handType)
         val result = CaptureResult(
             resultCode = ResultCode.CAPTURE_SUCCESS,
-            finalImage = ridgeBase64,
-            fullImage = ridgeBase64,
-            croppedImage = ridgeBase64
+            finalImage = finalBitmap
         )
         if (BuildConfig.DEBUG) {
             pendingResult = result
@@ -250,7 +261,7 @@ fun SlapCaptureRoute(
                 }
 
                 Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(Spacing.L)) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
@@ -266,7 +277,7 @@ fun SlapCaptureRoute(
                         }
 
                         if (BuildConfig.DEBUG) {
-                            Spacer(modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.size(Spacing.M))
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
@@ -276,7 +287,7 @@ fun SlapCaptureRoute(
                                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                         )
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                                    .padding(horizontal = Spacing.M, vertical = Spacing.M)
                             ) {
                                 Text("Test: Pick Image", color = Color.White, fontSize = 12.sp)
                             }
@@ -284,13 +295,13 @@ fun SlapCaptureRoute(
                     }
 
                     Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.Xxl),
                         contentAlignment = Alignment.Center
                     ) {
                         Surface(shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = 0.9f)) {
                             Text(
                                 text = liveState.statusMessage,
-                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 9.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.Xxl, vertical = Spacing.S),
                                 color = if (liveState.isReady) ReadyColor else Color.Black
                             )
                         }
@@ -298,13 +309,13 @@ fun SlapCaptureRoute(
                 }
 
                 Box(
-                    modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = 16.dp)
+                    modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = Spacing.L)
                 ) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
                             .background(Color.White.copy(alpha = 0.6f), shape = RoundedCornerShape(8.dp))
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .padding(horizontal = Spacing.L, vertical = Spacing.S)
                     ) {
                         Text(
                             text = "${handType} hand · 4-finger slap",
@@ -395,7 +406,7 @@ private fun SlapBottomBar(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().background(PageBackground).padding(20.dp).windowInsetsPadding(WindowInsets.systemBars),
+        modifier = Modifier.fillMaxWidth().background(PageBackground).padding(Spacing.Xl).windowInsetsPadding(WindowInsets.systemBars),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
@@ -410,7 +421,7 @@ private fun SlapBottomBar(
             // manual mode is added for slap capture.
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = Spacing.Xxl)
                     .size(88.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -454,12 +465,12 @@ private fun SlapBottomBar(
                     imageVector = Icons.Default.FlashOn,
                     contentDescription = "Torch",
                     tint = if (isTorchOn) Color(0xFFEAB308) else Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(Spacing.S)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.size(8.dp))
+        Spacer(modifier = Modifier.size(Spacing.S))
 
         Text(
             text = statusMessage,

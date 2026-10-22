@@ -52,31 +52,8 @@ import app.gov.uidai.registration.model.CaptureMethodUiState
 import app.gov.uidai.registration.model.FingerCaptureStatus
 import app.gov.uidai.registration.model.SlapSubOption
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
-import app.gov.uidai.registration.ui.theme.capture_method_active
-import app.gov.uidai.registration.ui.theme.capture_method_active_container
-import app.gov.uidai.registration.ui.theme.capture_method_bg
-import app.gov.uidai.registration.ui.theme.capture_method_border
-import app.gov.uidai.registration.ui.theme.capture_method_disabled_bg
-import app.gov.uidai.registration.ui.theme.capture_method_disabled_text
-import app.gov.uidai.registration.ui.theme.capture_method_icon_chip_bg
-import app.gov.uidai.registration.ui.theme.capture_method_info_footer_text
-import app.gov.uidai.registration.ui.theme.capture_method_locked_bg
-import app.gov.uidai.registration.ui.theme.capture_method_locked_border
-import app.gov.uidai.registration.ui.theme.capture_method_locked_text
-import app.gov.uidai.registration.ui.theme.capture_method_nav_back_circle
-import app.gov.uidai.registration.ui.theme.capture_method_primary
-import app.gov.uidai.registration.ui.theme.capture_method_primary_container
-import app.gov.uidai.registration.ui.theme.capture_method_progress_bg
-import app.gov.uidai.registration.ui.theme.capture_method_progress_border
-import app.gov.uidai.registration.ui.theme.capture_method_progress_track_bg
-import app.gov.uidai.registration.ui.theme.capture_method_strip_bg
-import app.gov.uidai.registration.ui.theme.capture_method_strip_border
-import app.gov.uidai.registration.ui.theme.capture_method_text_muted
-import app.gov.uidai.registration.ui.theme.capture_method_text_primary
-import app.gov.uidai.registration.ui.theme.capture_method_warning_bg
-import app.gov.uidai.registration.ui.theme.capture_method_warning_border
-import app.gov.uidai.registration.ui.theme.capture_method_warning_text
-import app.gov.uidai.registration.ui.theme.md_theme_onTertiary
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 
 @Composable
 fun CaptureMethodRoute(
@@ -139,14 +116,14 @@ fun CaptureMethodScreen(
 
     Column(modifier = Modifier
         .fillMaxSize()
-        .background(capture_method_bg)) {
+        .background(Colors.Background.Primary)) {
         CaptureMethodTopBar(onBack = onBack)
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = Spacing.L),
+            verticalArrangement = Arrangement.spacedBy(Spacing.L)
         ) {
             Text(
                 text = if (uiState.isLocked) {
@@ -155,7 +132,7 @@ fun CaptureMethodScreen(
                     "Choose how fingerprints will be captured for this session. You can switch methods until the first finger is saved."
                 },
                 fontSize = 13.sp,
-                color = capture_method_text_primary,
+                color = Colors.Text.Primary,
                 lineHeight = 20.sp
             )
             SlapCaptureCard(
@@ -200,24 +177,24 @@ private fun CaptureMethodTopBar(onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(capture_method_bg)
+            .background(Colors.Background.Primary)
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.L, vertical = Spacing.M),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.M)
     ) {
         Box(
             modifier = Modifier
                 .size(32.dp)
                 .clip(CircleShape)
-                .background(capture_method_nav_back_circle)
+                .background(Color.Black.copy(alpha = 0.07f))
                 .clickable(onClick = onBack),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Go Back",
-                tint = capture_method_text_primary,
+                tint = Colors.Text.Primary,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -225,7 +202,7 @@ private fun CaptureMethodTopBar(onBack: () -> Unit) {
             text = "New Collection",
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp,
-            color = capture_method_text_primary
+            color = Colors.Text.Primary
         )
     }
 }
@@ -247,39 +224,39 @@ private fun SlapCaptureCard(
     val blocked = isLocked && !isActive
 
     val borderColor = when {
-        isActive -> capture_method_active
-        blocked -> capture_method_locked_border
-        isSelected -> capture_method_primary
-        else -> capture_method_border
+        isActive -> Colors.Success.Main
+        blocked -> Colors.Border.Primary
+        isSelected -> Colors.Brand.Blue
+        else -> Colors.Border.Primary
     }
     val bgColor = when {
-        isActive -> capture_method_active_container
-        blocked -> capture_method_locked_bg
-        isSelected -> capture_method_primary_container
+        isActive -> Colors.Success.Container
+        blocked -> Colors.Background.Secondary
+        isSelected -> Colors.Info.Container
         else -> Color.White
     }
     val iconChipBg = when {
-        isActive -> capture_method_active
-        blocked -> capture_method_locked_border
-        isSelected -> capture_method_primary
-        else -> capture_method_icon_chip_bg
+        isActive -> Colors.Success.Main
+        blocked -> Colors.Border.Primary
+        isSelected -> Colors.Brand.Blue
+        else -> Colors.Background.Secondary
     }
     val textColor = when {
-        isActive -> capture_method_active
-        blocked -> capture_method_locked_text
-        isSelected -> capture_method_primary
-        else -> capture_method_text_primary
+        isActive -> Colors.Success.Main
+        blocked -> Colors.Text.Tertiary
+        isSelected -> Colors.Brand.Blue
+        else -> Colors.Text.Primary
     }
     val descColor = when {
-        isActive -> capture_method_active.copy(alpha = 0.85f)
-        blocked -> capture_method_locked_text
-        isSelected -> capture_method_primary.copy(alpha = 0.8f)
-        else -> capture_method_text_muted
+        isActive -> Colors.Success.Main.copy(alpha = 0.85f)
+        blocked -> Colors.Text.Tertiary
+        isSelected -> Colors.Brand.Blue.copy(alpha = 0.8f)
+        else -> Colors.Text.Secondary
     }
     val dividerColor = when {
-        !isLocked && !isSelected -> capture_method_locked_border
-        isSelected -> capture_method_primary.copy(alpha = 0.2f)
-        else -> capture_method_strip_border
+        !isLocked && !isSelected -> Colors.Border.Primary
+        isSelected -> Colors.Brand.Blue.copy(alpha = 0.2f)
+        else -> Colors.Brand.BlueSoft
     }
 
     Column(
@@ -294,8 +271,8 @@ private fun SlapCaptureCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(Spacing.L),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.M)
         ) {
             Box(
                 modifier = Modifier
@@ -323,7 +300,7 @@ private fun SlapCaptureCard(
                         blocked -> Text("🔒", fontSize = 16.sp)
                         else -> RadioIndicator(
                             isSelected = isSelected || isActive,
-                            fillColor = if (isActive) capture_method_active else capture_method_primary
+                            fillColor = if (isActive) Colors.Success.Main else Colors.Brand.Blue
                         )
                     }
                 }
@@ -362,15 +339,15 @@ private fun SlabSubOptionNeutralState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(color = md_theme_onTertiary)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .background(color = Colors.Background.Primary)
+            .padding(Spacing.L),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Xs)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
             Text(text = "\uD83E\uDEF1 Left slap")
             Text(text = "\uD83E\uDEF2 Right slap")
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
             Text(text = "\uD83D\uDC4D Left thumb")
             Text(text = "\uD83D\uDC4D Right thumb")
         }
@@ -386,25 +363,25 @@ private fun SlapSubOptionsRow(
     onSelectOption: (SlapSubOption) -> Unit
 ) {
     Column(
-        modifier = Modifier.background(capture_method_strip_bg)
+        modifier = Modifier.background(Colors.Brand.BlueSoft)
     ) {
         Text(
             text = "SELECT GROUPS TO CAPTURE",
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = capture_method_primary,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+            color = Colors.Brand.Blue,
+            modifier = Modifier.padding(horizontal = Spacing.L, vertical = Spacing.S)
         )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(capture_method_strip_bg)
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .background(Colors.Brand.BlueSoft)
+                .padding(start = Spacing.M, end = Spacing.M, bottom = Spacing.M),
+            verticalArrangement = Arrangement.spacedBy(Spacing.S)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S)
             ) {
                 listOf(SlapSubOption.LEFT_SLAP, SlapSubOption.RIGHT_SLAP).forEach { option ->
                     SubOptionChip(
@@ -420,7 +397,7 @@ private fun SlapSubOptionsRow(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S)
             ) {
                 listOf(SlapSubOption.LEFT_THUMB, SlapSubOption.RIGHT_THUMB).forEach { option ->
                     SubOptionChip(
@@ -466,22 +443,22 @@ private fun SubOptionChip(
     }
 
     val bgColor = when {
-        isSelected -> capture_method_primary
-        status == FingerCaptureStatus.UPLOADING -> capture_method_warning_bg
-        status == FingerCaptureStatus.PENDING -> capture_method_warning_bg
-        status == FingerCaptureStatus.FAILED -> capture_method_warning_bg
-        isCompleted -> capture_method_locked_border
+        isSelected -> Colors.Brand.Blue
+        status == FingerCaptureStatus.UPLOADING -> Colors.Warning.Container
+        status == FingerCaptureStatus.PENDING -> Colors.Warning.Container
+        status == FingerCaptureStatus.FAILED -> Colors.Warning.Container
+        isCompleted -> Colors.Border.Primary
         isInteractive -> Color.White
-        else -> capture_method_strip_bg
+        else -> Colors.Brand.BlueSoft
     }
     val contentColor = when {
         isSelected -> Color.White
-        status == FingerCaptureStatus.UPLOADING -> capture_method_warning_text
-        status == FingerCaptureStatus.PENDING -> capture_method_warning_text
-        status == FingerCaptureStatus.FAILED -> capture_method_warning_text
-        isCompleted -> capture_method_locked_text
-        isInteractive -> capture_method_primary
-        else -> capture_method_text_muted
+        status == FingerCaptureStatus.UPLOADING -> Colors.Warning.Text
+        status == FingerCaptureStatus.PENDING -> Colors.Warning.Text
+        status == FingerCaptureStatus.FAILED -> Colors.Warning.Text
+        isCompleted -> Colors.Text.Tertiary
+        isInteractive -> Colors.Brand.Blue
+        else -> Colors.Text.Secondary
     }
 
     val statusLabel = when (status) {
@@ -504,13 +481,13 @@ private fun SubOptionChip(
             .background(bgColor)
             .then(
                 if (isInteractive && !isSelected) {
-                    Modifier.border(1.dp, capture_method_primary, RoundedCornerShape(8.dp))
+                    Modifier.border(1.dp, Colors.Brand.Blue, RoundedCornerShape(8.dp))
                 } else {
                     Modifier
                 }
             )
             .clickable(enabled = isClickable, onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 4.dp),
+            .padding(vertical = Spacing.S, horizontal = Spacing.Xxs),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (status == FingerCaptureStatus.UPLOADING) {
@@ -546,16 +523,16 @@ private fun SubOptionChip(
     // particular sub-capture hasn't already been done this session.
     val isClickable = isInteractive && !isCompleted
     val bgColor = when {
-        isSelected -> capture_method_primary
-        isCompleted -> capture_method_locked_border
+        isSelected -> Colors.Brand.Blue
+        isCompleted -> Colors.Border.Primary
         isInteractive -> Color.White
-        else -> capture_method_strip_bg
+        else -> Colors.Brand.BlueSoft
     }
     val contentColor = when {
         isSelected -> Color.White
-        isCompleted -> capture_method_locked_text
-        isInteractive -> capture_method_primary
-        else -> capture_method_text_muted
+        isCompleted -> Colors.Text.Tertiary
+        isInteractive -> Colors.Brand.Blue
+        else -> Colors.Text.Secondary
     }
     Column(
         modifier = modifier
@@ -563,13 +540,13 @@ private fun SubOptionChip(
             .background(bgColor)
             .then(
                 if (isInteractive && !isSelected) {
-                    Modifier.border(1.dp, capture_method_primary, RoundedCornerShape(8.dp))
+                    Modifier.border(1.dp, Colors.Brand.Blue, RoundedCornerShape(8.dp))
                 } else {
                     Modifier
                 }
             )
             .clickable(enabled = isClickable, onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 4.dp),
+            .padding(vertical = Spacing.S, horizontal = Spacing.Xxs),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(if (isCompleted) "✓" else emoji, fontSize = 16.sp)
@@ -593,34 +570,34 @@ private fun SequentialCaptureCard(
     val blocked = isLocked && !isActive
 
     val borderColor = when {
-        isActive -> capture_method_active
-        blocked -> capture_method_locked_border
-        isSelected -> capture_method_primary
-        else -> capture_method_border
+        isActive -> Colors.Success.Main
+        blocked -> Colors.Border.Primary
+        isSelected -> Colors.Brand.Blue
+        else -> Colors.Border.Primary
     }
     val bgColor = when {
-        isActive -> capture_method_active_container
-        blocked -> capture_method_locked_bg
-        isSelected -> capture_method_primary_container
+        isActive -> Colors.Success.Container
+        blocked -> Colors.Background.Secondary
+        isSelected -> Colors.Info.Container
         else -> Color.White
     }
     val iconChipBg = when {
-        isActive -> capture_method_active
-        blocked -> capture_method_locked_border
-        isSelected -> capture_method_primary
-        else -> capture_method_icon_chip_bg
+        isActive -> Colors.Success.Main
+        blocked -> Colors.Border.Primary
+        isSelected -> Colors.Brand.Blue
+        else -> Colors.Background.Secondary
     }
     val textColor = when {
-        isActive -> capture_method_active
-        blocked -> capture_method_locked_text
-        isSelected -> capture_method_primary
-        else -> capture_method_text_primary
+        isActive -> Colors.Success.Main
+        blocked -> Colors.Text.Tertiary
+        isSelected -> Colors.Brand.Blue
+        else -> Colors.Text.Primary
     }
     val descColor = when {
-        isActive -> capture_method_active.copy(alpha = 0.85f)
-        blocked -> capture_method_locked_text
-        isSelected -> capture_method_primary.copy(alpha = 0.8f)
-        else -> capture_method_text_muted
+        isActive -> Colors.Success.Main.copy(alpha = 0.85f)
+        blocked -> Colors.Text.Tertiary
+        isSelected -> Colors.Brand.Blue.copy(alpha = 0.8f)
+        else -> Colors.Text.Secondary
     }
 
     Column(
@@ -635,8 +612,8 @@ private fun SequentialCaptureCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(Spacing.L),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.M)
         ) {
             Box(
                 modifier = Modifier
@@ -664,7 +641,7 @@ private fun SequentialCaptureCard(
                         blocked -> Text("🔒", fontSize = 16.sp)
                         else -> RadioIndicator(
                             isSelected = isSelected || isActive,
-                            fillColor = if (isActive) capture_method_active else capture_method_primary
+                            fillColor = if (isActive) Colors.Success.Main else Colors.Brand.Blue
                         )
                     }
                 }
@@ -690,17 +667,17 @@ private fun SequentialCaptureCard(
 @Composable
 private fun SequentialFooterNote() {
     Column {
-        HorizontalDivider(color = capture_method_strip_border, thickness = 1.dp)
+        HorizontalDivider(color = Colors.Brand.BlueSoft, thickness = 1.dp)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(capture_method_strip_bg)
-                .padding(12.dp)
+                .background(Colors.Brand.BlueSoft)
+                .padding(Spacing.M)
         ) {
             Text(
                 text = "ⓘ Once the first finger is saved you cannot switch to slap mode. Complete the session sequentially.",
                 fontSize = 11.sp,
-                color = capture_method_info_footer_text
+                color = Colors.Info.Text
             )
         }
     }
@@ -710,12 +687,12 @@ private fun SequentialFooterNote() {
 private fun SessionProgressStrip(fingersAlreadyCaptured: Int) {
     val progress = (fingersAlreadyCaptured.toFloat() / 4f).coerceIn(0f, 1f)
     Column {
-        HorizontalDivider(color = capture_method_progress_border, thickness = 1.dp)
+        HorizontalDivider(color = Colors.Success.Border, thickness = 1.dp)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(capture_method_progress_bg)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .background(Colors.Success.Container)
+                .padding(horizontal = Spacing.L, vertical = Spacing.S)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -726,14 +703,14 @@ private fun SessionProgressStrip(fingersAlreadyCaptured: Int) {
                     text = "SESSION PROGRESS",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = capture_method_active,
+                    color = Colors.Success.Main,
                     letterSpacing = 0.5.sp
                 )
                 Text(
                     text = "$fingersAlreadyCaptured / min. 4",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = capture_method_active
+                    color = Colors.Success.Main
                 )
             }
             Box(modifier = Modifier.height(6.dp))
@@ -742,14 +719,14 @@ private fun SessionProgressStrip(fingersAlreadyCaptured: Int) {
                     .fillMaxWidth()
                     .height(5.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(capture_method_progress_track_bg)
+                    .background(Colors.Success.Border)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(progress)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(capture_method_active)
+                        .background(Colors.Success.Main)
                 )
             }
         }
@@ -770,14 +747,14 @@ private fun CaptureLockedWarningNote(activeMethod: CaptureMethod?) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(capture_method_warning_bg)
-            .border(1.dp, capture_method_warning_border, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .background(Colors.Warning.Container)
+            .border(1.dp, Colors.Warning.Border, RoundedCornerShape(8.dp))
+            .padding(horizontal = Spacing.M, vertical = Spacing.S)
     ) {
         Text(
             text = message,
             fontSize = 12.sp,
-            color = capture_method_warning_text,
+            color = Colors.Warning.Text,
             lineHeight = 18.sp
         )
     }
@@ -786,7 +763,7 @@ private fun CaptureLockedWarningNote(activeMethod: CaptureMethod?) {
 @Composable
 private fun RadioIndicator(
     isSelected: Boolean,
-    fillColor: Color = capture_method_primary
+    fillColor: Color = Colors.Brand.Blue
 ) {
     Box(
         modifier = Modifier
@@ -794,7 +771,7 @@ private fun RadioIndicator(
             .clip(CircleShape)
             .then(
                 if (isSelected) Modifier.background(fillColor)
-                else Modifier.border(2.dp, capture_method_border, CircleShape)
+                else Modifier.border(2.dp, Colors.Border.Primary, CircleShape)
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -817,8 +794,8 @@ private fun CaptureMethodBottomBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(capture_method_bg)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .background(Colors.Background.Primary)
+            .padding(horizontal = Spacing.L, vertical = Spacing.M)
             .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
         Button(
@@ -829,10 +806,10 @@ private fun CaptureMethodBottomBar(
                 .height(48.dp),
             shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = capture_method_primary,
+                containerColor = Colors.Brand.Blue,
                 contentColor = Color.White,
-                disabledContainerColor = capture_method_disabled_bg,
-                disabledContentColor = capture_method_disabled_text
+                disabledContainerColor = Colors.Button.Disabled,
+                disabledContentColor = Colors.Button.OnDisabled
             )
         ) {
             Text(
@@ -863,12 +840,12 @@ private fun UploadingDialog(stage: FingerCaptureStatus) {
             modifier = Modifier
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color.White)
-                .padding(24.dp),
+                .padding(Spacing.Xxl),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(Spacing.M)
         ) {
-            CircularProgressIndicator(color = capture_method_primary)
-            Text(text = message, fontSize = 13.sp, color = capture_method_text_primary)
+            CircularProgressIndicator(color = Colors.Brand.Blue)
+            Text(text = message, fontSize = 13.sp, color = Colors.Text.Primary)
         }
     }
 }

@@ -25,7 +25,6 @@ import app.gov.uidai.capture.domain.model.ProcessingResult
 import app.gov.uidai.capture.slap.processing.SlapFingerprintProcessor
 import app.gov.uidai.capture.usecase.factory.SegmentationFactory
 import app.gov.uidai.capture.utils.KotlinUtils
-import app.gov.uidai.capture.utils.extension.toBase64
 import app.gov.uidai.capture.utils.extension.toByteArray
 import dagger.hilt.android.qualifiers.ApplicationContext
 import `in`.gov.uidai.network.data.local.FileRepository
@@ -71,6 +70,7 @@ class SlapCaptureViewModel @Inject constructor(
 
     fun setExpectedHandType(handType: String) {
         expectedHandType = handType
+        listener?.expectedHandType = handType   // left -> right slap within one capture loop
     }
 
     fun toggleTorch() {
@@ -116,7 +116,7 @@ class SlapCaptureViewModel @Inject constructor(
      * so the ~5-6s segmentation cost is hidden rather than freezing the
      * preview before review appears.
      *
-     * Returns the base64 ridge image for the CaptureResult. Falls back to
+     * Returns the colour crop for the CaptureResult. Falls back to
      * the colour crop if segmentation produces no mask -- same silent
      * degradation FinalProcessingU2Net.run already has when maskedImage
      * is null.
@@ -125,13 +125,13 @@ class SlapCaptureViewModel @Inject constructor(
     private val slapFingerprintProcessor by lazy { SlapFingerprintProcessor(context = appContext) }
 
     suspend fun processCapturedImage(
-        colourCrop: Bitmap,
+        colorCrop: Bitmap,
         handType: String
-    ): String = withContext(Dispatchers.Default) {
+    ): Bitmap = withContext(Dispatchers.Default) {
 
         setTorch(false)
 
-        if (!BuildConfig.DEBUG) return@withContext colourCrop.toBase64()
+        if (!BuildConfig.DEBUG) return@withContext colorCrop
 
         try {
             val slapHandType = if (handType.equals("LEFT", ignoreCase = true)) {
@@ -141,7 +141,7 @@ class SlapCaptureViewModel @Inject constructor(
             }
 
             val result = slapFingerprintProcessor.process(
-                bitmap = colourCrop,
+                bitmap = colorCrop,
                 handType = slapHandType
             )
 
@@ -165,15 +165,15 @@ class SlapCaptureViewModel @Inject constructor(
                 Log.d("DiagnosticImage", "Finger ${finger.index + 1} Ridge URI = $ridgeUri")
             }
 
-            colourCrop.toBase64()
+            colorCrop
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process Slap fingerprint image", e)
-            colourCrop.toBase64()
+            colorCrop
         }
     }
 
-    suspend fun processPickedImage(pickedBitmap: Bitmap, handType: String): String {
+    suspend fun processPickedImage(pickedBitmap: Bitmap, handType: String): Bitmap {
         return processCapturedImage(pickedBitmap, handType)
     }
 

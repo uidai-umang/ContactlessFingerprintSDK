@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.gov.uidai.registration.ui.theme.Spacing
 
 // --- Hand-guide overlay: shown for the first 3s on entering the screen,
 // showing 4 finger-shaped guides (varying heights: index/middle/ring/little
@@ -61,7 +62,7 @@ fun SlapHandGuideOverlay(handType: String, onClick: () -> Unit = {}) {
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.size(6.dp))
+            Spacer(modifier = Modifier.size(Spacing.Xs))
             Text(
                 text = "Keep a small gap between each finger",
                 color = Color.White.copy(alpha = 0.7f),
@@ -130,7 +131,7 @@ fun SlapHandGuideOverlay(handType: String, onClick: () -> Unit = {}) {
                 }
             }
 
-            Spacer(modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.size(Spacing.Xxl))
             Text(
                 text = "Starting camera…",
                 color = GuideGapHint,

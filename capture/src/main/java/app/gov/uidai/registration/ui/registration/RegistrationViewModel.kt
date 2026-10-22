@@ -1,8 +1,8 @@
 package app.gov.uidai.registration.ui.registration
 
-import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
-import androidx.activity.result.ActivityResultLauncher
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.gov.uidai.registration.data.dao.PendingCaptureDao
@@ -13,29 +13,32 @@ import app.gov.uidai.registration.model.FingerCaptureStatus
 import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.model.FingerType
 import app.gov.uidai.registration.model.RegistrationUiState
-import app.gov.uidai.registration.model.SDKResult
 import app.gov.uidai.registration.model.User
 import app.gov.uidai.registration.model.capture.CaptureRequest
 import `in`.gov.uidai.network.data.local.FileRepository
 import app.gov.uidai.registration.repository.OperatorRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
-import app.gov.uidai.registration.usecase.FingerSDKManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
 import app.gov.uidai.registration.usecase.UserUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import app.gov.uidai.registration.encryption.EncryptionService
 import app.gov.uidai.registration.model.resident.ResidentInput
+import app.gov.uidai.capture.ui.camera.CaptureResult
+import app.gov.uidai.registration.di.ApplicationScope
+import com.gemalto.jp2.JP2Encoder
+import `in`.gov.uidai.embedding.FingerEmbedder
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import java.util.UUID
 import `in`.gov.uidai.utility.constants.ResultCode
 import app.gov.uidai.capture.BuildConfig
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -52,10 +55,15 @@ class RegistrationViewModel @Inject constructor(
     private val residentUseCase: ResidentUseCase,
     private val captureQueueManager: CaptureQueueManager,
     private val pendingCaptureDao: PendingCaptureDao,
-    private val sdkManager: FingerSDKManager,
+    private val fingerEmbedder: FingerEmbedder,
     private val encryptionService: EncryptionService,
     private val operatorRepository: OperatorRepository,
+    @ApplicationScope private val appScope: CoroutineScope,
 ) : ViewModel() {
+
+    companion object {
+        private val TAG = RegistrationViewModel::class.simpleName
+    }
 
     private val _uiState = MutableStateFlow(RegistrationUiState())
     val uiState = _uiState.asStateFlow()
@@ -72,11 +80,19 @@ class RegistrationViewModel @Inject constructor(
     private val testCentreId = "00000000-0000-0000-0000-000000000003"
 
 
-    // ---- Auto-advance capture sequence ----
+    // ---- Capture loop (sequence + per-capture upload) ----
+    // The capture loop destination renders whatever activeCapture points at
+    // and pops back to the launching screen once it goes null.
     private val captureSequence = ArrayDeque<FingerPosition>()
     private val uploadMutex = Mutex()
-    private val _nextCapture = Channel<FingerPosition>(Channel.BUFFERED)
-    val nextCapture = _nextCapture.receiveAsFlow()
+    private val _activeCapture = MutableStateFlow<ActiveCapture?>(null)
+    val activeCapture: StateFlow<ActiveCapture?> = _activeCapture.asStateFlow()
+    private var captureCounter = 0
+    private var segmentCounter = 0
+
+    // Status of the in-flight position before it was flipped to CAPTURING,
+    // restored if the capture is aborted / fails.
+    private var statusBeforeCapture: FingerCaptureStatus? = null
 
     private fun FingerPosition.isDone() = when (_uiState.value.fingerUploadStatus[this]) {
         FingerCaptureStatus.CAPTURED, FingerCaptureStatus.PENDING, FingerCaptureStatus.UPLOADING -> true
@@ -107,16 +123,146 @@ class RegistrationViewModel @Inject constructor(
     }
 
     private fun advanceSequence() {
-        captureSequence.removeFirstOrNull()?.let { _nextCapture.trySend(it) }
+        val next = captureSequence.removeFirstOrNull()
+        if (next == null) {
+            _activeCapture.value = null
+            return
+        }
+        val previous = _activeCapture.value
+        // Same screen type as the previous capture -> same segment, so the
+        // camera screen stays mounted and only resets between captures.
+        val segment = if (previous != null && previous.position.isSlap == next.isSlap) {
+            previous.segment
+        } else {
+            ++segmentCounter
+        }
+        statusBeforeCapture = _uiState.value.fingerUploadStatus[next]
+        _uiState.update {
+            it.copy(
+                loadingFinger = if (next.isSlap) it.loadingFinger else next,
+                fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
+                    set(next, FingerCaptureStatus.CAPTURING)
+                }
+            )
+        }
+        _activeCapture.value = ActiveCapture(
+            position = next,
+            id = ++captureCounter,
+            segment = segment,
+            txnId = UUID.randomUUID().toString()
+        )
     }
 
-    fun cancelSequence() = captureSequence.clear()
-
-
-    init {
-        sdkManager.setResultListener { result -> onSDKResult(result) }
+    /** Back-press / abort / failure / permission denial: stop the chain and leave the loop. */
+    fun cancelSequence() {
+        captureSequence.clear()
+        _activeCapture.value?.let { restoreStatus(it.position) }
+        _activeCapture.value = null
     }
-    
+
+    private fun restoreStatus(position: FingerPosition) {
+        val restored = statusBeforeCapture ?: FingerCaptureStatus.NOT_CAPTURED
+        statusBeforeCapture = null
+        _uiState.update {
+            it.copy(
+                loadingFinger = if (it.loadingFinger == position) null else it.loadingFinger,
+                fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
+                    set(position, restored)
+                }
+            )
+        }
+    }
+
+    /**
+     * Called by the capture screen (in memory) when the active capture ends.
+     * On success the upload starts in [appScope] -- it must outlive the
+     * capture screen -- and the next capture in the sequence starts at once.
+     */
+    fun onCaptureResult(result: CaptureResult) {
+        val capture = _activeCapture.value ?: return
+        val bitmap = result.finalImage
+        if (result.resultCode != ResultCode.CAPTURE_SUCCESS || bitmap == null) {
+            Log.d(TAG, "Capture of ${capture.position} ended with code ${result.resultCode}")
+            cancelSequence()
+            return
+        }
+
+        val position = capture.position
+        statusBeforeCapture = null
+        _uiState.update {
+            it.copy(
+                loadingFinger = if (it.loadingFinger == position) null else it.loadingFinger,
+                message = null,
+                fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
+                    set(position, FingerCaptureStatus.UPLOADING)
+                }
+            )
+        }
+
+        val captureMode = if (position.isSlap) CaptureMode.SLAP else selectedCaptureMode
+        appScope.launch {
+            processAndUpload(
+                position = position,
+                captureMode = captureMode,
+                bitmap = bitmap,
+                blurScore = result.blurScore.toDouble(),
+                brightnessScore = result.brightnessScore.toDouble(),
+                glareScore = result.glareScore.toDouble()
+            )
+        }
+        advanceSequence()
+    }
+
+    private suspend fun processAndUpload(
+        position: FingerPosition,
+        captureMode: String,
+        bitmap: Bitmap,
+        blurScore: Double,
+        brightnessScore: Double,
+        glareScore: Double
+    ) {
+        try {
+            val jp2ByteArray = JP2Encoder(bitmap).encode()
+            if (!position.isSlap) {
+                // Single fingers keep the embedding + preview the finger grid
+                // shows; a whole-hand slap image isn't a single fingerprint.
+                val (embedding, fingerQuality) = fingerEmbedder.embed(jp2ByteArray)
+                val fingerprint = CLFingerprint(
+                    fingerPosition = position,
+                    bitmap = bitmap,
+                    embedding = embedding,
+                    fingerQuality = fingerQuality,
+                    jp2ByteArray = jp2ByteArray,
+                    blurScore = blurScore,
+                    brightnessScore = brightnessScore,
+                    glareScore = glareScore
+                )
+                _uiState.update {
+                    it.copy(fingerprints = it.fingerprints.toMutableMap().apply { set(position, fingerprint) })
+                }
+            }
+            uploadCapture(
+                fingerPosition = position,
+                captureMode = captureMode,
+                imageBytes = jp2ByteArray,
+                blurScore = blurScore,
+                brightnessScore = brightnessScore,
+                glareScore = glareScore
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Processing/upload of $position failed", e)
+            _uiState.update {
+                it.copy(
+                    message = "Unable to process ${position.name.replace('_', ' ')} capture.",
+                    fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
+                        set(position, FingerCaptureStatus.NOT_CAPTURED)
+                    }
+                )
+            }
+        }
+    }
+
+
     fun setResident(resident: ResidentInput) {
         // Same resident may be set again when navigating back into this
         // shared instance from a sibling destination (e.g. CaptureMethod)
@@ -209,123 +355,6 @@ class RegistrationViewModel @Inject constructor(
                 phoneNumber = phoneNumber
             )
         }
-    }
-
-    fun startFingerprintCapture(fingerPosition: FingerPosition, launchSdk: () -> Unit) {
-        val currentState = _uiState.value
-
-        if (currentState.loadingFinger != null) {
-            _uiState.update {
-                it.copy(
-                    message = "Already processing ${
-                        currentState.loadingFinger.name.replace(
-                            '_',
-                            ' '
-                        )
-                    }"
-                )
-            }
-        } else {
-            _uiState.update {
-                it.copy(
-                    loadingFinger = fingerPosition,
-                    fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
-                        set(fingerPosition, FingerCaptureStatus.CAPTURING)
-                    }
-                )
-            }
-            launchSdk()
-        }
-    }
-
-    fun onSDKResult(result: SDKResult<CLFingerprint>) {
-        val currentState = _uiState.value
-        when (result) {
-            is SDKResult.Success -> {
-                val data = result.data.copy(fingerPosition = currentState.loadingFinger!!)
-                val updatedFingerprints = currentState.fingerprints.toMutableMap().apply {
-                    set(currentState.loadingFinger, data)
-                }
-                _uiState.update {
-                    currentState.copy(
-                        fingerprints = updatedFingerprints,
-                        loadingFinger = null,
-                        message = null,
-                        fingerUploadStatus = currentState.fingerUploadStatus.toMutableMap().apply {
-                            set(data.fingerPosition, FingerCaptureStatus.UPLOADING)
-                        }
-                    )
-                }
-
-                viewModelScope.launch {
-                    uploadCapture(
-                        fingerPosition = data.fingerPosition,
-                        captureMode = selectedCaptureMode,
-                        imageBytes = data.imageBytes,
-                        blurScore = data.blurScore,
-                        brightnessScore = data.brightnessScore,
-                        glareScore = data.glareScore
-                    )
-                }
-                advanceSequence()
-            }
-
-            is SDKResult.Error -> {
-                cancelSequence()
-                _uiState.update {
-                    currentState.copy(
-                        loadingFinger = null,
-                        message = result.message,
-                        fingerUploadStatus = currentState.loadingFinger?.let { position ->
-                            currentState.fingerUploadStatus.toMutableMap().apply {
-                                set(position, FingerCaptureStatus.NOT_CAPTURED)
-                            }
-                        } ?: currentState.fingerUploadStatus
-                    )
-                }
-            }
-        }
-    }
-
-    // Entry point for a completed slap capture (LEFT_SLAP / RIGHT_SLAP).
-    // Called from RegistrationActivity's slap ActivityResultLauncher callback
-    // once it's decoded the returned image + scores -- this ViewModel stays
-    // Context-free, same as the rest of the class.
-    fun uploadSlapResult(
-        handType: String,
-        imageBytes: ByteArray,
-        blurScore: Double = 0.0,
-        brightnessScore: Double = 0.0,
-        glareScore: Double = 0.0
-    ) {
-        val fingerPosition = when (handType) {
-            "Left" -> FingerPosition.LEFT_SLAP
-            "Right" -> FingerPosition.RIGHT_SLAP
-            else -> {
-                _uiState.update { it.copy(message = "Unknown slap hand type: $handType") }
-                return
-            }
-        }
-
-        _uiState.update {
-            it.copy(
-                fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
-                    set(fingerPosition, FingerCaptureStatus.UPLOADING)
-                }
-            )
-        }
-
-        viewModelScope.launch {
-            uploadCapture(
-                fingerPosition = fingerPosition,
-                captureMode = CaptureMode.SLAP,
-                imageBytes = imageBytes,
-                blurScore = blurScore,
-                brightnessScore = brightnessScore,
-                glareScore = glareScore
-            )
-        }
-        advanceSequence()
     }
 
     private suspend fun uploadCapture(
@@ -493,36 +522,6 @@ class RegistrationViewModel @Inject constructor(
             }
         }
 
-    fun handleSdkActivityResult(resultCode: Int, data: Intent?) {
-        if (resultCode != ResultCode.CAPTURE_SUCCESS) cancelSequence()   // abort/fail/timeout stops the chain
-        viewModelScope.launch { sdkManager.parseResponse(resultCode, data) }
-    }
-
-    fun captureFingerprint(fingerPosition: FingerPosition, launcher: ActivityResultLauncher<Intent>) {
-        startFingerprintCapture(fingerPosition) {
-            sdkManager.captureFingerprint(
-                activityResultLauncher = launcher,
-                purpose = "register",
-                fingerPosition = fingerPosition
-            )
-        }
-    }
-
-    fun markSlapProcessing(handType: String) {
-        val fingerPosition = when (handType) {
-            "Left" -> FingerPosition.LEFT_SLAP
-            "Right" -> FingerPosition.RIGHT_SLAP
-            else -> return
-        }
-        _uiState.update {
-            it.copy(
-                fingerUploadStatus = it.fingerUploadStatus.toMutableMap().apply {
-                    set(fingerPosition, FingerCaptureStatus.CAPTURING)
-                }
-            )
-        }
-    }
-
     fun setSelectedCaptureMode(mode: String) {
         selectedCaptureMode = mode
     }
@@ -536,6 +535,18 @@ class RegistrationViewModel @Inject constructor(
         }
     }
 }
+
+data class ActiveCapture(
+    val position: FingerPosition,
+    /** Unique per capture; the capture screens reset when it changes. */
+    val id: Int,
+    /** Changes only when switching between single-finger and slap screens. */
+    val segment: Int,
+    val txnId: String
+)
+
+private val FingerPosition.isSlap: Boolean
+    get() = this == FingerPosition.LEFT_SLAP || this == FingerPosition.RIGHT_SLAP
 
 sealed class RegistrationResult {
     object Success : RegistrationResult()

@@ -9,8 +9,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import app.gov.uidai.registration.utils.residentInput
 import app.gov.uidai.registration.utils.residentNavArguments
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -39,32 +36,31 @@ import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
 import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
 import app.gov.uidai.registration.model.CaptureMode
-import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
 import app.gov.uidai.registration.ui.operator.RegisterOperatorRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.registration.method.CaptureMethodRoute
-import app.gov.uidai.registration.model.SlapSubOption
 import app.gov.uidai.registration.model.toFingerPositionOrNull
-import app.gov.uidai.registration.model.usesSingleFingerCapture
-import app.gov.uidai.registration.utils.toBitmap
-import com.gemalto.jp2.JP2Encoder
-import `in`.gov.uidai.utility.constants.JourneyConstant
-import `in`.gov.uidai.utility.constants.ResultCode
 import app.gov.uidai.registration.ui.theme.AttendanceAppTheme
-import app.gov.uidai.registration.ui.theme.md_theme_scrim
-import app.gov.uidai.registration.ui.theme.md_theme_surface
 import app.gov.uidai.registration.ui.uidentry.UidEntryRoute
 import app.gov.uidai.registration.usecase.DeviceUseCase
-import app.gov.uidai.registration.usecase.SlapCaptureLauncher
 import app.gov.uidai.registration.utils.Routes
 import app.gov.uidai.registration.utils.device.DeviceRegistrationGate
 import app.gov.uidai.registration.utils.worker.CaptureWorkScheduler
+import app.gov.uidai.capture.BuildConfig
+import app.gov.uidai.capture.pref.PreferenceStore
+import app.gov.uidai.capture.ui.camera.CameraController
+import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
+import app.gov.uidai.capture.utils.MainThreadWatchdog
+import app.gov.uidai.registration.ui.registration.capture.CaptureLoopRoute
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Provider
 import jakarta.inject.Inject
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import app.gov.uidai.registration.ui.theme.Colors
 
 @AndroidEntryPoint
 class RegistrationActivity : ComponentActivity() {
@@ -80,6 +76,16 @@ class RegistrationActivity : ComponentActivity() {
     @Inject
     lateinit var maintenanceStatusProvider: MaintenanceStatusProvider
 
+    // Capture loop dependencies.
+    @Inject
+    lateinit var cameraControllerProvider: Provider<CameraController>
+
+    @Inject
+    lateinit var imageProcessorFactory: ImageProcessorFactory
+
+    @Inject
+    lateinit var preferenceStore: PreferenceStore
+
     companion object {
         const val EXTRA_OPERATOR_REF_ID = "operator_ref_id"   // host app passes this
     }
@@ -88,16 +94,24 @@ class RegistrationActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted -> }
 
+    private val storagePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted -> }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) MainThreadWatchdog.start()
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(this))
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(
                 scrim = Color.Transparent.toArgb(),
-                darkScrim = md_theme_scrim.toArgb()
+                darkScrim = Colors.Background.Tertiary.toArgb()
             ),
             navigationBarStyle = SystemBarStyle.light(
-                scrim = md_theme_surface.toArgb(),
-                darkScrim = md_theme_scrim.toArgb()
+                scrim = Colors.Background.Primary.toArgb(),
+                darkScrim = Colors.Background.Tertiary.toArgb()
             )
         )
 
@@ -108,6 +122,15 @@ class RegistrationActivity : ComponentActivity() {
             ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+
+        // Debug builds save diagnostic images to Pictures/, which needs this pre-Q.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
 
         sharedViewModel.initialize(this)
@@ -184,84 +207,13 @@ class RegistrationActivity : ComponentActivity() {
                                 arguments = residentNavArguments
                             ) { backStackEntry ->
                                 val resident = backStackEntry.residentInput()
-                                val context = LocalContext.current
 
                                 // registrationViewModel is Activity-scoped (see field above),
-                                // shared with the Registration destination below -- one
-                                // resident lookup / session / capture_mode source of truth
-                                // for both sequential and slap capture.
+                                // shared with the Registration and CaptureLoop destinations --
+                                // one resident lookup / session / capture sequence source of
+                                // truth for both sequential and slap capture.
                                 LaunchedEffect(resident) {
                                     registrationViewModel.setResident(resident)
-                                }
-
-                                // Tracks which sub-option launched the slap capture Activity,
-                                // since the ActivityResultLauncher callback below doesn't get
-                                // the original launch params back.
-                                var pendingSlapSubOption by remember { mutableStateOf<SlapSubOption?>(null) }
-
-                                val slapCaptureLauncher = rememberLauncherForActivityResult(
-                                    ActivityResultContracts.StartActivityForResult()
-                                ) { result ->
-                                    val handType = pendingSlapSubOption?.let { if (it == SlapSubOption.LEFT_SLAP) "Left" else "Right" }
-                                    when (result.resultCode) {
-                                        ResultCode.CAPTURE_SUCCESS -> {
-                                            val uri = result.data?.data
-                                            val responseXml = result.data?.getStringExtra(JourneyConstant.RESPONSE)
-                                            if (handType != null) registrationViewModel.markSlapProcessing(handType)
-
-                                            lifecycleScope.launch(Dispatchers.Default) {
-                                                val base64String = uri?.let {
-                                                    context.contentResolver.openInputStream(it)?.bufferedReader()
-                                                        ?.use { reader -> reader.readText() }
-                                                }
-                                                uri?.let { runCatching { context.contentResolver.delete(it, null, null) } }
-                                                if (base64String != null && handType != null) {
-                                                    val bitmap = base64String.toBitmap()
-                                                    val jp2ByteArray = JP2Encoder(bitmap).encode()
-                                                    val (blurScore, brightnessScore, glareScore) = parseSlapScoresFromResponseXml(responseXml)
-                                                    // starts the background upload AND advances the sequence
-                                                    registrationViewModel.uploadSlapResult(
-                                                        handType = handType,
-                                                        imageBytes = jp2ByteArray,
-                                                        blurScore = blurScore,
-                                                        brightnessScore = brightnessScore,
-                                                        glareScore = glareScore
-                                                    )
-                                                } else {
-                                                    Log.w("SlapCapture", "No image data in slap capture result")
-                                                    registrationViewModel.cancelSequence()
-                                                }
-                                            }
-                                        }
-                                        else -> {
-                                            Log.d("SlapCapture", "Slap capture activity result: resultCode=${result.resultCode}")
-                                            registrationViewModel.cancelSequence()
-                                        }
-                                    }
-                                }
-
-                                val thumbCaptureLauncher = rememberLauncherForActivityResult(
-                                    ActivityResultContracts.StartActivityForResult()
-                                ) { result -> registrationViewModel.handleSdkActivityResult(result.resultCode, result.data) }
-
-                                val launchPosition: (FingerPosition) -> Unit = { position ->
-                                    val slapOption = when (position) {
-                                        FingerPosition.LEFT_SLAP -> SlapSubOption.LEFT_SLAP
-                                        FingerPosition.RIGHT_SLAP -> SlapSubOption.RIGHT_SLAP
-                                        else -> null
-                                    }
-                                    if (slapOption != null) {
-                                        pendingSlapSubOption = slapOption
-                                        slapCaptureLauncher.launch(
-                                            SlapCaptureLauncher.createIntent(context, purpose = "register", slapSubOption = slapOption)
-                                        )
-                                    } else {
-                                        registrationViewModel.captureFingerprint(position, thumbCaptureLauncher)
-                                    }
-                                }
-
-                                LaunchedEffect(registrationViewModel) {
-                                    registrationViewModel.nextCapture.collect { launchPosition(it) }
                                 }
 
                                 CaptureMethodRoute(
@@ -274,7 +226,18 @@ class RegistrationActivity : ComponentActivity() {
                                     onContinueSlap = { slapSubOption ->
                                         registrationViewModel.setSelectedCaptureMode(CaptureMode.SLAP)
                                         registrationViewModel.startSlapSequence(slapSubOption.toFingerPositionOrNull()!!)
+                                        navController.navigate(Routes.CaptureLoop.route) { launchSingleTop = true }
                                     }
+                                )
+                            }
+                            composable(Routes.CaptureLoop.route) {
+                                CaptureLoopRoute(
+                                    viewModel = registrationViewModel,
+                                    cameraControllerProvider = cameraControllerProvider,
+                                    imageProcessorFactory = imageProcessorFactory,
+                                    preferenceStore = preferenceStore,
+                                    // Back to whichever screen launched the loop, statuses intact.
+                                    onExit = { navController.popBackStack(Routes.CaptureLoop.route, inclusive = true) }
                                 )
                             }
                             composable(
@@ -285,7 +248,10 @@ class RegistrationActivity : ComponentActivity() {
                                     resident = backStackEntry.residentInput(),
                                     viewModel = registrationViewModel,
                                     sharedUiState = sharedUiState,
-                                    onNavigateUp = { navController.navigateUp() }
+                                    onNavigateUp = { navController.navigateUp() },
+                                    onStartCaptureLoop = {
+                                        navController.navigate(Routes.CaptureLoop.route) { launchSingleTop = true }
+                                    }
                                 )
                             }
                             // Not yet reachable from any screen in this module — no
@@ -326,19 +292,5 @@ class RegistrationActivity : ComponentActivity() {
                 DeviceRegistrationGate.markRegistered(this@RegistrationActivity)
             }
         }
-    }
-
-    // Mirrors FingerSDKManagerImpl.parseScoresFromResponseXml -- slap capture
-    // returns the same XML shape via JourneyConstant.RESPONSE, just without
-    // going through FingerEmbedder (see SlapCaptureLauncher's doc comment).
-    private fun parseSlapScoresFromResponseXml(xml: String?): Triple<Double, Double, Double> {
-        if (xml == null) return Triple(0.0, 0.0, 0.0)
-        fun extractAttr(name: String): Double =
-            Regex("""$name="([\d.]+)"""").find(xml)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-        return Triple(
-            extractAttr("blurScore"),
-            extractAttr("brightnessScore"),
-            extractAttr("glareScore")
-        )
     }
 }

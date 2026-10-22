@@ -26,6 +26,10 @@ sealed class Routes(val route: String) {
             "$PATH_CAPTURE_METHOD/${resident.refId}/${resident.dob}/${resident.gender}"
     }
 
+    // Capture loop: renders the active capture of RegistrationViewModel's
+    // sequence (single-finger or slap camera) and pops back when it ends.
+    data object CaptureLoop : Routes(PATH_CAPTURE_LOOP)
+
     data object Registration :
         Routes("$PATH_REGISTRATION/{$ARG_REF_ID}/{$ARG_DOB}/{$ARG_GENDER}") {
         fun createRoute(resident: ResidentInput) =
@@ -49,6 +53,7 @@ sealed class Routes(val route: String) {
         private const val PATH_DEBUG_SETTINGS = "debug_settings"
         private const val PATH_CAPTURE_METHOD = "capture_method"
         private const val PATH_REGISTRATION = "registration"
+        private const val PATH_CAPTURE_LOOP = "capture_loop"
         private const val PATH_USER_INFO = "user_info"
         private const val PATH_DASHBOARD = "dashboard"
         const val ARG_UID_HASH = "uidHash"

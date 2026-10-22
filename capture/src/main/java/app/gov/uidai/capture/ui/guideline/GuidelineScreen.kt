@@ -50,8 +50,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.R
-import app.gov.uidai.capture.ui.theme.Colors
-import app.gov.uidai.capture.ui.theme.Spacing
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 import app.gov.uidai.capture.ui.theme.Typography
 
 // ── Static content — fixed copy from the mockup. Bold spans hardcoded
@@ -135,7 +135,7 @@ fun GuidelineScreen(
 
     Scaffold(
         modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars),
-        containerColor = Colors.colourBase,
+        containerColor = Colors.Background.Primary,
         topBar = { GuidelineTopBar(onBack = onBack) },
         bottomBar = {
             GuidelineBottomBar(
@@ -155,14 +155,14 @@ fun GuidelineScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.SpacingL, vertical = Spacing.SpacingS),
-            verticalArrangement = Arrangement.spacedBy(Spacing.SpacingS)
+                .padding(horizontal = Spacing.L, vertical = Spacing.S),
+            verticalArrangement = Arrangement.spacedBy(Spacing.S)
         ) {
-            Spacer(modifier = Modifier.height(Spacing.SpacingS))
+            Spacer(modifier = Modifier.height(Spacing.S))
             PurposeRightsCard()
             SectionDivider(stringResource(R.string.section_capture_guidelines))
             CaptureGuidelinesCard()
-            Spacer(modifier = Modifier.height(Spacing.SpacingXS))
+            Spacer(modifier = Modifier.height(Spacing.Xs))
             ConsentRow(
                 checked = consentChecked,
                 onCheckedChange = { consentChecked = it }
@@ -176,15 +176,15 @@ private fun GuidelineTopBar(onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Colors.colourBase)
+            .background(Colors.Background.Primary)
             .padding(
-                start = Spacing.SpacingS,
-                top = Spacing.SpacingS,
-                bottom = Spacing.Spacing2XS,
-                end = Spacing.SpacingL
+                start = Spacing.S,
+                top = Spacing.S,
+                bottom = Spacing.Xxs,
+                end = Spacing.L
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.SpacingM)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.M)
     ) {
         Box(
             modifier = Modifier
@@ -197,13 +197,13 @@ private fun GuidelineTopBar(onBack: () -> Unit) {
             Icon(
                 painter = painterResource(R.drawable.ic_baseline_arrow_back_24),
                 contentDescription = stringResource(R.string.desc_back_button),
-                tint = Colors.colourSurfaceOnBase
+                tint = Colors.Text.Primary
             )
         }
         Text(
             text = stringResource(R.string.title_new_collection),
             style = Typography.heading3,
-            color = Colors.colourSurfaceOnBase,
+            color = Colors.Text.Primary,
             modifier = Modifier.weight(1f)
         )
     }
@@ -215,41 +215,41 @@ private fun PurposeRightsCard() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Colors.colourContainerBase)
+            .background(Colors.Background.Secondary)
     ) {
         Text(
             text = stringResource(R.string.section_purpose_rights),
             style = Typography.labels3,
-            color = Colors.colourAccentOnBase,
+            color = Colors.Accent.Terracotta,
             modifier = Modifier.padding(
-                start = Spacing.SpacingM,
-                top = Spacing.SpacingS,
-                end = Spacing.SpacingM,
-                bottom = Spacing.Spacing2XS
+                start = Spacing.M,
+                top = Spacing.S,
+                end = Spacing.M,
+                bottom = Spacing.Xxs
             )
         )
 
-        HorizontalDivider(color = Colors.colourBorderBase, thickness = 1.dp)
+        HorizontalDivider(color = Colors.Border.Primary, thickness = 1.dp)
 
         PURPOSE_RIGHTS_ITEMS.forEachIndexed { index, item ->
-            if (index > 0) HorizontalDivider(color = Colors.colourBorderBase, thickness = 1.dp)
+            if (index > 0) HorizontalDivider(color = Colors.Border.Primary, thickness = 1.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.SpacingM, vertical = Spacing.SpacingS),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.SpacingS),
+                    .padding(horizontal = Spacing.M, vertical = Spacing.S),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S),
                 verticalAlignment = Alignment.Top
             ) {
                 Text(
                     text = if (item.bullet == RightsBullet.CHECK) "\u2713" else "\u25CF",
-                    color = if (item.bullet == RightsBullet.CHECK) Colors.colourPrimary else Colors.colourStatusWarningOnContainer,
+                    color = if (item.bullet == RightsBullet.CHECK) Colors.Brand.Blue else Colors.Warning.Main,
                     style = Typography.body2,
                     modifier = Modifier.padding(top = 1.dp)
                 )
                 Text(
                     text = buildBoldText(item.text, item.boldRanges),
                     style = Typography.body3,
-                    color = Colors.colourSurfaceOnCard
+                    color = Colors.Text.Primary
                 )
             }
         }
@@ -260,11 +260,11 @@ private fun PurposeRightsCard() {
 private fun SectionDivider(label: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.SpacingS)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S)
     ) {
-        HorizontalDivider(modifier = Modifier.weight(1f), color = Colors.colourBorderBase)
-        Text(text = label, style = Typography.labels3, color = Colors.colourSurfaceMuted)
-        HorizontalDivider(modifier = Modifier.weight(1f), color = Colors.colourBorderBase)
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Colors.Border.Primary)
+        Text(text = label, style = Typography.labels3, color = Colors.Text.Tertiary)
+        HorizontalDivider(modifier = Modifier.weight(1f), color = Colors.Border.Primary)
     }
 }
 
@@ -274,22 +274,22 @@ private fun CaptureGuidelinesCard() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Colors.colourContainerBase)
+            .background(Colors.Background.Secondary)
     ) {
         CAPTURE_GUIDELINE_ROWS.forEachIndexed { index, row ->
-            if (index > 0) HorizontalDivider(color = Colors.colourBorderBase, thickness = 1.dp)
+            if (index > 0) HorizontalDivider(color = Colors.Border.Primary, thickness = 1.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.SpacingM, vertical = Spacing.SpacingS),
+                    .padding(horizontal = Spacing.M, vertical = Spacing.S),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.SpacingS)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S)
             ) {
                 Box(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(Colors.colourBase),
+                        .background(Colors.Background.Primary),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(text = row.emoji, style = Typography.body2)
@@ -297,7 +297,7 @@ private fun CaptureGuidelinesCard() {
                 Text(
                     text = buildBoldText(row.text, listOf(row.boldRange)),
                     style = Typography.body3,
-                    color = Colors.colourSurfaceOnCard
+                    color = Colors.Text.Primary
                 )
             }
         }
@@ -310,28 +310,28 @@ private fun ConsentRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(if (checked) Colors.colourInfoContainer else Colors.colourContainerBase)
+            .background(if (checked) Colors.Info.Container else Colors.Background.Secondary)
             .then(
                 if (checked) Modifier.border(
                     1.dp,
-                    Colors.colourInfoContainerBorder,
+                    Colors.Info.Border,
                     RoundedCornerShape(10.dp)
                 )
                 else Modifier
             )
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = Spacing.SpacingM, vertical = Spacing.SpacingM),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.SpacingM),
+            .padding(horizontal = Spacing.M, vertical = Spacing.M),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.M),
         verticalAlignment = Alignment.Top
     ) {
         Box(
             modifier = Modifier
                 .size(22.dp)
                 .clip(RoundedCornerShape(5.dp))
-                .background(if (checked) Colors.colourPrimary else Color.White)
+                .background(if (checked) Colors.Brand.Blue else Color.White)
                 .border(
                     2.dp,
-                    if (checked) Colors.colourPrimary else Colors.colourBorderBase,
+                    if (checked) Colors.Brand.Blue else Colors.Border.Primary,
                     RoundedCornerShape(5.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -348,7 +348,7 @@ private fun ConsentRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
         Text(
             text = stringResource(R.string.consent_text_updated),
             style = Typography.body3,
-            color = if (checked) Colors.colourPrimary else Colors.colourConsentText,
+            color = if (checked) Colors.Brand.Blue else Colors.Text.Secondary,
             fontWeight = if (checked) FontWeight.Medium else FontWeight.Normal
         )
     }
@@ -365,12 +365,12 @@ private fun GuidelineBottomBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Colors.colourBase)
-            .padding(horizontal = Spacing.SpacingL, vertical = Spacing.SpacingS),
-        verticalArrangement = Arrangement.spacedBy(Spacing.SpacingS)
+            .background(Colors.Background.Primary)
+            .padding(horizontal = Spacing.L, vertical = Spacing.S),
+        verticalArrangement = Arrangement.spacedBy(Spacing.S)
     ) {
 
-        HorizontalDivider(color = Colors.colourBorderBase, thickness = 1.dp)
+        HorizontalDivider(color = Colors.Border.Primary, thickness = 1.dp)
 
         if (showDebugButton) {
             OutlinedButton(onClick = onDebugSettings, modifier = Modifier.fillMaxWidth()) {
@@ -385,9 +385,9 @@ private fun GuidelineBottomBar(
                 .fillMaxWidth()
                 .height(48.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Colors.colourPrimary,
-                disabledContainerColor = Colors.colourBorderBase,
-                disabledContentColor = Colors.colourSurfaceMuted
+                containerColor = Colors.Brand.Blue,
+                disabledContainerColor = Colors.Border.Primary,
+                disabledContentColor = Colors.Text.Tertiary
             ),
             shape = RoundedCornerShape(10.dp)
         ) {

@@ -37,7 +37,7 @@ data class SlapLiveState(
 )
 
 class SlapCaptureListener(
-    private val expectedHandType: String,
+    @Volatile var expectedHandType: String,
     private val analyzer: SlapFrameAnalyzer,
     private val blurChecker: SlapBlurChecker,
     private val coroutineScope: CoroutineScope,

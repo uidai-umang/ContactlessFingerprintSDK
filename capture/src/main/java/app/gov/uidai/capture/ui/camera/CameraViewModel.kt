@@ -176,11 +176,11 @@ class CameraViewModel @Inject constructor(
         return fileRepository.saveBitmapAndGetUri(bitmap, captureName)
     }
 
-    suspend fun processImageAfterSuccess(segmentedFrame: SegmentedFrame): String =
+    suspend fun processImageAfterSuccess(segmentedFrame: SegmentedFrame): Bitmap =
         withContext(Dispatchers.Default) {
             sessionTimerManager.stopSessionTimer()
 
-            if (!BuildConfig.DEBUG) return@withContext segmentedFrame.finalBitmap.toBase64()
+            if (!BuildConfig.DEBUG) return@withContext segmentedFrame.finalBitmap
 
             delay(300)
             val startTime = SystemClock.uptimeMillis()
@@ -193,10 +193,9 @@ class CameraViewModel @Inject constructor(
             val enhancedImage = FinalProcessingU2Net.run(image, maskedImage)
             saveBitmapAndGetUri(enhancedImage, "FinalEnhancedImage")
 
-            val encodedBitmap = image.toBase64()
             val timeLapsed = SystemClock.uptimeMillis() - startTime
             delay(max(2500 - timeLapsed, 1))
-            encodedBitmap
+            image
         }
 
     fun reset() {

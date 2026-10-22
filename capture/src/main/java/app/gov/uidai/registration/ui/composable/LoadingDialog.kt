@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import app.gov.uidai.registration.ui.theme.Spacing
 
 @Composable
 fun LoadingDialog(isLoading: Boolean, title: String) {
@@ -23,10 +24,10 @@ fun LoadingDialog(isLoading: Boolean, title: String) {
             Card(modifier = Modifier.wrapContentSize()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(Spacing.L)
                 ) {
                     CircularProgressIndicator()
-                    Spacer(Modifier.size(16.dp))
+                    Spacer(Modifier.size(Spacing.L))
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,

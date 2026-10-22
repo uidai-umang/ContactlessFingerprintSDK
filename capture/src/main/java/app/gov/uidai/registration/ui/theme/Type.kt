@@ -34,7 +34,7 @@ val Typography = Typography(
         fontFamily = NotoSansRegular,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
-        color = md_theme_secondary
+        color = Colors.Accent.Terracotta
     ),
     bodyLarge = TextStyle(
         fontFamily = ManropeMedium,

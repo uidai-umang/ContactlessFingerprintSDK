@@ -1,5 +1,110 @@
 # Decisions
 
+## 2026-10-22 — Capture flow: one Activity, capture loop owns the sequence and the upload
+
+**Decision:** Removed the Intent/ActivityResult hop into `CaptureActivity`.
+`RegistrationActivity`'s single NavHost now has a `Routes.CaptureLoop`
+destination (`CaptureLoopRoute`) that renders `CameraScreen` /
+`SlapCaptureRoute` directly. `RegistrationViewModel` (already Activity-scoped
+and shared by `CaptureMethodRoute` / `RegistrationRoute`) is the session
+ViewModel: `startSlapSequence` / `startHandSequence` (ordering logic
+unchanged) fill the queue, `activeCapture` exposes the current position,
+and the capture screens hand back a `CaptureResult` holding the final
+`Bitmap` in memory through `onCaptureResult`. On success the ViewModel marks
+the finger `UPLOADING`, launches JP2 encode -> (single finger only)
+`FingerEmbedder.embed` -> `EncryptionService.encryptImage` ->
+`CaptureQueueManager.uploadOrQueue` in an `@ApplicationScope`
+`CoroutineScope(SupervisorJob() + Dispatchers.Default)` (new
+`CoroutineScopeModule`), and starts the next capture at the same moment.
+When the queue empties, or on back-press / abort / capture failure /
+camera-permission denial, `activeCapture` goes null and the loop pops back
+to the screen that launched it, with statuses intact.
+
+**Screen reuse:** `CameraController` is single-use (`closeCamera()` stops its
+threads), so each run of same-type captures (a "segment": single-finger vs
+slap) gets a fresh controller (`Provider<CameraController>`) and a
+`hiltViewModel(key = ...)` instance. Within a segment the screen stays
+mounted: `captureId` changes trigger `viewModel.reset()` + `restartCapture()`
+(single finger) or `viewModel.reset()` (slap). Left -> right slap is handled
+in place by making `SlapCaptureListener.expectedHandType` mutable.
+
+**Why:** Each finger previously went back to the method screen and
+relaunched an Activity, paying for camera + model start-up and passing
+images through PidOptions XML and a base64 file in `cacheDir/shared`
+behind a FileProvider. Uploads ran in `viewModelScope`.
+
+**Removed:** `CaptureActivity`, `CaptureRoutes`, `PidOptions` / `Opts` /
+`CustOpts` / `Param` / `SDKResponse`, `XmlMapper`, `JourneyConstant`,
+`SDK_*` + `CAPTURE_TIMEOUT` result codes, `FingerSDKManager(Impl)`,
+`SlapCaptureLauncher`, `SDKResult`, Jackson XML / kotlin / stax deps, the
+shared FileProvider + `file_path.xml`, `CameraFragment`, `GuidelineFragment`,
+`GuidelineAdapter`, `DebugSettingsFragment`, `sdk_nav_graph.xml` and the
+`activity_camera` / `fragment_camera` / `fragment_guideline` layouts. Chaquopy
+start-up and the debug `MainThreadWatchdog` moved into `RegistrationActivity`,
+which also asks for `WRITE_EXTERNAL_STORAGE` below Q (as CaptureActivity did).
+`CameraController.closeCamera()` now tolerates a session that never opened.
+
+**Kept:** `FingerEmbedder` -- still used by `SharedViewModel` (initialize /
+embed on assets) and for single-finger captures (the grid preview and
+`registerUser`). The bound impl is still `DemoFingerEmbedderImpl`. The
+BuildConfig.DEBUG gating for review screens / segmentation / local saves is
+unchanged.
+
+**Verified:** `:app:assembleDebug` and `:app:assembleRelease` pass. Not yet
+tested on a device.
+
+**Follow-up needed:** On-device pass of both sequences. Legacy view classes
+now appear unreferenced (`BottomSheetView`, `LiveQualityScoresView`,
+`OverlayMaskView`, `BottomCameraControllerView`, `ChipExtensions`,
+`list_item_guideline.xml`) -- left for a separate cleanup.
+
+---
+
+## 2026-10-22 — Collapse to one library module (:capture) + :app shell
+
+**Decision:** Folded `:network`, `:utility`, `:core` and `:registration` into
+`:capture` (in that order, building after each). Kotlin packages are
+unchanged (`in.gov.uidai.network`, `in.gov.uidai.utility`,
+`app.gov.uidai.registration`, `in.gov.uidai.embedding` now live under
+`capture/src/main/java`). `settings.gradle.kts` is `include(":app",
+":capture")` and `:app` depends only on `:capture`. One namespace
+(`app.gov.uidai.capture`): every registration `R` / `BuildConfig` import
+now points at capture's.
+
+**Core:** `CoreActivity` / `CaptureSDK` deleted. Callers used
+`CaptureActivity.createIntent` directly and `parseResponse` accepted the
+`CAPTURE_*` codes (both later removed by the flow change above).
+
+**Registration merge:** manifest entries (INTERNET, POST_NOTIFICATIONS,
+`RegistrationActivity`), Room / WorkManager / Hilt-work, Retrofit / OkHttp,
+JP2, Coil, Chucker debug / no-op release, the compose foundation 1.7.6
+force and Remote Config moved into `capture/build.gradle.kts`.
+`BACKEND_URL` now comes from `local.properties` per build type
+(`BACKEND_URL_DEBUG` / `BACKEND_URL_RELEASE`) through
+`androidComponents.onVariants` with a lazy provider: only the variant
+being built needs its key, and a missing key fails with "Missing
+BACKEND_URL_<TYPE> in local.properties ...".
+
+**Resource collisions:** dropped registration's `app_name` (`:app`'s value
+already won at runtime, so the JP2 gallery folder is unchanged),
+`hello_blank_fragment`, `md_theme_surface` (same colour), and the
+identical fonts, launcher icons/drawables and backup XMLs (`:app` already
+overrides them). Registration's strings, `black` / `white` and
+`Theme.ContactlessRegistration` were appended to capture's values.
+
+**Dedup:** one `PreferenceStore` / `PreferenceType` (union: BOOLEAN, INT,
+FLOAT, DOUBLE, STRING, CHOICE) writing to `debug_settings`. Registration's
+old `attendance_app_pref` file is copied in once (keys not already present)
+and cleared, so stored operator / resident values survive the update. One
+`FileRepository` (`in.gov.uidai.network.data.local`) with the bitmap-save
+and JP2-save / readAsset methods and a single `StorageModule` binding. One
+`toYYYYMMDDHHmmss` (utility).
+
+**Verified:** `:app:assembleDebug` + `:app:assembleRelease` pass. Fail-fast
+checked by removing `BACKEND_URL_DEBUG` locally.
+
+---
+
 ## 2026-09-03 — Slap capture v3: native MediaPipe Tasks HandLandmarker (replaces Python/Chaquopy bridge)
 
 **Decision:** Replaced the Python/Chaquopy `mediapipe` bridge for slap-capture

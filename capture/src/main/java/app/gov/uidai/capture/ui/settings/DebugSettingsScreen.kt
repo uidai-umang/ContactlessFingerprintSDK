@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import app.gov.uidai.capture.pref.model.PreferenceParam
 import app.gov.uidai.capture.pref.model.PreferenceType
+import app.gov.uidai.registration.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,14 +39,14 @@ fun DebugSettingsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(vertical = 8.dp)
+            contentPadding = PaddingValues(vertical = Spacing.S)
         ) {
             groups.forEach { group ->
                 item {
                     Text(
                         text = group.title,
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 4.dp)
+                        modifier = Modifier.padding(start = Spacing.L, top = Spacing.Xl, bottom = Spacing.Xxs)
                     )
                 }
                 items(group.all) { setting ->
@@ -74,7 +75,7 @@ private fun SettingRow(setting: PreferenceParam<*>, viewModel: DebugSettingsView
 private fun BooleanRow(setting: PreferenceParam<Boolean>, viewModel: DebugSettingsViewModel) {
     var checked by remember { mutableStateOf(viewModel.get(setting)) }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.L, vertical = Spacing.M),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -94,9 +95,9 @@ private fun <T : Number> NumberRow(setting: PreferenceParam<T>, viewModel: Debug
     var text by remember { mutableStateOf(viewModel.get(setting).toString()) }
     var isError by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.L, vertical = Spacing.S)) {
         Text(setting.displayName, style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(Spacing.Xxs))
         OutlinedTextField(
             value = text,
             onValueChange = { newText ->
@@ -131,9 +132,9 @@ private fun ChoiceRow(setting: PreferenceParam<*>, viewModel: DebugSettingsViewM
     var expanded by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(viewModel.get(enumSetting)) }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.L, vertical = Spacing.S)) {
         Text(enumSetting.displayName, style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(Spacing.Xxs))
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
             OutlinedTextField(
                 value = selected.name,

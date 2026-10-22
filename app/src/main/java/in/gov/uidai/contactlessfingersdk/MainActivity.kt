@@ -3,40 +3,17 @@ package `in`.gov.uidai.contactlessfingersdk
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import dagger.hilt.android.AndroidEntryPoint
-import app.gov.uidai.capture.CaptureActivity
 import app.gov.uidai.registration.RegistrationActivity
-import kotlin.jvm.java
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
-
-    private val coreActivityLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        setResult(result.resultCode, result.data)
-        finish()
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         startActivity(Intent(this, RegistrationActivity::class.java))
         finish()
-
-//        // Launch the CameraActivity to start the capture process
-//        launchCoreActivity()
-    }
-
-    private fun launchCoreActivity() {
-        val intent = CaptureActivity.createIntent(
-            context = this,
-            requestXml = intent.getStringExtra("request"),
-            callingPackage = callingPackage
-        )
-        Log.d(TAG, "Capture Activity Launched")
-        coreActivityLauncher.launch(intent)
     }
 
     private fun launchRegistrationFlow() {
