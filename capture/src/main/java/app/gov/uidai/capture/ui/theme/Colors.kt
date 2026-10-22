@@ -9,7 +9,7 @@ object Colors {
     val colourSurfaceOnBase: Color = Color(0xFF010F2A)
 
     // ── Base surfaces ──
-    val colourBase: Color = Color(0xFFF5F0EC)           // screen / phone background
+    val colourBase: Color = Color(0xFFFFFFFF)           // screen / phone background
     val colourContainerBase: Color = Color(0xFFEDE8E3)  // card / section / row background
     val colourBorderBase: Color = Color(0xFFD8D0C8)     // default hairline borders
     val colourBorderMuted: Color = Color(0xFFB8AFA8)    // dashed/skip borders
