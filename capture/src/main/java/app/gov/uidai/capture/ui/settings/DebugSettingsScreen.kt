@@ -65,6 +65,8 @@ private fun SettingRow(setting: PreferenceParam<*>, viewModel: DebugSettingsView
         is PreferenceType.INT -> NumberRow(setting as PreferenceParam<Int>, viewModel, isInt = true)
         is PreferenceType.FLOAT -> NumberRow(setting as PreferenceParam<Float>, viewModel, isInt = false)
         is PreferenceType.CHOICE<*> -> ChoiceRow(setting, viewModel)
+        // Only the registration flow's operator/resident prefs use these; never a debug setting.
+        is PreferenceType.DOUBLE, is PreferenceType.STRING -> Unit
     }
 }
 

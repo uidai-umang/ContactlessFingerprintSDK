@@ -1,3 +1,6 @@
+import com.android.build.api.variant.BuildConfigField
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -55,6 +58,36 @@ android {
     }
 }
 
+// BACKEND_URL comes from local.properties per build type (BACKEND_URL_DEBUG /
+// BACKEND_URL_RELEASE). Resolved lazily so only the variant being built needs its key.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val key = "BACKEND_URL_${variant.buildType.orEmpty().uppercase()}"
+        variant.buildConfigFields?.put(
+            "BACKEND_URL",
+            providers.provider {
+                val url = localProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+                    ?: throw GradleException(
+                        "Missing $key in local.properties (needed for the ${variant.name} BACKEND_URL buildConfigField)."
+                    )
+                BuildConfigField("String", "\"$url\"", null)
+            }
+        )
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force("androidx.compose.foundation:foundation:1.7.6")   // matches compose-bom 2024.12.01
+        force("androidx.compose.foundation:foundation-android:1.7.6")
+    }
+}
+
 chaquopy {
     defaultConfig {
         pip {
@@ -66,8 +99,6 @@ chaquopy {
 }
 
 dependencies {
-    implementation(project(":network"))
-    implementation(project(":utility"))
 
     // Firebase
     implementation(platform(libs.firebase.bom))
@@ -104,10 +135,6 @@ dependencies {
     // MediaPipe
     implementation(libs.tasks.vision)
 
-    // Navigation
-    implementation(libs.androidx.navigation.fragment.ktx)
-    implementation(libs.androidx.navigation.ui.ktx)
-
     // Material 3
     implementation(libs.androidx.material3)
 
@@ -136,6 +163,34 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.androidx.hilt)
+
+    // Registration flow
+    implementation(libs.androidx.hilt.common)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.hilt.work)
+    implementation(libs.workmanager)
+
+    // Room
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // Retrofit / OkHttp
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(platform(libs.okhttp.bom))
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+
+    implementation("dev.keiji.jp2:jp2-android:1.0.5")
+    implementation(libs.commons.codec)
+    implementation(libs.coil.compose)
+
+    // Chucker
+    debugImplementation(libs.chucker.debug)
+    releaseImplementation(libs.chucker.release)
+
+    implementation(libs.firebase.remote.config)
 }
 
 afterEvaluate {

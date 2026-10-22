@@ -6,7 +6,7 @@ import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import dagger.hilt.android.AndroidEntryPoint
-import `in`.gov.uidai.core.CaptureSDK
+import app.gov.uidai.capture.CaptureActivity
 import app.gov.uidai.registration.RegistrationActivity
 import kotlin.jvm.java
 
@@ -30,7 +30,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun launchCoreActivity() {
-        val intent = CaptureSDK.createIntent(
+        val intent = CaptureActivity.createIntent(
             context = this,
             requestXml = intent.getStringExtra("request"),
             callingPackage = callingPackage

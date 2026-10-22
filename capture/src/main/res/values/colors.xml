@@ -49,4 +49,8 @@
     <color name="colorOnSuccess">#FFFFFF</color>
     <color name="colorSuccessContainer">#008810</color>
     <color name="colorOnSuccessContainer">#F8FFF0</color>
+
+    <!-- Registration flow -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
 </resources>

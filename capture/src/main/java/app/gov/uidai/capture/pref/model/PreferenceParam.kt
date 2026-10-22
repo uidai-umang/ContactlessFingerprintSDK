@@ -4,6 +4,8 @@ sealed class PreferenceType<T> {
     data object BOOLEAN : PreferenceType<Boolean>()
     data object FLOAT : PreferenceType<Float>()
     data object INT : PreferenceType<Int>()
+    data object DOUBLE : PreferenceType<Double>()
+    data object STRING : PreferenceType<String>()
     data class CHOICE<T : Enum<T>>(val options: List<T>) : PreferenceType<T>()
 }
 

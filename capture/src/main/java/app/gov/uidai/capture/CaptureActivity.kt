@@ -68,6 +68,17 @@ class CaptureActivity : ComponentActivity() {
     companion object {
         private val TAG = CaptureActivity::class.simpleName
 
+        /**
+         * Builds the in-process Intent for this Activity. Replaces the old
+         * `in.gov.uidai.core.CaptureSDK.createIntent` + CoreActivity hop; the
+         * result comes back with the raw [ResultCode].CAPTURE_* codes.
+         */
+        fun createIntent(context: Context, requestXml: String?, callingPackage: String? = null): Intent =
+            Intent(context, CaptureActivity::class.java).apply {
+                putExtra(JourneyConstant.CALLING_PACKAGE, callingPackage)
+                putExtra(JourneyConstant.REQUEST, requestXml)
+            }
+
         private val REQUIRED_PERMISSIONS = buildList {
             add(Manifest.permission.CAMERA)
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {

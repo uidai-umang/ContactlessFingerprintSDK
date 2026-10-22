@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "ContactlessFingerSDK_SITA"
-include(":app", ":network", ":utility", ":capture", ":core", ":registration")
+include(":app", ":capture")

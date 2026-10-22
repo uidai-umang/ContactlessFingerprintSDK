@@ -34,8 +34,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":core"))
-    implementation(project(":registration"))
     implementation(project(":capture"))
     implementation(libs.firebase.common.ktx)
 

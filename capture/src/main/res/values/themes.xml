@@ -167,4 +167,9 @@
         <item name="android:focusable">false</item>
         <item name="checkedIconVisible">false</item>
     </style>
+
+    <!-- Registration flow -->
+    <style name="Theme.ContactlessRegistration" parent="Theme.Material3.Light.NoActionBar" >
+        <item name="android:windowBackground">@color/md_theme_surface</item>
+    </style>
 </resources>

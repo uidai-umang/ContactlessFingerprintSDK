@@ -49,6 +49,9 @@ class DebugSettingsFragment : PreferenceFragmentCompat() {
             is PreferenceType.INT -> createEditTextPreference(setting as PreferenceParam<Int>)
             is PreferenceType.FLOAT -> createEditTextPreference(setting as PreferenceParam<Float>)
             is PreferenceType.CHOICE<*> -> createDropDownPreference(setting)
+            // Only the registration flow's operator/resident prefs use these; never a debug setting.
+            is PreferenceType.DOUBLE, is PreferenceType.STRING ->
+                throw IllegalArgumentException("Unsupported debug setting type: ${setting.type}")
         }
     }
 
