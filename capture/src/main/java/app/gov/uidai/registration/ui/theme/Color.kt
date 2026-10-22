@@ -147,7 +147,7 @@ val dash_modal_back_border = Color(0xFFC8D5E8)
 val dash_modal_back_text = Color(0xFF4A5568)
 
 // ── "Choose capture method" screen tokens (matches mockup exactly) ──
-val capture_method_bg = Color(0xFFF5F0EC)
+val capture_method_bg = Color(0xFFFFFFFF)
 val capture_method_border = Color(0xFFD8D0C8)
 val capture_method_primary = Color(0xFF1A56A0)
 val capture_method_primary_container = Color(0xFFEBF3FD)
