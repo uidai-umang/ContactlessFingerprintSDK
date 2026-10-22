@@ -386,7 +386,7 @@ private fun GuidelineBottomBar(
                 .height(48.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Colors.Brand.Blue,
-                disabledContainerColor = Colors.Border.Primary,
+                disabledContainerColor = Colors.Background.Secondary,
                 disabledContentColor = Colors.Text.Tertiary
             ),
             shape = RoundedCornerShape(10.dp)
