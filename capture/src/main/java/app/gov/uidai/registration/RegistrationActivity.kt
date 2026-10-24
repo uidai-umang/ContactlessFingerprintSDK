@@ -54,6 +54,7 @@ import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
 import app.gov.uidai.capture.utils.MainThreadWatchdog
 import app.gov.uidai.registration.ui.registration.capture.CaptureLoopRoute
+import app.gov.uidai.registration.ui.registration.method.NewCaptureMethodRoute
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import dagger.hilt.android.AndroidEntryPoint
@@ -208,24 +209,14 @@ class RegistrationActivity : ComponentActivity() {
                             ) { backStackEntry ->
                                 val resident = backStackEntry.residentInput()
 
-                                // registrationViewModel is Activity-scoped (see field above),
-                                // shared with the Registration and CaptureLoop destinations --
-                                // one resident lookup / session / capture sequence source of
-                                // truth for both sequential and slap capture.
                                 LaunchedEffect(resident) {
                                     registrationViewModel.setResident(resident)
                                 }
 
-                                CaptureMethodRoute(
-                                    onNavigateUp = { navController.navigateUp() },
+                                NewCaptureMethodRoute(
                                     registrationViewModel = registrationViewModel,
-                                    onContinueSequential = {
-                                        registrationViewModel.setSelectedCaptureMode(CaptureMode.SEQUENTIAL)
-                                        navController.navigate(Routes.Registration.createRoute(resident = resident))
-                                    },
-                                    onContinueSlap = { slapSubOption ->
-                                        registrationViewModel.setSelectedCaptureMode(CaptureMode.SLAP)
-                                        registrationViewModel.startSlapSequence(slapSubOption.toFingerPositionOrNull()!!)
+                                    onNavigateUp = { navController.navigateUp() },
+                                    onStartCaptureLoop = {
                                         navController.navigate(Routes.CaptureLoop.route) { launchSingleTop = true }
                                     }
                                 )
