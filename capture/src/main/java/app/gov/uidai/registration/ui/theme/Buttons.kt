@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 val ButtonTextStyle = TextStyle(
-    fontFamily = NotoSansMedium,
+    fontFamily = Roboto,
     fontSize = 18.sp
 )
 
