@@ -8,61 +8,62 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import app.gov.uidai.capture.R
 
-// Set of Material typography styles to start with
 // Load fonts from res/font
-val NotoSansBold = FontFamily(Font(R.font.noto_sans_bold))
-val NotoSansMedium = FontFamily(Font(R.font.noto_sans_medium))
-val NotoSansRegular = FontFamily(Font(R.font.noto_sans_regular))
-val ManropeMedium = FontFamily(Font(R.font.manrope_medium))
-val ManropeLight = FontFamily(Font(R.font.manrope_light))
+// Roboto has no SemiBold file, so SemiBold uses the Medium file.
+val Roboto = FontFamily(
+    Font(R.font.roboto_regular, FontWeight.Normal),
+    Font(R.font.roboto_medium, FontWeight.Medium),
+    Font(R.font.roboto_medium, FontWeight.SemiBold),
+    Font(R.font.roboto_bold, FontWeight.Bold)
+)
 
 val Typography = Typography(
     headlineMedium = TextStyle(
-        fontFamily = NotoSansRegular,
+        fontFamily = Roboto,
         fontSize = 28.sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = NotoSansRegular,
+        fontFamily = Roboto,
         fontSize = 24.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = NotoSansRegular,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 22.sp,
     ),
     titleMedium = TextStyle(
-        fontFamily = NotoSansRegular,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         color = Colors.Accent.Terracotta
     ),
     bodyLarge = TextStyle(
-        fontFamily = ManropeMedium,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp
     ),
     bodyMedium = TextStyle(
-        fontFamily = ManropeMedium,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp
     ),
     bodySmall = TextStyle(
-        fontFamily = ManropeMedium,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp
     ),
     labelLarge = TextStyle(
-        fontFamily = ManropeLight,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp
     ),
     labelMedium = TextStyle(
-        fontFamily = ManropeLight,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = ManropeLight,
+        fontFamily = Roboto,
         fontWeight = FontWeight.Normal,
         fontSize = 11.sp
     )
@@ -70,7 +71,7 @@ val Typography = Typography(
 
 // Extra style for BodyXL (20sp) — not in default Material3 set
 val BodyXL = TextStyle(
-    fontFamily = ManropeMedium,
+    fontFamily = Roboto,
     fontWeight = FontWeight.Normal,
     fontSize = 20.sp
 )
