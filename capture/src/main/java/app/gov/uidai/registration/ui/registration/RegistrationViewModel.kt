@@ -5,8 +5,12 @@ import android.os.Build
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.gov.uidai.capture.BuildConfig
+import app.gov.uidai.capture.ui.camera.CaptureResult
 import app.gov.uidai.registration.data.dao.PendingCaptureDao
 import app.gov.uidai.registration.data.remote.network.ApiResult
+import app.gov.uidai.registration.di.ApplicationScope
+import app.gov.uidai.registration.encryption.EncryptionService
 import app.gov.uidai.registration.model.CLFingerprint
 import app.gov.uidai.registration.model.CaptureMode
 import app.gov.uidai.registration.model.FingerCaptureStatus
@@ -15,32 +19,30 @@ import app.gov.uidai.registration.model.FingerType
 import app.gov.uidai.registration.model.RegistrationUiState
 import app.gov.uidai.registration.model.User
 import app.gov.uidai.registration.model.capture.CaptureRequest
-import `in`.gov.uidai.network.data.local.FileRepository
+import app.gov.uidai.registration.model.resident.ResidentInput
 import app.gov.uidai.registration.repository.OperatorRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
 import app.gov.uidai.registration.usecase.ResidentUseCase
 import app.gov.uidai.registration.usecase.UserUseCase
-import dagger.hilt.android.lifecycle.HiltViewModel
-import app.gov.uidai.registration.encryption.EncryptionService
-import app.gov.uidai.registration.model.resident.ResidentInput
-import app.gov.uidai.capture.ui.camera.CaptureResult
-import app.gov.uidai.registration.di.ApplicationScope
 import com.gemalto.jp2.JP2Encoder
+import dagger.hilt.android.lifecycle.HiltViewModel
 import `in`.gov.uidai.embedding.FingerEmbedder
+import `in`.gov.uidai.network.data.local.FileRepository
+import `in`.gov.uidai.utility.constants.ResultCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import java.util.UUID
-import `in`.gov.uidai.utility.constants.ResultCode
-import app.gov.uidai.capture.BuildConfig
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.util.UUID
+import javax.inject.Inject
 
 // Hoisted to Activity scope (see RegistrationActivity: `by viewModels()`,
 // passed into both CaptureMethodRoute and RegistrationRoute) instead of
@@ -84,6 +86,8 @@ class RegistrationViewModel @Inject constructor(
     // The capture loop destination renders whatever activeCapture points at
     // and pops back to the launching screen once it goes null.
     private val captureSequence = ArrayDeque<FingerPosition>()
+    private var advanceJob: Job? = null
+    private val nextCaptureDelayMs = 500L
     private val uploadMutex = Mutex()
     private val _activeCapture = MutableStateFlow<ActiveCapture?>(null)
     val activeCapture: StateFlow<ActiveCapture?> = _activeCapture.asStateFlow()
@@ -103,8 +107,10 @@ class RegistrationViewModel @Inject constructor(
     private fun FingerPosition.coveringSlap() = when (this) {
         FingerPosition.LEFT_INDEX, FingerPosition.LEFT_MIDDLE,
         FingerPosition.LEFT_RING, FingerPosition.LEFT_LITTLE -> FingerPosition.LEFT_SLAP
+
         FingerPosition.RIGHT_INDEX, FingerPosition.RIGHT_MIDDLE,
         FingerPosition.RIGHT_RING, FingerPosition.RIGHT_LITTLE -> FingerPosition.RIGHT_SLAP
+
         else -> null
     }
 
@@ -114,10 +120,12 @@ class RegistrationViewModel @Inject constructor(
             FingerPosition.LEFT_INDEX, FingerPosition.LEFT_MIDDLE,
             FingerPosition.LEFT_RING, FingerPosition.LEFT_LITTLE
         )
+
         FingerPosition.RIGHT_SLAP -> listOf(
             FingerPosition.RIGHT_INDEX, FingerPosition.RIGHT_MIDDLE,
             FingerPosition.RIGHT_RING, FingerPosition.RIGHT_LITTLE
         )
+
         else -> emptyList()
     }
 
@@ -181,6 +189,8 @@ class RegistrationViewModel @Inject constructor(
 
     /** Back-press / abort / failure / permission denial: stop the chain and leave the loop. */
     fun cancelSequence() {
+        advanceJob?.cancel()
+        advanceJob = null
         captureSequence.clear()
         _activeCapture.value?.let { restoreStatus(it.position) }
         _activeCapture.value = null
@@ -213,6 +223,8 @@ class RegistrationViewModel @Inject constructor(
             return
         }
 
+        if (advanceJob?.isActive == true) return
+
         val position = capture.position
         statusBeforeCapture = null
         _uiState.update {
@@ -236,7 +248,18 @@ class RegistrationViewModel @Inject constructor(
                 glareScore = result.glareScore.toDouble()
             )
         }
-        advanceSequence()
+        scheduleNextCapture()
+    }
+
+    private fun scheduleNextCapture() {
+        if (captureSequence.isEmpty()) {
+            advanceSequence()
+            return
+        }
+        advanceJob = viewModelScope.launch {
+            delay(nextCaptureDelayMs)
+            advanceSequence()
+        }
     }
 
     private suspend fun processAndUpload(
@@ -264,7 +287,9 @@ class RegistrationViewModel @Inject constructor(
                     glareScore = glareScore
                 )
                 _uiState.update {
-                    it.copy(fingerprints = it.fingerprints.toMutableMap().apply { set(position, fingerprint) })
+                    it.copy(
+                        fingerprints = it.fingerprints.toMutableMap()
+                            .apply { set(position, fingerprint) })
                 }
             }
             uploadCapture(
@@ -298,6 +323,7 @@ class RegistrationViewModel @Inject constructor(
         currentResidentId = ""
         lookupResidentAndCreateSession()
     }
+
     private fun lookupResidentAndCreateSession() {
         val resident = currentResident ?: return
         _uiState.update { it.copy(isLookingUpResident = true) }
