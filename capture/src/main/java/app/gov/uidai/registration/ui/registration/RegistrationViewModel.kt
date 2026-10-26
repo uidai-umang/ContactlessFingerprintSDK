@@ -87,6 +87,9 @@ class RegistrationViewModel @Inject constructor(
     // and pops back to the launching screen once it goes null.
     private val captureSequence = ArrayDeque<FingerPosition>()
     private var advanceJob: Job? = null
+
+    private val _upNext = MutableStateFlow<FingerPosition?>(null)
+    val upNext: StateFlow<FingerPosition?> = _upNext.asStateFlow()
     private val nextCaptureDelayMs = 500L
     private val uploadMutex = Mutex()
     private val _activeCapture = MutableStateFlow<ActiveCapture?>(null)
@@ -191,6 +194,7 @@ class RegistrationViewModel @Inject constructor(
     fun cancelSequence() {
         advanceJob?.cancel()
         advanceJob = null
+        _upNext.value = null
         captureSequence.clear()
         _activeCapture.value?.let { restoreStatus(it.position) }
         _activeCapture.value = null
@@ -256,8 +260,10 @@ class RegistrationViewModel @Inject constructor(
             advanceSequence()
             return
         }
+        _upNext.value = captureSequence.first()
         advanceJob = viewModelScope.launch {
             delay(nextCaptureDelayMs)
+            _upNext.value = null
             advanceSequence()
         }
     }

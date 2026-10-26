@@ -1,10 +1,13 @@
 package app.gov.uidai.registration.ui.registration.capture
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.capture.pref.PreferenceStore
@@ -17,6 +20,25 @@ import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
 import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import javax.inject.Provider
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 
 /**
  * Capture loop: renders the camera for [RegistrationViewModel.activeCapture]
@@ -38,6 +60,7 @@ fun CaptureLoopRoute(
     onExit: () -> Unit
 ) {
     val active by viewModel.activeCapture.collectAsStateWithLifecycle()
+    val upNext by viewModel.upNext.collectAsStateWithLifecycle()
     val capture = active
 
     LaunchedEffect(capture == null) {
@@ -45,31 +68,79 @@ fun CaptureLoopRoute(
     }
     if (capture == null) return
 
-    key(capture.segment) {
-        when (capture.position) {
-            FingerPosition.LEFT_SLAP, FingerPosition.RIGHT_SLAP -> {
-                SlapCaptureRoute(
-                    handType = if (capture.position == FingerPosition.LEFT_SLAP) "Left" else "Right",
-                    captureId = capture.id,
-                    onFinish = viewModel::onCaptureResult,
-                    onPopBackStack = viewModel::cancelSequence,
-                    viewModel = hiltViewModel<SlapCaptureViewModel>(key = "slap-${capture.segment}")
+    Box(modifier = Modifier.fillMaxSize()) {
+        key(capture.segment) {
+            when (capture.position) {
+                FingerPosition.LEFT_SLAP, FingerPosition.RIGHT_SLAP -> {
+                    SlapCaptureRoute(
+                        handType = if (capture.position == FingerPosition.LEFT_SLAP) "Left" else "Right",
+                        captureId = capture.id,
+                        onFinish = viewModel::onCaptureResult,
+                        onPopBackStack = viewModel::cancelSequence,
+                        viewModel = hiltViewModel<SlapCaptureViewModel>(key = "slap-${capture.segment}")
+                    )
+                }
+                else -> {
+                    val cameraController = remember { cameraControllerProvider.get() }
+                    CameraScreen(
+                        txnId = capture.txnId,
+                        fingerType = capture.position.name,
+                        captureId = capture.id,
+                        cameraController = cameraController,
+                        imageProcessorFactory = imageProcessorFactory,
+                        preferenceStore = preferenceStore,
+                        onFinish = viewModel::onCaptureResult,
+                        onPopBackStack = viewModel::cancelSequence,
+                        viewModel = hiltViewModel<CameraViewModel>(key = "camera-${capture.segment}")
+                    )
+                }
+            }
+        }
+
+        upNext?.let { NextCaptureCue(it) }
+    }
+}
+
+@Composable
+private fun NextCaptureCue(next: FingerPosition) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Colors.Background.Tertiary.copy(alpha = 0.7f))
+            // swallow taps so nothing underneath is hit during the pause
+            .pointerInput(Unit) { detectTapGestures { } },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .background(Colors.Background.Primary, RoundedCornerShape(16.dp))
+                .padding(horizontal = Spacing.Xxl, vertical = Spacing.L),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.Xxs)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Colors.Success.Main,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Capture saved",
+                    color = Colors.Success.Text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            else -> {
-                val cameraController = remember { cameraControllerProvider.get() }
-                CameraScreen(
-                    txnId = capture.txnId,
-                    fingerType = capture.position.name,
-                    captureId = capture.id,
-                    cameraController = cameraController,
-                    imageProcessorFactory = imageProcessorFactory,
-                    preferenceStore = preferenceStore,
-                    onFinish = viewModel::onCaptureResult,
-                    onPopBackStack = viewModel::cancelSequence,
-                    viewModel = hiltViewModel<CameraViewModel>(key = "camera-${capture.segment}")
-                )
-            }
+            Text(
+                text = "Next: ${next.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }}",
+                color = Colors.Text.Primary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

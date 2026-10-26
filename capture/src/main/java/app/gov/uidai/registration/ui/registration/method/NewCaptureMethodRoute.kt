@@ -138,11 +138,25 @@ private fun FingerPosition.coveringSlap() = when (this) {
     else -> null
 }
 
-// Status to show for a finger: its own, or its slap's when the slap is saved.
+// Status to show for a position:
+//  - a finger covered by a saved slap shows the slap's status;
+//  - a slap whose four fingers are all saved on their own shows the least-finished of them.
 private fun FingerStatusMap.fingerStatusOf(position: FingerPosition): FingerCaptureStatus {
     val own = statusOf(position)
+    if (own.isSaved()) return own
+
     val slap = position.coveringSlap()?.let { statusOf(it) }
-    return if (!own.isSaved() && slap != null && slap.isSaved()) slap else own
+    if (slap != null && slap.isSaved()) return slap
+
+    val fingers = position.slapFingers().map { statusOf(it) }
+    if (fingers.isNotEmpty() && fingers.all { it.isSaved() }) {
+        return when {
+            FingerCaptureStatus.UPLOADING in fingers -> FingerCaptureStatus.UPLOADING
+            FingerCaptureStatus.PENDING in fingers -> FingerCaptureStatus.PENDING
+            else -> FingerCaptureStatus.CAPTURED
+        }
+    }
+    return own
 }
 
 private fun FingerStatusMap.savedCount(positions: List<FingerPosition>) =
@@ -162,8 +176,7 @@ private fun FingerPosition.slapFingers() = when (this) {
 }
 
 private fun FingerStatusMap.isSlapBlocked(position: FingerPosition) =
-    !statusOf(position).isSaved() && position.slapFingers().any { statusOf(it).isSaved() }
-
+    !fingerStatusOf(position).isSaved() && position.slapFingers().any { statusOf(it).isSaved() }
 private fun FingerStatusMap.isSelectable(position: FingerPosition) =
     fingerStatusOf(position).canCapture() && !isSlapBlocked(position)
 
@@ -530,7 +543,7 @@ fun SlapModeContent(
         ) {
             SlapPositions.forEach { position ->
                 val color = when {
-                    fingerStatus.statusOf(position).isSaved() -> Colors.Success.Main
+                    fingerStatus.fingerStatusOf(position).isSaved() -> Colors.Success.Main
                     position == selected -> Colors.Brand.BlueSoft
                     else -> Colors.Border.Primary
                 }
@@ -556,7 +569,7 @@ fun SlapModeContent(
                         GroupCard(
                             modifier = Modifier.weight(1f),
                             position = position,
-                            status = fingerStatus.statusOf(position),
+                            status = fingerStatus.fingerStatusOf(position),
                             isSelected = position == selected,
                             isBlocked = fingerStatus.isSlapBlocked(position),
                             onClick = { onGroupSelect(position) },
