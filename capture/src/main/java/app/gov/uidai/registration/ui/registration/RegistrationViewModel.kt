@@ -19,6 +19,7 @@ import app.gov.uidai.registration.model.FingerType
 import app.gov.uidai.registration.model.RegistrationUiState
 import app.gov.uidai.registration.model.User
 import app.gov.uidai.registration.model.capture.CaptureRequest
+import app.gov.uidai.registration.model.resident.ResidentConsentRequest
 import app.gov.uidai.registration.model.resident.ResidentInput
 import app.gov.uidai.registration.repository.OperatorRepository
 import app.gov.uidai.registration.usecase.CaptureQueueManager
@@ -73,6 +74,8 @@ class RegistrationViewModel @Inject constructor(
     private val _registrationResult = MutableStateFlow<RegistrationResult?>(null)
     val registrationResult = _registrationResult.asStateFlow()
     private var currentResidentId: String = ""
+    var isConsented: Boolean = false
+        private set
 
     private var selectedCaptureMode: String = CaptureMode.SEQUENTIAL
 
@@ -345,6 +348,7 @@ class RegistrationViewModel @Inject constructor(
                 is ApiResult.Success -> {
                     val response = result.data
                     currentResidentId = response.residentPseudonymId
+                    isConsented = response.isConsented
 
                     // Backend truth: what's confirmed captured/pending on the server
                     val capturedFingers = response.capturedFingers.mapNotNull { name ->
@@ -485,6 +489,16 @@ class RegistrationViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    fun postResidentConsent() {
+        val request = ResidentConsentRequest(
+            residentPseudonymId = currentResidentId,
+            consented = true
+        )
+        viewModelScope.launch {
+            residentUseCase.postResidentConsent(request)
         }
     }
 

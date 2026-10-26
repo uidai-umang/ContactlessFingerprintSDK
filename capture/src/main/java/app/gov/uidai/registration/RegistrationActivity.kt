@@ -178,7 +178,17 @@ class RegistrationActivity : ComponentActivity() {
                                     sharedUiState = sharedUiState,
                                     onClearSharedMessage = sharedViewModel::clearError,
                                     onNavigateToRegistration = { resident ->
-                                        navController.navigate(Routes.Guideline.createRoute(resident))
+                                        if(registrationViewModel.isConsented) {
+                                            navController.navigate(Routes.CaptureMethod.createRoute(resident)) {
+                                                popUpTo(Routes.UidEntry.route) { inclusive = true }
+                                            }
+                                        } else {
+                                            navController.navigate(
+                                                Routes.Guideline.createRoute(
+                                                    resident
+                                                )
+                                            )
+                                        }
                                     }
                                 )
                             }
@@ -193,6 +203,7 @@ class RegistrationActivity : ComponentActivity() {
                                     onProceed = {
                                         // GuidelineScreen sets isLoading on proceed and never
                                         // resets it, so it must not stay on the back stack.
+                                        registrationViewModel.postResidentConsent()
                                         navController.navigate(Routes.CaptureMethod.createRoute(resident)) {
                                             popUpTo(Routes.Guideline.route) { inclusive = true }
                                         }

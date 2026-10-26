@@ -1,6 +1,8 @@
 package app.gov.uidai.registration.usecase
 
 import app.gov.uidai.registration.data.remote.network.ApiResult
+import app.gov.uidai.registration.model.resident.ResidentConsentRequest
+import app.gov.uidai.registration.model.resident.ResidentConsentResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
 
@@ -11,4 +13,8 @@ interface ResidentUseCase {
         dateOfBirth: String,
         gender: String
     ): ApiResult<ResidentLookupResponse>
+
+    suspend fun postResidentConsent(
+        request: ResidentConsentRequest
+    ): ApiResult<ResidentConsentResponse>
 }

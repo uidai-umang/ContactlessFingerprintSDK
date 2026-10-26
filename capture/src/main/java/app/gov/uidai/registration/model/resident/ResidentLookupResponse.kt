@@ -10,5 +10,6 @@ data class ResidentLookupResponse(
     @SerializedName("captured_fingers") val capturedFingers: List<String>,
     @SerializedName("pending_uploads") val pendingUploads: List<String>,
     @SerializedName("total_captured") val totalCaptured: Int,
-    @SerializedName("is_complete") val isComplete: Boolean
+    @SerializedName("is_complete") val isComplete: Boolean,
+    @SerializedName("is_consented") val isConsented: Boolean
 )

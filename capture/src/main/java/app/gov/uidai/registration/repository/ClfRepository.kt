@@ -5,6 +5,8 @@ import app.gov.uidai.registration.model.capture.CaptureRequest
 import app.gov.uidai.registration.model.capture.CaptureResponse
 import app.gov.uidai.registration.model.device.DeviceRegistrationRequest
 import app.gov.uidai.registration.model.device.DeviceRegistrationResponse
+import app.gov.uidai.registration.model.resident.ResidentConsentRequest
+import app.gov.uidai.registration.model.resident.ResidentConsentResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
 
@@ -13,6 +15,10 @@ interface ClfRepository {
     suspend fun lookupResident(
         request: ResidentLookupRequest
     ): ApiResult<ResidentLookupResponse>
+
+    suspend fun postResidentConsent(
+        request: ResidentConsentRequest
+    ): ApiResult<ResidentConsentResponse>
 
     suspend fun uploadCapture(
         request: CaptureRequest

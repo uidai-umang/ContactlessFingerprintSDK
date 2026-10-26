@@ -4,6 +4,7 @@ object Urls {
     const val PRIMARY_END_POINT = "clf/"
     const val VERSION_V1 = "v1/"
     const val RESIDENT_LOOKUP = "${PRIMARY_END_POINT}${VERSION_V1}residents/lookup"
+    const val RESIDENT_CONSENT = "${PRIMARY_END_POINT}${VERSION_V1}residents/consent"
     const val CAPTURE_UPLOAD = "${PRIMARY_END_POINT}${VERSION_V1}captures"
     const val CAPTURE_BATCH_UPLOAD = "${PRIMARY_END_POINT}${VERSION_V1}captures/batch"
 

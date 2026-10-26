@@ -10,6 +10,8 @@ import app.gov.uidai.registration.model.capture.CaptureRequest
 import app.gov.uidai.registration.model.capture.CaptureResponse
 import app.gov.uidai.registration.model.device.DeviceRegistrationRequest
 import app.gov.uidai.registration.model.device.DeviceRegistrationResponse
+import app.gov.uidai.registration.model.resident.ResidentConsentRequest
+import app.gov.uidai.registration.model.resident.ResidentConsentResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
 import app.gov.uidai.registration.repository.ClfRepository
@@ -23,6 +25,12 @@ class ClfRepositoryImpl @Inject constructor(
         request: ResidentLookupRequest
     ): ApiResult<ResidentLookupResponse> = ResponseHandler.safeApiCall {
         apiService.lookupResident(request)
+    }
+
+    override suspend fun postResidentConsent(
+        request: ResidentConsentRequest
+    ): ApiResult<ResidentConsentResponse> = ResponseHandler.safeApiCall {
+        apiService.postResidentConsent(request)
     }
 
     override suspend fun uploadCapture(

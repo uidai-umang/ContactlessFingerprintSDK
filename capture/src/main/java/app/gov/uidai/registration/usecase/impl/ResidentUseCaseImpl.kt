@@ -1,6 +1,8 @@
 package app.gov.uidai.registration.usecase.impl
 
 import app.gov.uidai.registration.data.remote.network.ApiResult
+import app.gov.uidai.registration.model.resident.ResidentConsentRequest
+import app.gov.uidai.registration.model.resident.ResidentConsentResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
 import app.gov.uidai.registration.repository.ClfRepository
@@ -22,5 +24,9 @@ class ResidentUseCaseImpl @Inject constructor(
             gender = gender
         )
         return clfRepository.lookupResident(request)
+    }
+
+    override suspend fun postResidentConsent(request: ResidentConsentRequest): ApiResult<ResidentConsentResponse> {
+        return clfRepository.postResidentConsent(request)
     }
 }

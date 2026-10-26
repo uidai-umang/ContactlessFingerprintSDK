@@ -15,6 +15,8 @@ import app.gov.uidai.registration.model.dashboard.QuotaCheckResponse
 import app.gov.uidai.registration.model.dashboard.QuotaOverrideResponse
 import app.gov.uidai.registration.model.device.DeviceRegistrationRequest
 import app.gov.uidai.registration.model.device.DeviceRegistrationResponse
+import app.gov.uidai.registration.model.resident.ResidentConsentRequest
+import app.gov.uidai.registration.model.resident.ResidentConsentResponse
 import app.gov.uidai.registration.model.resident.ResidentLookupRequest
 import app.gov.uidai.registration.model.resident.ResidentLookupResponse
 import okhttp3.MultipartBody
@@ -49,6 +51,11 @@ interface ClfApiService {
     suspend fun lookupResident(
         @Body request: ResidentLookupRequest
     ): Response<ResidentLookupResponse>
+
+    @POST(Urls.RESIDENT_CONSENT)
+    suspend fun postResidentConsent(
+        @Body request: ResidentConsentRequest
+    ): Response<ResidentConsentResponse>
 
     @Multipart
     @POST(Urls.CAPTURE_UPLOAD)

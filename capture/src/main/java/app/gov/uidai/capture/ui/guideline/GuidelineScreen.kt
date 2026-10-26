@@ -53,6 +53,7 @@ import app.gov.uidai.capture.R
 import app.gov.uidai.registration.ui.theme.Colors
 import app.gov.uidai.registration.ui.theme.Spacing
 import app.gov.uidai.capture.ui.theme.Typography
+import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 
 // ── Static content — fixed copy from the mockup. Bold spans hardcoded
 // as substrings since this isn't localized yet; move to
