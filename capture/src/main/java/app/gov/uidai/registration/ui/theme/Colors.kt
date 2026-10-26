@@ -8,6 +8,7 @@ object Colors {
         val Primary = Color(0xFFFFFFFF)    // screens, dialogs, bottom bars
         val Secondary = Color(0xFFF5F5F4)  // cards, rows, chips, tab strips, dashboard bg
         val Tertiary = Color(0xFF1A1A1A)   // dark surfaces (camera)
+        val Transparent = Color.Transparent
     }
 
     object Text {
