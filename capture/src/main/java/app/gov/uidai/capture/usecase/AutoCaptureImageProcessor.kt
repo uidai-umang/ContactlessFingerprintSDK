@@ -139,6 +139,8 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
     override val isReadyForAccumulation: Boolean
         get() = isStage1Passed.get() && provider.isFocusLockedForCapture
 
+    private val isSegmentationEnabled = false
+
     @SuppressLint("DefaultLocale")
     override suspend fun processStage2(candidateBatch: List<CameraFrame>) {
         val processingId = candidateBatch.first().processingId
@@ -218,10 +220,8 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             }
 
             // ----------------------------------------------------------------------
-            // SEGMENTATION
+            // SEGMENTATION (skipped when isSegmentationEnabled is false)
             // ----------------------------------------------------------------------
-
-            listener.onStage2ProcessingStageUpdate(ProcessingStage.SEGMENTATION)
 
             val blurSortedIndices = blurResults.indices
                 .filter { blurResults[it].allPassed }
@@ -232,118 +232,110 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             Log.i(TAG, "STAGE2_DEBUG WINNER=candidate ${blurSortedIndices.firstOrNull()} of ${blurResults.size}, order=$blurSortedIndices")
 
             val winnerIndex = blurSortedIndices.first()
-            val bestFrame = candidateBatch[blurSortedIndices.first()]
+            val bestFrame = candidateBatch[winnerIndex]
 
-            val (segCroppedByteArray, segCroppedByteArraySize) =
-                bestFrame.getByteArray(
-                    requiresCropping = preferenceStore.get(
-                        ProcessingSettings.CROPPED_INPUT_TO_SEGMENTATION_MODEL
-                    ),
-                    cutoutRect = provider.getCutoutRectInImageCoordinates(
-                        Size(bestFrame.width, bestFrame.height),
-                        bestFrame.rotationDegrees
-                    )
-                )
-
-            val segmentationProvider = ImageDataProvider(
-                segCroppedByteArray,
-                segCroppedByteArraySize.width,
-                segCroppedByteArraySize.height,
+            val cutoutRect = provider.getCutoutRectInImageCoordinates(
+                Size(bestFrame.width, bestFrame.height),
                 bestFrame.rotationDegrees
             )
 
-            Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEG_INPUT")
-            controller.saveBitmap(segmentationProvider.getAsUprightBitmap(), "S2_${winnerIndex}_2_SegInput")
-
-            val segmentationResult = segmentationCheck.run(
-                segmentationProvider
+            // Needed with or without segmentation.
+            val (fullByteArray, fullByteArraySize) = bestFrame.getByteArray(
+                requiresCropping = false,
+                cutoutRect = cutoutRect
             )
+            val fullBitmap = fullByteArray
+                .toBitmap(fullByteArraySize)
+                .rotate(bestFrame.rotationDegrees)
 
-            if (preferenceStore.get(ProcessingSettings.SAVE_SEGMENTATION_INPUT)) {
-                controller.saveBitmap(
-                    segmentationProvider.getAsUprightBitmap(),
-                    "SegInput"
-                )
-            }
+            val (croppedByteArray, croppedByteArraySize) = bestFrame.getByteArray(
+                requiresCropping = true,
+                cutoutRect = cutoutRect
+            )
+            val croppedBitmap = croppedByteArray
+                .toBitmap(croppedByteArraySize)
+                .rotate(bestFrame.rotationDegrees)
 
-            Log.d(TAG, "Segmentation Result: $segmentationResult")
+            val segmentedFrame = if (isSegmentationEnabled) {
+                listener.onStage2ProcessingStageUpdate(ProcessingStage.SEGMENTATION)
 
-            val segmentedFrame = when (segmentationResult) {
-
-                is ProcessingResult.Failed -> {
-                    listener.onStage2Result(
-                        passed = false,
-                        errors = listOf(
-                            segmentationResult.cause as Error
-                        )
+                val (segCroppedByteArray, segCroppedByteArraySize) =
+                    bestFrame.getByteArray(
+                        requiresCropping = preferenceStore.get(
+                            ProcessingSettings.CROPPED_INPUT_TO_SEGMENTATION_MODEL
+                        ),
+                        cutoutRect = cutoutRect
                     )
-                    return
+
+                val segmentationProvider = ImageDataProvider(
+                    segCroppedByteArray,
+                    segCroppedByteArraySize.width,
+                    segCroppedByteArraySize.height,
+                    bestFrame.rotationDegrees
+                )
+
+                Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEG_INPUT")
+                controller.saveBitmap(segmentationProvider.getAsUprightBitmap(), "S2_${winnerIndex}_2_SegInput")
+
+                val segmentationResult = segmentationCheck.run(segmentationProvider)
+
+                if (preferenceStore.get(ProcessingSettings.SAVE_SEGMENTATION_INPUT)) {
+                    controller.saveBitmap(
+                        segmentationProvider.getAsUprightBitmap(),
+                        "SegInput"
+                    )
                 }
 
-                is ProcessingResult.Passed -> {
+                Log.d(TAG, "Segmentation Result: $segmentationResult")
 
-                    val boundingBox = segmentationResult.data.box
-
-                    // IMPORTANT:
-                    // Crop the ORIGINAL bitmap using the segmentation bounding box.
-                    // This is what gives us the actual finger image containing
-                    // the fingerprint ridges.
-                    val finalBitmap = segmentationProvider
-                        .getAsUprightBitmap()
-                        .crop(boundingBox)
-
-                    val (fullByteArray, fullByteArraySize) =
-                        bestFrame.getByteArray(
-                            requiresCropping = false,
-                            cutoutRect = provider.getCutoutRectInImageCoordinates(
-                                Size(bestFrame.width, bestFrame.height),
-                                bestFrame.rotationDegrees
-                            )
+                when (segmentationResult) {
+                    is ProcessingResult.Failed -> {
+                        segmentationProvider.clearCache()
+                        listener.onStage2Result(
+                            passed = false,
+                            errors = listOf(segmentationResult.cause as Error)
                         )
-
-                    val fullBitmap = fullByteArray
-                        .toBitmap(fullByteArraySize)
-                        .rotate(bestFrame.rotationDegrees)
-
-                    val (croppedByteArray, croppedByteArraySize) =
-                        bestFrame.getByteArray(
-                            requiresCropping = true,
-                            cutoutRect = provider.getCutoutRectInImageCoordinates(
-                                Size(bestFrame.width, bestFrame.height),
-                                bestFrame.rotationDegrees
-                            )
-                        )
-
-                    val croppedBitmap = croppedByteArray
-                        .toBitmap(croppedByteArraySize)
-                        .rotate(bestFrame.rotationDegrees)
-
-                    if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
-                        controller.saveBitmap(
-                            finalBitmap,
-                            "FinalOutput"
-                        )
-
-                        segmentationResult.data.mask?.let {
-                            controller.saveBitmap(
-                                it,
-                                "FinalOutputMask"
-                            )
-                        }
+                        return
                     }
 
-                    Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEG_OUTPUT")
-                    controller.saveBitmap(finalBitmap, "S2_${winnerIndex}_3_SegOutput")
+                    is ProcessingResult.Passed -> {
+                        // Crop the ORIGINAL bitmap using the segmentation bounding box.
+                        val finalBitmap = segmentationProvider
+                            .getAsUprightBitmap()
+                            .crop(segmentationResult.data.box)
 
-                    SegmentedFrame(
-                        processingId = processingId,
-                        finalBitmap = finalBitmap,
-                        fullBitmap = fullBitmap,
-                        croppedBitmap = croppedBitmap,
-                        timestamp = bestFrame.timestamp,
-                        finalMask = segmentationResult.data.mask
-                    )
+                        segmentationProvider.clearCache()
+
+                        if (preferenceStore.get(ProcessingSettings.SAVE_FINAL_OUTPUT)) {
+                            controller.saveBitmap(finalBitmap, "FinalOutput")
+                            segmentationResult.data.mask?.let {
+                                controller.saveBitmap(it, "FinalOutputMask")
+                            }
+                        }
+
+                        Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEG_OUTPUT")
+                        controller.saveBitmap(finalBitmap, "S2_${winnerIndex}_3_SegOutput")
+
+                        SegmentedFrame(
+                            processingId = processingId,
+                            finalBitmap = finalBitmap,
+                            fullBitmap = fullBitmap,
+                            croppedBitmap = croppedBitmap,
+                            timestamp = bestFrame.timestamp,
+                            finalMask = segmentationResult.data.mask
+                        )
+                    }
                 }
+            } else {
+                Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] segmentation skipped, using cutout crop")
+                SegmentedFrame(
+                    processingId = processingId,
+                    finalBitmap = croppedBitmap,
+                    fullBitmap = fullBitmap,
+                    croppedBitmap = croppedBitmap,
+                    timestamp = bestFrame.timestamp,
+                    finalMask = null
+                )
             }
 
             Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] SEGMENTED_FRAME finalBitmap=${segmentedFrame.finalBitmap.width}x${segmentedFrame.finalBitmap.height} fullBitmap=${segmentedFrame.fullBitmap.width}x${segmentedFrame.fullBitmap.height} croppedBitmap=${segmentedFrame.croppedBitmap.width}x${segmentedFrame.croppedBitmap.height}")
@@ -351,8 +343,6 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             controller.saveBitmap(segmentedFrame.finalBitmap, "S2_${winnerIndex}_SF_finalBitmap")
             controller.saveBitmap(segmentedFrame.fullBitmap, "S2_${winnerIndex}_SF_fullBitmap")
             controller.saveBitmap(segmentedFrame.croppedBitmap, "S2_${winnerIndex}_SF_croppedBitmap")
-
-            segmentationProvider.clearCache()
 
             blurSortedIndices.forEach { _ ->
                 addToFinalBuffer(segmentedFrame)
@@ -368,10 +358,7 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
 
             val (byteArray, actualSize) = bestFrame.getByteArray(
                 requiresCropping = true,
-                cutoutRect = provider.getCutoutRectInImageCoordinates(
-                    Size(bestFrame.width, bestFrame.height),
-                    bestFrame.rotationDegrees
-                )
+                cutoutRect = cutoutRect
             )
 
             val finalScoreProvider = ImageDataProvider(
@@ -384,15 +371,12 @@ class AutoCaptureImageProcessor @AssistedInject constructor(
             Log.i(TAG, "STAGE2_DEBUG [$winnerIndex] RESCORE_INPUT size=${finalScoreProvider.width}x${finalScoreProvider.height}")
             controller.saveBitmap(finalScoreProvider.getAsUprightBitmap(), "S2_${winnerIndex}_4_RescoreInput")
 
-            val (fullByteArray, fullSize) = bestFrame.getByteArray(
+            val (fingerFullByteArray, fullSize) = bestFrame.getByteArray(
                 requiresCropping = false,
-                cutoutRect = provider.getCutoutRectInImageCoordinates(
-                    Size(bestFrame.width, bestFrame.height),
-                    bestFrame.rotationDegrees
-                )
+                cutoutRect = cutoutRect
             )
             val finalFingerCheckProvider = ImageDataProvider(
-                fullByteArray,
+                fingerFullByteArray,
                 fullSize.width,
                 fullSize.height,
                 bestFrame.rotationDegrees
