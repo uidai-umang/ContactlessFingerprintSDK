@@ -94,10 +94,36 @@ class RegistrationViewModel @Inject constructor(
     // restored if the capture is aborted / fails.
     private var statusBeforeCapture: FingerCaptureStatus? = null
 
-    private fun FingerPosition.isDone() = when (_uiState.value.fingerUploadStatus[this]) {
+    private fun FingerPosition.isSaved() = when (_uiState.value.fingerUploadStatus[this]) {
         FingerCaptureStatus.CAPTURED, FingerCaptureStatus.PENDING, FingerCaptureStatus.UPLOADING -> true
         else -> false
     }
+
+    // A saved slap already covers the four fingers (not the thumb) of its hand.
+    private fun FingerPosition.coveringSlap() = when (this) {
+        FingerPosition.LEFT_INDEX, FingerPosition.LEFT_MIDDLE,
+        FingerPosition.LEFT_RING, FingerPosition.LEFT_LITTLE -> FingerPosition.LEFT_SLAP
+        FingerPosition.RIGHT_INDEX, FingerPosition.RIGHT_MIDDLE,
+        FingerPosition.RIGHT_RING, FingerPosition.RIGHT_LITTLE -> FingerPosition.RIGHT_SLAP
+        else -> null
+    }
+
+    // A slap can't be captured once any of its hand's four fingers was captured on its own.
+    private fun FingerPosition.slapFingers() = when (this) {
+        FingerPosition.LEFT_SLAP -> listOf(
+            FingerPosition.LEFT_INDEX, FingerPosition.LEFT_MIDDLE,
+            FingerPosition.LEFT_RING, FingerPosition.LEFT_LITTLE
+        )
+        FingerPosition.RIGHT_SLAP -> listOf(
+            FingerPosition.RIGHT_INDEX, FingerPosition.RIGHT_MIDDLE,
+            FingerPosition.RIGHT_RING, FingerPosition.RIGHT_LITTLE
+        )
+        else -> emptyList()
+    }
+
+    // "Done" for sequencing = nothing left to capture: saved, covered by a saved slap, or slap blocked.
+    private fun FingerPosition.isDone() =
+        isSaved() || coveringSlap()?.isSaved() == true || slapFingers().any { it.isSaved() }
 
     /** Sequential mode: tapped finger first, then the rest of that hand, thumb -> little. */
     fun startHandSequence(start: FingerPosition) {

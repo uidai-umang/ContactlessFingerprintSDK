@@ -1,5 +1,6 @@
 package app.gov.uidai.registration.ui.registration.method
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Fingerprint
@@ -31,17 +32,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -49,17 +51,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,6 +77,7 @@ import app.gov.uidai.registration.model.FingerCaptureStatus
 import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.theme.Colors
+import kotlinx.coroutines.launch
 
 // --------------------------------------------------
 // Existing flow: finger positions, status rules, labels
@@ -95,6 +103,14 @@ private val RightHand = listOf(
     FingerPosition.RIGHT_MIDDLE,
     FingerPosition.RIGHT_RING,
     FingerPosition.RIGHT_LITTLE
+)
+
+// One entry per tab of the Sequential mode; the index is the tab index.
+private data class HandTab(val title: String, val fingers: List<FingerPosition>)
+
+private val HandTabs = listOf(
+    HandTab("Left Hand", LeftHand),
+    HandTab("Right Hand", RightHand)
 )
 
 // Same rule as RegistrationViewModel.isDone(): captured, queued or uploading counts as saved.
@@ -135,23 +151,46 @@ private fun FingerStatusMap.savedCount(positions: List<FingerPosition>) =
 // Fingers covered out of 10.
 private fun FingerStatusMap.savedFingerCount() = savedCount(LeftHand + RightHand)
 
+private fun FingerStatusMap.savedSummary(noun: String) =
+    "${savedFingerCount()} of 10 fingerprints saved · Select a $noun to continue"
+
+// A slap can't be captured once any of its hand's four fingers was captured on its own (Sequential).
+private fun FingerPosition.slapFingers() = when (this) {
+    FingerPosition.LEFT_SLAP -> LeftHand.drop(1)
+    FingerPosition.RIGHT_SLAP -> RightHand.drop(1)
+    else -> emptyList()
+}
+
+private fun FingerStatusMap.isSlapBlocked(position: FingerPosition) =
+    !statusOf(position).isSaved() && position.slapFingers().any { statusOf(it).isSaved() }
+
+private fun FingerStatusMap.isSelectable(position: FingerPosition) =
+    fingerStatusOf(position).canCapture() && !isSlapBlocked(position)
+
+private fun FingerPosition.slapBlockedMessage() =
+    "${label()} isn't available because ${name.substringBefore('_').lowercase()}-hand fingers are already captured in Sequential."
+
+private fun FingerPosition.isSlap() =
+    this == FingerPosition.LEFT_SLAP || this == FingerPosition.RIGHT_SLAP
+
+private fun FingerPosition.isLeft() = name.startsWith("LEFT")
+
 private fun FingerPosition.label() =
     name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
 
-private fun FingerPosition.fingerCount() =
-    if (this == FingerPosition.LEFT_SLAP || this == FingerPosition.RIGHT_SLAP) 4 else 1
+private fun FingerPosition.fingerCount() = if (isSlap()) 4 else 1
 
 private fun FingerPosition.fingerCountText() =
     fingerCount().let { "$it ${if (it == 1) "finger" else "fingers"}" }
 
-private fun FingerPosition.guidance() = when (this) {
-    FingerPosition.LEFT_SLAP, FingerPosition.RIGHT_SLAP ->
+private fun FingerPosition.guidance() =
+    if (isSlap()) {
         "Align all four ${
             name.substringBefore('_').lowercase()
         }-hand fingers with the palm overlay. Keep the thumb out."
-
-    else -> "Place ${label().lowercase()} flat on the center of the scanner sensor."
-}
+    } else {
+        "Place ${label().lowercase()} flat on the center of the scanner sensor."
+    }
 
 // --------------------------------------------------
 // Route: connects the screen to the shared RegistrationViewModel
@@ -197,16 +236,19 @@ fun FingerprintCollectionScreen(
     onHelpClick: () -> Unit = {},
     onCreateCollection: (CaptureMethod, FingerPosition) -> Unit = { _, _ -> }
 ) {
-    var selectedMethod by rememberSaveable { mutableStateOf(CaptureMethod.SLAP) }
+    var selectedMethod by rememberSaveable { mutableStateOf(CaptureMethod.SEQUENTIAL) }
 
     var selectedHandTab by rememberSaveable { mutableIntStateOf(0) } // 0: Left, 1: Right
     var pickedPosition by rememberSaveable { mutableStateOf<FingerPosition?>(null) }
 
-    val handFingers = if (selectedHandTab == 0) LeftHand else RightHand
+    val handFingers = HandTabs[selectedHandTab].fingers
     val candidates = if (selectedMethod == CaptureMethod.SLAP) SlapPositions else handFingers
     val selected = pickedPosition
-        ?.takeIf { it in candidates && fingerStatus.fingerStatusOf(it).canCapture() }
-        ?: candidates.firstOrNull { fingerStatus.fingerStatusOf(it).canCapture() }
+        ?.takeIf { it in candidates && fingerStatus.isSelectable(it) }
+        ?: candidates.firstOrNull { fingerStatus.isSelectable(it) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     val savedFingers = fingerStatus.savedFingerCount()
     val sessionStatus = when (savedFingers) {
@@ -261,6 +303,7 @@ fun FingerprintCollectionScreen(
                 onClick = { selected?.let { onCreateCollection(selectedMethod, it) } }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Colors.Background.Secondary
     ) { innerPadding ->
         LazyColumn(
@@ -311,11 +354,7 @@ fun FingerprintCollectionScreen(
                     onMethodSelected = { selectedMethod = it }
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Counts in tabs show fingers captured with each method.",
-                    fontSize = 12.sp,
-                    color = Colors.Text.Secondary
-                )
+                CaptionText(text = "Counts in tabs show fingers captured with each method.")
             }
 
             // Content dynamic to selected mode
@@ -324,7 +363,13 @@ fun FingerprintCollectionScreen(
                     SlapModeContent(
                         fingerStatus = fingerStatus,
                         selected = selected,
-                        onGroupSelect = { pickedPosition = it }
+                        onGroupSelect = { pickedPosition = it },
+                        onBlockedGroupClick = { position ->
+                            scope.launch {
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                snackbarHostState.showSnackbar(position.slapBlockedMessage())
+                            }
+                        }
                     )
                 }
             } else {
@@ -362,10 +407,8 @@ fun FingerprintCollectionScreen(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
+                    CaptionText(
                         text = "You can switch methods at any time. A saved slap marks that hand's four fingers as done in Sequential.",
-                        fontSize = 12.sp,
-                        color = Colors.Text.Secondary,
                         lineHeight = 16.sp
                     )
                 }
@@ -455,7 +498,8 @@ fun MethodButton(
 fun SlapModeContent(
     fingerStatus: Map<FingerPosition, FingerCaptureStatus>,
     selected: FingerPosition?,
-    onGroupSelect: (FingerPosition) -> Unit
+    onGroupSelect: (FingerPosition) -> Unit,
+    onBlockedGroupClick: (FingerPosition) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -490,18 +534,16 @@ fun SlapModeContent(
                     position == selected -> Colors.Brand.BlueSoft
                     else -> Colors.Border.Primary
                 }
-                Box(Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(color, RoundedCornerShape(2.dp)))
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(color, RoundedCornerShape(2.dp))
+                )
             }
         }
 
-        Text(
-            text = "${fingerStatus.savedFingerCount()} of 10 fingerprints saved · Select a group to continue",
-            fontSize = 12.sp,
-            color = Colors.Text.Secondary
-        )
+        CaptionText(text = fingerStatus.savedSummary("group"))
 
         // 2x2 Grid
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -516,7 +558,9 @@ fun SlapModeContent(
                             position = position,
                             status = fingerStatus.statusOf(position),
                             isSelected = position == selected,
-                            onClick = { onGroupSelect(position) }
+                            isBlocked = fingerStatus.isSlapBlocked(position),
+                            onClick = { onGroupSelect(position) },
+                            onBlockedClick = { onBlockedGroupClick(position) }
                         )
                     }
                 }
@@ -531,22 +575,23 @@ fun GroupCard(
     position: FingerPosition,
     status: FingerCaptureStatus,
     isSelected: Boolean,
-    onClick: () -> Unit
+    isBlocked: Boolean = false,
+    onClick: () -> Unit,
+    onBlockedClick: () -> Unit = {}
 ) {
     val isSaved = status.isSaved()
 
-    Card(
-        modifier = modifier
-            .clickable(enabled = status.canCapture(), onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Colors.Background.Primary),
-        border = BorderStroke(
-            width = if (isSelected) 1.8.dp else 1.dp,
-            color = if (isSelected) Colors.Brand.Blue else Colors.Border.Primary
-        )
+    // A blocked group stays tappable so the operator gets told why it can't be used.
+    SelectableCard(
+        modifier = modifier,
+        isSelected = isSelected,
+        enabled = status.canCapture() || isBlocked,
+        onClick = if (isBlocked) onBlockedClick else onClick
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .alpha(if (isBlocked) 0.4f else 1f)
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -554,75 +599,17 @@ fun GroupCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val icon = if(position == FingerPosition.LEFT_SLAP || position == FingerPosition.RIGHT_SLAP) {
-                    R.drawable.slap_symbol
-                } else {
-                    R.drawable.uncaptured_finger_symbol
-                }
-
-                val scale = if(position == FingerPosition.LEFT_SLAP || position == FingerPosition.LEFT_THUMB) {
-                    1f
-                } else {
-                    -1f
-                }
-
-                Icon(
-                    painter = painterResource(icon),
-                    contentDescription = null,
+                FingerIcon(
+                    iconRes = if (position.isSlap()) R.drawable.slap_symbol else R.drawable.uncaptured_finger_symbol,
+                    position = position,
                     tint = if (isSaved) Colors.Success.Main else Colors.Text.Primary,
-                    modifier = Modifier.size(22.dp).graphicsLayer(scaleX = scale)
+                    size = 22.dp
                 )
-
-                when {
-                    isSaved -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.saved),
-                                null,
-                                tint = Colors.Success.Main,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                "Done",
-                                fontSize = 12.sp,
-                                color = Colors.Success.Text,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    isSelected -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.capture_mode_selected_ico),
-                                null,
-                                tint = Colors.Brand.Blue,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                "Selected",
-                                fontSize = 12.sp,
-                                color = Colors.Brand.Blue,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-
-                    else -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Outlined.Schedule,
-                                null,
-                                tint = Colors.Text.Secondary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text("Pending", fontSize = 12.sp, color = Colors.Text.Secondary)
-                        }
-                    }
-                }
+                CaptureStatusLabel(
+                    status = status,
+                    isSelected = isSelected,
+                    iconSize = 14.dp
+                )
             }
 
             Column {
@@ -632,11 +619,7 @@ fun GroupCard(
                     fontSize = 16.sp,
                     color = Colors.Text.Primary
                 )
-                Text(
-                    text = position.fingerCountText() + if (isSaved) " · Saved" else "",
-                    fontSize = 12.sp,
-                    color = Colors.Text.Secondary
-                )
+                CaptionText(text = position.fingerCountText() + if (isSaved) " · Saved" else "")
             }
         }
     }
@@ -653,7 +636,7 @@ fun SequentialModeContent(
     selected: FingerPosition?,
     onFingerSelect: (FingerPosition) -> Unit
 ) {
-    val fingers = if (selectedHandTab == 0) LeftHand else RightHand
+    val fingers = HandTabs[selectedHandTab].fingers
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Tab Row (Left Hand vs Right Hand)
@@ -669,7 +652,7 @@ fun SequentialModeContent(
                         .fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    repeat(2) { index ->
+                    repeat(HandTabs.size) { index ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -684,41 +667,21 @@ fun SequentialModeContent(
             },
             divider = {}
         ) {
-            Tab(
-                selected = selectedHandTab == 0,
-                onClick = { onTabSelect(0) },
-                text = {
-                    Text(
-                        "Left Hand (${fingerStatus.savedCount(LeftHand)})",
-                        fontWeight = if(selectedHandTab == 0) {
-                            FontWeight.Bold
-                        } else {
-                            FontWeight.Normal
-                        }
-                    )
-                }
-            )
-            Tab(
-                selected = selectedHandTab == 1,
-                onClick = { onTabSelect(1) },
-                text = {
-                    Text(
-                        "Right Hand (${fingerStatus.savedCount(RightHand)})",
-                        fontWeight = if(selectedHandTab == 1) {
-                            FontWeight.Bold
-                        } else {
-                            FontWeight.Normal
-                        }
-                    )
-                }
-            )
+            HandTabs.forEachIndexed { index, hand ->
+                Tab(
+                    selected = selectedHandTab == index,
+                    onClick = { onTabSelect(index) },
+                    text = {
+                        Text(
+                            "${hand.title} (${fingerStatus.savedCount(hand.fingers)})",
+                            fontWeight = if (selectedHandTab == index) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                )
+            }
         }
 
-        Text(
-            text = "${fingerStatus.savedFingerCount()} of 10 fingerprints saved · Select a finger to continue",
-            fontSize = 12.sp,
-            color = Colors.Text.Secondary
-        )
+        CaptionText(text = fingerStatus.savedSummary("finger"))
 
         // List of Finger Cards
         fingers.forEach { position ->
@@ -741,16 +704,11 @@ fun FingerRowCard(
 ) {
     val isSaved = status.isSaved()
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = status.canCapture(), onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Colors.Background.Primary),
-        border = BorderStroke(
-            width = if (isSelected) 1.8.dp else 1.dp,
-            color = if (isSelected) Colors.Brand.Blue else Colors.Border.Primary
-        )
+    SelectableCard(
+        modifier = Modifier.fillMaxWidth(),
+        isSelected = isSelected,
+        enabled = status.canCapture(),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
@@ -759,23 +717,12 @@ fun FingerRowCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val fingerIcon = when {
-                isSaved -> R.drawable.captured__finger_symbol
-                else -> R.drawable.uncaptured_finger_symbol
-            }
-            val leftFingers: List<FingerPosition> = listOf(FingerPosition.LEFT_THUMB, FingerPosition.LEFT_INDEX, FingerPosition.LEFT_MIDDLE, FingerPosition.LEFT_RING, FingerPosition.LEFT_LITTLE)
-            val rightFingers: List<FingerPosition> = listOf(FingerPosition.RIGHT_THUMB, FingerPosition.RIGHT_INDEX, FingerPosition.RIGHT_MIDDLE, FingerPosition.RIGHT_RING, FingerPosition.RIGHT_LITTLE)
-            val scale = if(position in leftFingers) {
-                1f
-            } else {
-                -1f
-            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(R.drawable.uncaptured_finger_symbol),
-                    contentDescription = null,
+                FingerIcon(
+                    iconRes = R.drawable.uncaptured_finger_symbol,
+                    position = position,
                     tint = if (isSaved) Colors.Success.Main else Colors.Text.Secondary,
-                    modifier = Modifier.size(24.dp).graphicsLayer(scaleX = scale)
+                    size = 24.dp
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -785,63 +732,14 @@ fun FingerRowCard(
                     color = Colors.Text.Primary
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (isSaved) "1 finger · Saved" else "1 finger · Not captured",
-                    fontSize = 12.sp,
-                    color = Colors.Text.Secondary
-                )
+                CaptionText(text = if (isSaved) "1 finger · Saved" else "1 finger · Not captured")
             }
 
-            when {
-                isSaved -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            painterResource(R.drawable.saved),
-                            null,
-                            tint = Colors.Success.Main,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        Text(
-                            "Done",
-                            fontSize = 12.sp,
-                            color = Colors.Success.Text,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                isSelected -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Outlined.CheckCircle,
-                            null,
-                            tint = Colors.Brand.Blue,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        Text(
-                            "Selected",
-                            fontSize = 12.sp,
-                            color = Colors.Brand.Blue,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                else -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Outlined.Schedule,
-                            null,
-                            tint = Colors.Text.Secondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        Text("Pending", fontSize = 12.sp, color = Colors.Text.Secondary)
-                    }
-                }
-            }
+            CaptureStatusLabel(
+                status = status,
+                isSelected = isSelected,
+                iconSize = 16.dp
+            )
         }
     }
 }
@@ -931,11 +829,7 @@ fun BottomActionBar(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            Text(
-                text = selectedGroupText,
-                fontSize = 12.sp,
-                color = Colors.Text.Secondary
-            )
+            CaptionText(text = selectedGroupText)
         }
     }
 }
@@ -964,6 +858,143 @@ fun StatusBadge(text: String) {
 }
 
 // --------------------------------------------------
+// Shared building blocks (used by more than one section above)
+// --------------------------------------------------
+
+/** Small grey 12sp text used for hints, counts and summaries. */
+@Composable
+private fun CaptionText(
+    text: String,
+    modifier: Modifier = Modifier,
+    lineHeight: TextUnit = TextUnit.Unspecified
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        fontSize = 12.sp,
+        color = Colors.Text.Secondary,
+        lineHeight = lineHeight
+    )
+}
+
+/** White card with a blue border when selected; the base of GroupCard and FingerRowCard. */
+@Composable
+private fun SelectableCard(
+    isSelected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = modifier.clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = if(isSelected) {
+            Colors.Brand.BlueLight
+        } else {
+            Colors.Background.Primary
+        }),
+        border = BorderStroke(
+            width = if (isSelected) 1.8.dp else 1.dp,
+            color = if (isSelected) Colors.Brand.Blue else Colors.Border.Primary
+        ),
+        content = content
+    )
+}
+
+/** Finger / slap icon, mirrored for the right hand. */
+@Composable
+private fun FingerIcon(
+    @DrawableRes iconRes: Int,
+    position: FingerPosition,
+    tint: Color,
+    size: Dp
+) {
+    Icon(
+        painter = painterResource(iconRes),
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier
+            .size(size)
+            .graphicsLayer(scaleX = if (position.isLeft()) 1f else -1f)
+    )
+}
+
+/** Optional icon followed by a 12sp label, e.g. "Done", "Selected", "Pending", "+ Capture". */
+@Composable
+private fun StatusLabel(
+    text: String,
+    textColor: Color,
+    icon: Painter? = null,
+    iconSize: Dp = 16.dp,
+    iconTint: Color = textColor,
+    fontWeight: FontWeight? = null
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) {
+            Icon(
+                painter = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(iconSize)
+            )
+            Spacer(Modifier.width(2.dp))
+        }
+        Text(text, fontSize = 12.sp, color = textColor, fontWeight = fontWeight)
+    }
+}
+
+/** Label at the end of a card, driven by the finger's capture status. */
+@Composable
+private fun CaptureStatusLabel(
+    status: FingerCaptureStatus,
+    isSelected: Boolean,
+    iconSize: Dp
+) {
+    when {
+        status == FingerCaptureStatus.CAPTURED -> StatusLabel(
+            icon = painterResource(R.drawable.saved),
+            iconSize = 16.dp,
+            text = "Done",
+            iconTint = Colors.Success.Main,
+            textColor = Colors.Success.Text,
+            fontWeight = FontWeight.Medium
+        )
+
+        // Captured and saved on the device, waiting to sync to the backend.
+        status == FingerCaptureStatus.PENDING -> StatusLabel(
+            icon = rememberVectorPainter(Icons.Outlined.Schedule),
+            iconSize = iconSize,
+            text = "Pending",
+            textColor = Colors.Warning.Primary
+        )
+
+        status == FingerCaptureStatus.CAPTURING || status == FingerCaptureStatus.UPLOADING ->
+            CircularProgressIndicator(
+                modifier = Modifier.size(iconSize),
+                strokeWidth = 2.dp,
+                color = Colors.Brand.Blue
+            )
+
+        isSelected -> StatusLabel(
+            icon = painterResource(R.drawable.capture_mode_selected_ico),
+            iconSize = iconSize,
+            text = "Selected",
+            iconTint = Colors.Brand.Blue,
+            textColor = Colors.Brand.Blue,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        // NOT_CAPTURED and FAILED
+        else -> StatusLabel(
+            text = "+ Capture",
+            textColor = Colors.Brand.Blue,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+// --------------------------------------------------
 // Previews
 // --------------------------------------------------
 @Preview(showBackground = true)
@@ -972,7 +1003,7 @@ fun FingerprintCollectionScreenPreview() {
     MaterialTheme {
         FingerprintCollectionScreen(
             fingerStatus = mapOf(
-                FingerPosition.LEFT_SLAP to FingerCaptureStatus.CAPTURED,
+                FingerPosition.LEFT_SLAP to FingerCaptureStatus.PENDING,
                 FingerPosition.LEFT_THUMB to FingerCaptureStatus.CAPTURED
             )
         )

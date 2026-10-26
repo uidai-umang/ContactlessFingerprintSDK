@@ -55,6 +55,7 @@ object Colors {
     }
 
     object Warning {
+        val Primary = Color(0xFFCE6C03)
         val Main = Color(0xFFD97706)
         val Container = Color(0xFFFEF3C7)
         val Border = Color(0xFFFCD34D)
