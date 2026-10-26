@@ -4,25 +4,58 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Fingerprint
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.ThumbUp
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -78,18 +111,29 @@ private typealias FingerStatusMap = Map<FingerPosition, FingerCaptureStatus>
 private fun FingerStatusMap.statusOf(position: FingerPosition) =
     this[position] ?: FingerCaptureStatus.NOT_CAPTURED
 
-private fun FingerStatusMap.savedCount(positions: List<FingerPosition>) =
-    positions.count { statusOf(it).isSaved() }
+// A slap covers the four fingers of its hand (not the thumb), so those fingers are done once it is saved.
+private fun FingerPosition.coveringSlap() = when (this) {
+    FingerPosition.LEFT_INDEX, FingerPosition.LEFT_MIDDLE,
+    FingerPosition.LEFT_RING, FingerPosition.LEFT_LITTLE -> FingerPosition.LEFT_SLAP
 
-// Fingers covered out of 10: a saved slap covers the four fingers of its hand, not the thumb.
-private fun FingerStatusMap.savedFingerCount(): Int =
-    listOf(
-        LeftHand to FingerPosition.LEFT_SLAP,
-        RightHand to FingerPosition.RIGHT_SLAP
-    ).sumOf { (fingers, slap) ->
-        val thumb = fingers.first()
-        fingers.count { statusOf(it).isSaved() || (it != thumb && statusOf(slap).isSaved()) }
-    }
+    FingerPosition.RIGHT_INDEX, FingerPosition.RIGHT_MIDDLE,
+    FingerPosition.RIGHT_RING, FingerPosition.RIGHT_LITTLE -> FingerPosition.RIGHT_SLAP
+
+    else -> null
+}
+
+// Status to show for a finger: its own, or its slap's when the slap is saved.
+private fun FingerStatusMap.fingerStatusOf(position: FingerPosition): FingerCaptureStatus {
+    val own = statusOf(position)
+    val slap = position.coveringSlap()?.let { statusOf(it) }
+    return if (!own.isSaved() && slap != null && slap.isSaved()) slap else own
+}
+
+private fun FingerStatusMap.savedCount(positions: List<FingerPosition>) =
+    positions.count { fingerStatusOf(it).isSaved() }
+
+// Fingers covered out of 10.
+private fun FingerStatusMap.savedFingerCount() = savedCount(LeftHand + RightHand)
 
 private fun FingerPosition.label() =
     name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
@@ -102,7 +146,10 @@ private fun FingerPosition.fingerCountText() =
 
 private fun FingerPosition.guidance() = when (this) {
     FingerPosition.LEFT_SLAP, FingerPosition.RIGHT_SLAP ->
-        "Align all four ${name.substringBefore('_').lowercase()}-hand fingers with the palm overlay. Keep the thumb out."
+        "Align all four ${
+            name.substringBefore('_').lowercase()
+        }-hand fingers with the palm overlay. Keep the thumb out."
+
     else -> "Place ${label().lowercase()} flat on the center of the scanner sensor."
 }
 
@@ -128,6 +175,7 @@ fun NewCaptureMethodRoute(
                     registrationViewModel.setSelectedCaptureMode(CaptureMode.SLAP)
                     registrationViewModel.startSlapSequence(start)
                 }
+
                 CaptureMethod.SEQUENTIAL -> {
                     registrationViewModel.setSelectedCaptureMode(CaptureMode.SEQUENTIAL)
                     registrationViewModel.startHandSequence(start)
@@ -150,14 +198,15 @@ fun FingerprintCollectionScreen(
     onCreateCollection: (CaptureMethod, FingerPosition) -> Unit = { _, _ -> }
 ) {
     var selectedMethod by rememberSaveable { mutableStateOf(CaptureMethod.SLAP) }
+
     var selectedHandTab by rememberSaveable { mutableIntStateOf(0) } // 0: Left, 1: Right
     var pickedPosition by rememberSaveable { mutableStateOf<FingerPosition?>(null) }
 
     val handFingers = if (selectedHandTab == 0) LeftHand else RightHand
     val candidates = if (selectedMethod == CaptureMethod.SLAP) SlapPositions else handFingers
     val selected = pickedPosition
-        ?.takeIf { it in candidates && fingerStatus.statusOf(it).canCapture() }
-        ?: candidates.firstOrNull { fingerStatus.statusOf(it).canCapture() }
+        ?.takeIf { it in candidates && fingerStatus.fingerStatusOf(it).canCapture() }
+        ?: candidates.firstOrNull { fingerStatus.fingerStatusOf(it).canCapture() }
 
     val savedFingers = fingerStatus.savedFingerCount()
     val sessionStatus = when (savedFingers) {
@@ -178,9 +227,14 @@ fun FingerprintCollectionScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(
+                        onClick = onBackClick,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = Colors.Background.Transparent
+                        )
+                    ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            painter = painterResource(R.drawable.chevron_left),
                             contentDescription = "Back",
                             tint = Colors.Text.Primary
                         )
@@ -189,7 +243,7 @@ fun FingerprintCollectionScreen(
                 actions = {
                     IconButton(onClick = onHelpClick) {
                         Icon(
-                            imageVector = Icons.Outlined.HelpOutline,
+                            painter = painterResource(R.drawable.help),
                             contentDescription = "Help",
                             tint = Colors.Text.Secondary
                         )
@@ -309,7 +363,7 @@ fun FingerprintCollectionScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Switch between Slap and Sequential at any time. Your saved fingerprints are retained.",
+                        text = "You can switch methods at any time. A saved slap marks that hand's four fingers as done in Sequential.",
                         fontSize = 12.sp,
                         color = Colors.Text.Secondary,
                         lineHeight = 16.sp
@@ -344,7 +398,7 @@ fun CaptureMethodSelector(
         MethodButton(
             modifier = Modifier.weight(1f),
             label = "Slap ($slapSaved)",
-            icon = painterResource(R.drawable.capture_symbol),
+            icon = painterResource(R.drawable.slap_symbol),
             isSelected = isSlap,
             onClick = { onMethodSelected(CaptureMethod.SLAP) }
         )
@@ -436,7 +490,10 @@ fun SlapModeContent(
                     position == selected -> Colors.Brand.BlueSoft
                     else -> Colors.Border.Primary
                 }
-                Box(Modifier.weight(1f).fillMaxHeight().background(color, RoundedCornerShape(2.dp)))
+                Box(Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(color, RoundedCornerShape(2.dp)))
             }
         }
 
@@ -497,31 +554,70 @@ fun GroupCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val icon = if(position == FingerPosition.LEFT_SLAP || position == FingerPosition.RIGHT_SLAP) {
+                    R.drawable.slap_symbol
+                } else {
+                    R.drawable.uncaptured_finger_symbol
+                }
+
+                val scale = if(position == FingerPosition.LEFT_SLAP || position == FingerPosition.LEFT_THUMB) {
+                    1f
+                } else {
+                    -1f
+                }
+
                 Icon(
-                    imageVector = Icons.Outlined.ThumbUp,
+                    painter = painterResource(icon),
                     contentDescription = null,
-                    tint = if (isSaved) Colors.Success.Main else Colors.Brand.Blue,
-                    modifier = Modifier.size(22.dp)
+                    tint = if (isSaved) Colors.Success.Main else Colors.Text.Primary,
+                    modifier = Modifier.size(22.dp).graphicsLayer(scaleX = scale)
                 )
 
                 when {
                     isSaved -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Check, null, tint = Colors.Success.Main, modifier = Modifier.size(16.dp))
+                            Icon(
+                                painter = painterResource(R.drawable.saved),
+                                null,
+                                tint = Colors.Success.Main,
+                                modifier = Modifier.size(16.dp)
+                            )
                             Spacer(Modifier.width(2.dp))
-                            Text("Done", fontSize = 12.sp, color = Colors.Success.Text, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Done",
+                                fontSize = 12.sp,
+                                color = Colors.Success.Text,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
+
                     isSelected -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.CheckCircle, null, tint = Colors.Brand.Blue, modifier = Modifier.size(14.dp))
+                            Icon(
+                                painter = painterResource(R.drawable.capture_mode_selected_ico),
+                                null,
+                                tint = Colors.Brand.Blue,
+                                modifier = Modifier.size(14.dp)
+                            )
                             Spacer(Modifier.width(2.dp))
-                            Text("Selected", fontSize = 12.sp, color = Colors.Brand.Blue, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Selected",
+                                fontSize = 12.sp,
+                                color = Colors.Brand.Blue,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
+
                     else -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Schedule, null, tint = Colors.Text.Secondary, modifier = Modifier.size(14.dp))
+                            Icon(
+                                Icons.Outlined.Schedule,
+                                null,
+                                tint = Colors.Text.Secondary,
+                                modifier = Modifier.size(14.dp)
+                            )
                             Spacer(Modifier.width(2.dp))
                             Text("Pending", fontSize = 12.sp, color = Colors.Text.Secondary)
                         }
@@ -530,7 +626,12 @@ fun GroupCard(
             }
 
             Column {
-                Text(text = position.label(), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Colors.Text.Primary)
+                Text(
+                    text = position.label(),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    color = Colors.Text.Primary
+                )
                 Text(
                     text = position.fingerCountText() + if (isSaved) " · Saved" else "",
                     fontSize = 12.sp,
@@ -559,18 +660,57 @@ fun SequentialModeContent(
         TabRow(
             selectedTabIndex = selectedHandTab,
             containerColor = Color.Transparent,
-            contentColor = Colors.Brand.Blue,
-            divider = { HorizontalDivider(color = Colors.Border.Primary) }
+            contentColor = Colors.Text.Primary,
+            indicator = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .wrapContentSize(Alignment.BottomStart)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    repeat(2) { index ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(3.dp)
+                                .background(
+                                    color = if (index == selectedHandTab) Colors.Success.Main else Colors.Brand.BlueSoft,
+                                    shape = RoundedCornerShape(3.dp)
+                                )
+                        )
+                    }
+                }
+            },
+            divider = {}
         ) {
             Tab(
                 selected = selectedHandTab == 0,
                 onClick = { onTabSelect(0) },
-                text = { Text("Left Hand (${fingerStatus.savedCount(LeftHand)})", fontWeight = FontWeight.SemiBold) }
+                text = {
+                    Text(
+                        "Left Hand (${fingerStatus.savedCount(LeftHand)})",
+                        fontWeight = if(selectedHandTab == 0) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.Normal
+                        }
+                    )
+                }
             )
             Tab(
                 selected = selectedHandTab == 1,
                 onClick = { onTabSelect(1) },
-                text = { Text("Right Hand (${fingerStatus.savedCount(RightHand)})", fontWeight = FontWeight.SemiBold) }
+                text = {
+                    Text(
+                        "Right Hand (${fingerStatus.savedCount(RightHand)})",
+                        fontWeight = if(selectedHandTab == 1) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.Normal
+                        }
+                    )
+                }
             )
         }
 
@@ -584,7 +724,7 @@ fun SequentialModeContent(
         fingers.forEach { position ->
             FingerRowCard(
                 position = position,
-                status = fingerStatus.statusOf(position),
+                status = fingerStatus.fingerStatusOf(position),
                 isSelected = position == selected,
                 onClick = { onFingerSelect(position) }
             )
@@ -619,40 +759,87 @@ fun FingerRowCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            val fingerIcon = when {
+                isSaved -> R.drawable.captured__finger_symbol
+                else -> R.drawable.uncaptured_finger_symbol
+            }
+            val leftFingers: List<FingerPosition> = listOf(FingerPosition.LEFT_THUMB, FingerPosition.LEFT_INDEX, FingerPosition.LEFT_MIDDLE, FingerPosition.LEFT_RING, FingerPosition.LEFT_LITTLE)
+            val rightFingers: List<FingerPosition> = listOf(FingerPosition.RIGHT_THUMB, FingerPosition.RIGHT_INDEX, FingerPosition.RIGHT_MIDDLE, FingerPosition.RIGHT_RING, FingerPosition.RIGHT_LITTLE)
+            val scale = if(position in leftFingers) {
+                1f
+            } else {
+                -1f
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Outlined.ThumbUp,
+                    painter = painterResource(R.drawable.uncaptured_finger_symbol),
                     contentDescription = null,
                     tint = if (isSaved) Colors.Success.Main else Colors.Text.Secondary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp).graphicsLayer(scaleX = scale)
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = position.label(),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Colors.Text.Primary
-                    )
-                    Text(
-                        text = if (isSaved) "1 finger · Saved" else "1 finger · Not captured",
-                        fontSize = 12.sp,
-                        color = Colors.Text.Secondary
-                    )
-                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = position.label(),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Colors.Text.Primary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isSaved) "1 finger · Saved" else "1 finger · Not captured",
+                    fontSize = 12.sp,
+                    color = Colors.Text.Secondary
+                )
             }
 
-            if (isSaved) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Check, null, tint = Colors.Success.Main, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text("Done", fontSize = 12.sp, color = Colors.Success.Text, fontWeight = FontWeight.SemiBold)
+            when {
+                isSaved -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painterResource(R.drawable.saved),
+                            null,
+                            tint = Colors.Success.Main,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            "Done",
+                            fontSize = 12.sp,
+                            color = Colors.Success.Text,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Schedule, null, tint = Colors.Text.Secondary, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text("Pending", fontSize = 12.sp, color = Colors.Text.Secondary)
+
+                isSelected -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            null,
+                            tint = Colors.Brand.Blue,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            "Selected",
+                            fontSize = 12.sp,
+                            color = Colors.Brand.Blue,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                else -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Outlined.Schedule,
+                            null,
+                            tint = Colors.Text.Secondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text("Pending", fontSize = 12.sp, color = Colors.Text.Secondary)
+                    }
                 }
             }
         }
@@ -675,7 +862,7 @@ fun GuidanceCard(
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Outlined.Fingerprint,
