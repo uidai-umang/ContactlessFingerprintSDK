@@ -17,8 +17,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import app.gov.uidai.registration.utils.residentInput
-import app.gov.uidai.registration.utils.residentNavArguments
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,40 +26,39 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.gov.uidai.capture.BuildConfig
+import app.gov.uidai.capture.pref.PreferenceStore
+import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.guideline.GuidelineScreen
 import app.gov.uidai.capture.ui.settings.DebugSettingsScreen
+import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
+import app.gov.uidai.capture.utils.MainThreadWatchdog
 import app.gov.uidai.registration.connectivity.ConnectivityObserver
 import app.gov.uidai.registration.connectivity.ui.NoInternetScreen
 import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
 import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
-import app.gov.uidai.registration.model.CaptureMode
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
 import app.gov.uidai.registration.ui.operator.RegisterOperatorRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
-import app.gov.uidai.registration.ui.registration.method.CaptureMethodRoute
-import app.gov.uidai.registration.model.toFingerPositionOrNull
+import app.gov.uidai.registration.ui.registration.capture.CaptureLoopRoute
+import app.gov.uidai.registration.ui.registration.method.NewCaptureMethodRoute
 import app.gov.uidai.registration.ui.theme.AttendanceAppTheme
+import app.gov.uidai.registration.ui.theme.Colors
 import app.gov.uidai.registration.ui.uidentry.UidEntryRoute
 import app.gov.uidai.registration.usecase.DeviceUseCase
 import app.gov.uidai.registration.utils.Routes
 import app.gov.uidai.registration.utils.device.DeviceRegistrationGate
+import app.gov.uidai.registration.utils.residentInput
+import app.gov.uidai.registration.utils.residentNavArguments
 import app.gov.uidai.registration.utils.worker.CaptureWorkScheduler
-import app.gov.uidai.capture.BuildConfig
-import app.gov.uidai.capture.pref.PreferenceStore
-import app.gov.uidai.capture.ui.camera.CameraController
-import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
-import app.gov.uidai.capture.utils.MainThreadWatchdog
-import app.gov.uidai.registration.ui.registration.capture.CaptureLoopRoute
-import app.gov.uidai.registration.ui.registration.method.NewCaptureMethodRoute
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Provider
 import jakarta.inject.Inject
 import kotlinx.coroutines.launch
-import app.gov.uidai.registration.ui.theme.Colors
+import javax.inject.Provider
 
 @AndroidEntryPoint
 class RegistrationActivity : ComponentActivity() {
@@ -164,11 +161,19 @@ class RegistrationActivity : ComponentActivity() {
                         ) {
                             composable(Routes.RegisterOperator.route) {
                                 RegisterOperatorRoute(
-                                    initialOperatorRefId = intent.getStringExtra(EXTRA_OPERATOR_REF_ID),
+                                    initialOperatorRefId = intent.getStringExtra(
+                                        EXTRA_OPERATOR_REF_ID
+                                    ),
                                     onRegistered = { operatorId ->
                                         registerDeviceIfNeeded(operatorId)
-                                        navController.navigate(Routes.Dashboard.createRoute(operatorId)) {
-                                            popUpTo(Routes.RegisterOperator.route) { inclusive = true }
+                                        navController.navigate(
+                                            Routes.Dashboard.createRoute(
+                                                operatorId
+                                            )
+                                        ) {
+                                            popUpTo(Routes.RegisterOperator.route) {
+                                                inclusive = true
+                                            }
                                         }
                                     }
                                 )
@@ -178,8 +183,12 @@ class RegistrationActivity : ComponentActivity() {
                                     sharedUiState = sharedUiState,
                                     onClearSharedMessage = sharedViewModel::clearError,
                                     onNavigateToRegistration = { resident ->
-                                        if(registrationViewModel.isConsented) {
-                                            navController.navigate(Routes.CaptureMethod.createRoute(resident)) {
+                                        if (registrationViewModel.isConsented) {
+                                            navController.navigate(
+                                                Routes.CaptureMethod.createRoute(
+                                                    resident
+                                                )
+                                            ) {
                                                 popUpTo(Routes.UidEntry.route) { inclusive = true }
                                             }
                                         } else {
@@ -204,7 +213,11 @@ class RegistrationActivity : ComponentActivity() {
                                         // GuidelineScreen sets isLoading on proceed and never
                                         // resets it, so it must not stay on the back stack.
                                         registrationViewModel.postResidentConsent()
-                                        navController.navigate(Routes.CaptureMethod.createRoute(resident)) {
+                                        navController.navigate(
+                                            Routes.CaptureMethod.createRoute(
+                                                resident
+                                            )
+                                        ) {
                                             popUpTo(Routes.Guideline.route) { inclusive = true }
                                         }
                                     },
@@ -228,7 +241,9 @@ class RegistrationActivity : ComponentActivity() {
                                     registrationViewModel = registrationViewModel,
                                     onNavigateUp = { navController.navigateUp() },
                                     onStartCaptureLoop = {
-                                        navController.navigate(Routes.CaptureLoop.route) { launchSingleTop = true }
+                                        navController.navigate(Routes.CaptureLoop.route) {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 )
                             }
@@ -239,7 +254,12 @@ class RegistrationActivity : ComponentActivity() {
                                     imageProcessorFactory = imageProcessorFactory,
                                     preferenceStore = preferenceStore,
                                     // Back to whichever screen launched the loop, statuses intact.
-                                    onExit = { navController.popBackStack(Routes.CaptureLoop.route, inclusive = true) }
+                                    onExit = {
+                                        navController.popBackStack(
+                                            Routes.CaptureLoop.route,
+                                            inclusive = true
+                                        )
+                                    }
                                 )
                             }
                             composable(
@@ -252,7 +272,9 @@ class RegistrationActivity : ComponentActivity() {
                                     sharedUiState = sharedUiState,
                                     onNavigateUp = { navController.navigateUp() },
                                     onStartCaptureLoop = {
-                                        navController.navigate(Routes.CaptureLoop.route) { launchSingleTop = true }
+                                        navController.navigate(Routes.CaptureLoop.route) {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 )
                             }
@@ -266,7 +288,8 @@ class RegistrationActivity : ComponentActivity() {
                                 })
                             ) { backStackEntry ->
                                 val operatorId =
-                                    backStackEntry.arguments?.getString(Routes.ARG_OPERATOR_ID).orEmpty()
+                                    backStackEntry.arguments?.getString(Routes.ARG_OPERATOR_ID)
+                                        .orEmpty()
                                 DashboardRoute(
                                     operatorId = operatorId,
                                     onNavigateUp = { navController.navigateUp() },
