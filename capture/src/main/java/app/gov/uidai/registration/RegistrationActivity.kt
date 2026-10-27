@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -18,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -38,6 +40,7 @@ import app.gov.uidai.registration.connectivity.ui.NoInternetScreen
 import app.gov.uidai.registration.connectivity.ui.UnderMaintenanceScreen
 import app.gov.uidai.registration.data.remote.network.ApiResult
 import app.gov.uidai.registration.maintenance.MaintenanceStatusProvider
+import app.gov.uidai.registration.ui.composable.LoadingDialog
 import app.gov.uidai.registration.ui.dashboard.DashboardRoute
 import app.gov.uidai.registration.ui.operator.RegisterOperatorRoute
 import app.gov.uidai.registration.ui.registration.RegistrationRoute
@@ -179,27 +182,31 @@ class RegistrationActivity : ComponentActivity() {
                                 )
                             }
                             composable(Routes.UidEntry.route) {
+                                val registrationUiState by registrationViewModel.uiState.collectAsStateWithLifecycle()
+                                val context = LocalContext.current
+
                                 UidEntryRoute(
                                     sharedUiState = sharedUiState,
                                     onClearSharedMessage = sharedViewModel::clearError,
                                     onNavigateToRegistration = { resident ->
-                                        if (registrationViewModel.isConsented) {
-                                            navController.navigate(
-                                                Routes.CaptureMethod.createRoute(
-                                                    resident
-                                                )
-                                            ) {
-                                                popUpTo(Routes.UidEntry.route) { inclusive = true }
+                                        registrationViewModel.setResident(resident) {
+                                            if (registrationViewModel.isConsented) {
+                                                navController.navigate(Routes.CaptureMethod.createRoute(resident))
+                                            } else {
+                                                navController.navigate(Routes.Guideline.createRoute(resident))
                                             }
-                                        } else {
-                                            navController.navigate(
-                                                Routes.Guideline.createRoute(
-                                                    resident
-                                                )
-                                            )
                                         }
                                     }
                                 )
+
+                                LoadingDialog(registrationUiState.isLookingUpResident, "Checking resident ...")
+
+                                LaunchedEffect(registrationUiState.message) {
+                                    registrationUiState.message?.let {
+                                        Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                                        registrationViewModel.clearError()
+                                    }
+                                }
                             }
                             composable(
                                 route = Routes.Guideline.route,

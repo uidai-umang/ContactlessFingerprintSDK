@@ -67,7 +67,8 @@ val localProperties = Properties().apply {
 
 androidComponents {
     onVariants { variant ->
-        val key = "BACKEND_URL_${variant.buildType.orEmpty().uppercase()}"
+//        val key = "BACKEND_URL_${variant.buildType.orEmpty().uppercase()}"
+        val key = "BACKEND_URL"
         variant.buildConfigFields?.put(
             "BACKEND_URL",
             providers.provider {

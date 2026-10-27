@@ -316,14 +316,18 @@ class RegistrationViewModel @Inject constructor(
     }
 
 
-    fun setResident(resident: ResidentInput) {
-        if (resident == currentResident && currentResidentId.isNotEmpty()) return
+    fun setResident(resident: ResidentInput, onLoaded: () -> Unit = {}) {
+        if (resident == currentResident && currentResidentId.isNotEmpty()) {
+            onLoaded()
+            return
+        }
         currentResident = resident
         currentResidentId = ""
-        lookupResidentAndCreateSession()
+        isConsented = false
+        lookupResidentAndCreateSession(onLoaded)
     }
 
-    private fun lookupResidentAndCreateSession() {
+    private fun lookupResidentAndCreateSession(onLoaded: () -> Unit) {
         val resident = currentResident ?: return
         _uiState.update { it.copy(isLookingUpResident = true) }
 
@@ -379,6 +383,7 @@ class RegistrationViewModel @Inject constructor(
                             fingerUploadStatus = uploadStatusMap
                         )
                     }
+                    onLoaded()
                 }
 
                 is ApiResult.Error -> {
@@ -474,6 +479,7 @@ class RegistrationViewModel @Inject constructor(
         )
         viewModelScope.launch {
             residentUseCase.postResidentConsent(request)
+            isConsented = true
         }
     }
 
