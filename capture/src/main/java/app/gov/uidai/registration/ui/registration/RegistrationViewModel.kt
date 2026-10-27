@@ -81,13 +81,6 @@ class RegistrationViewModel @Inject constructor(
 
     private var currentResident: ResidentInput? = null
 
-    private val testDeviceId = "00000000-0000-0000-0000-000000000002"
-    private val testCentreId = "00000000-0000-0000-0000-000000000003"
-
-
-    // ---- Capture loop (sequence + per-capture upload) ----
-    // The capture loop destination renders whatever activeCapture points at
-    // and pops back to the launching screen once it goes null.
     private val captureSequence = ArrayDeque<FingerPosition>()
     private var advanceJob: Job? = null
 
@@ -324,9 +317,6 @@ class RegistrationViewModel @Inject constructor(
 
 
     fun setResident(resident: ResidentInput) {
-        // Same resident may be set again when navigating back into this
-        // shared instance from a sibling destination (e.g. CaptureMethod)
-        // -- avoid re-triggering a fresh lookup/session for no reason.
         if (resident == currentResident && currentResidentId.isNotEmpty()) return
         currentResident = resident
         currentResidentId = ""
@@ -403,21 +393,6 @@ class RegistrationViewModel @Inject constructor(
         }
     }
 
-    fun onNameChanged(name: String) {
-        _uiState.update {
-            it.copy(
-                name = name
-            )
-        }
-    }
-
-    fun onPhoneNumberChanged(phoneNumber: String) {
-        _uiState.update {
-            it.copy(
-                phoneNumber = phoneNumber
-            )
-        }
-    }
 
     private suspend fun uploadCapture(
         fingerPosition: FingerPosition,
