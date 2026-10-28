@@ -3,6 +3,7 @@ package app.gov.uidai.registration.ui.theme
 import androidx.compose.ui.graphics.Color
 
 object Colors {
+    val customColor = Color(0xFFF5F7FA)
 
     object Background {
         val Primary = Color(0xFFFFFFFF)    // screens, dialogs, bottom bars
@@ -31,6 +32,8 @@ object Colors {
         val BlueLight = Color(0xFFEBF3FD)
         val BlueSoft = Color(0xFFD6E8F8)
         val BlueBorder = Color(0xFF93C5FD)
+
+        val Text = Color(0xFF172B42)
     }
 
     object Button {
@@ -74,5 +77,13 @@ object Colors {
         val Container = Brand.BlueLight
         val Border = Brand.BlueBorder
         val Text = Color(0xFF083459)
+    }
+
+    object GuidelineItems {
+        val item1Color = Color(0xFFE5F0FF)
+        val item2Color = Color(0xFFFFF6E5)
+        val item3Color = Color(0xFFE5FFFD)
+        val item4Color = Color(0xFFFDEAEA)
+        val item5Color = Color(0xFFEAF8FD)
     }
 }
