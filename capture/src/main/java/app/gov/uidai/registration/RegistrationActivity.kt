@@ -31,7 +31,7 @@ import androidx.navigation.navArgument
 import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.pref.PreferenceStore
 import app.gov.uidai.capture.ui.camera.CameraController
-import app.gov.uidai.capture.ui.guideline.GuidelineScreen
+import app.gov.uidai.capture.ui.consent.ConsentScreen
 import app.gov.uidai.capture.ui.settings.DebugSettingsScreen
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
 import app.gov.uidai.capture.utils.MainThreadWatchdog
@@ -193,7 +193,7 @@ class RegistrationActivity : ComponentActivity() {
                                             if (registrationViewModel.isConsented) {
                                                 navController.navigate(Routes.CaptureMethod.createRoute(resident))
                                             } else {
-                                                navController.navigate(Routes.Guideline.createRoute(resident))
+                                                navController.navigate(Routes.Consent.createRoute(resident))
                                             }
                                         }
                                     }
@@ -209,15 +209,15 @@ class RegistrationActivity : ComponentActivity() {
                                 }
                             }
                             composable(
-                                route = Routes.Guideline.route,
+                                route = Routes.Consent.route,
                                 arguments = residentNavArguments
                             ) { backStackEntry ->
                                 val resident = backStackEntry.residentInput()
-                                GuidelineScreen(
+                                ConsentScreen(
                                     txnId = "",
                                     onBack = { navController.navigateUp() },
                                     onProceed = {
-                                        // GuidelineScreen sets isLoading on proceed and never
+                                        // ConsentScreen sets isLoading on proceed and never
                                         // resets it, so it must not stay on the back stack.
                                         registrationViewModel.postResidentConsent()
                                         navController.navigate(
@@ -225,7 +225,7 @@ class RegistrationActivity : ComponentActivity() {
                                                 resident
                                             )
                                         ) {
-                                            popUpTo(Routes.Guideline.route) { inclusive = true }
+                                            popUpTo(Routes.Consent.route) { inclusive = true }
                                         }
                                     },
                                     onDebugSettings = { navController.navigate(Routes.DebugSettings.route) }
