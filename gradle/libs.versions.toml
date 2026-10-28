@@ -57,6 +57,7 @@ firebase-remote-config = {module = "com.google.firebase:firebase-config"}
 firebase-common-ktx = { module = "com.google.firebase:firebase-common"}
 
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+kotlinreflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
 jackson-dataformat-xml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-xml", version.ref = "jacksonDataformatXml" }

@@ -137,6 +137,9 @@ dependencies {
     // Gson
     implementation(libs.gson)
 
+    // Kotlin Reflect
+    implementation(libs.kotlinreflect)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

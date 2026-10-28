@@ -1,6 +1,12 @@
 # ── Attributes ──────────────────────────────────────────────
 -keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod, Exceptions
 
+# ── Kotlin Reflection & PreferenceGroup ─────────────────────
+-keep class kotlin.reflect.** { *; }
+-keep class kotlin.Metadata { *; }
+-keep class * implements app.gov.uidai.capture.pref.model.PreferenceGroup { *; }
+-keepclassmembers class * implements app.gov.uidai.capture.pref.model.PreferenceGroup { *; }
+
 # ── Gson: request/response models (reflection on field names) ─
 -keepclassmembers class app.gov.uidai.registration.model.** { <fields>; }
 -keep class app.gov.uidai.registration.model.** { <init>(...); }
