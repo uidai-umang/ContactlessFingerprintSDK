@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Schedule
@@ -56,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
@@ -67,8 +70,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.capture.R
+import app.gov.uidai.capture.ui.theme.Typography
 import app.gov.uidai.registration.model.CaptureMethod
 import app.gov.uidai.registration.model.CaptureMode
 import app.gov.uidai.registration.model.FingerCaptureStatus
@@ -272,6 +278,9 @@ fun FingerprintCollectionScreen(
         else -> "In progress"
     }
 
+    var showGuidelines by rememberSaveable { mutableStateOf(false) }
+    var showCaptureStatus by rememberSaveable { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -318,67 +327,73 @@ fun FingerprintCollectionScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Colors.customColor
     ) { innerPadding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header: Title & Status Chip
-            item {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 80.dp), // keeps the last item clear of the card
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header: Title & Status Chip
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Fingerprints",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Colors.Brand.Text
+                        )
+
+                        StatusBadge(text = sessionStatus)
+                    }
+                }
+
+                // Capture Method Segmented Toggle
+                Column {
                     Text(
-                        text = "Fingerprints",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Colors.Brand.Text
+                        text = "CAPTURE METHOD",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Colors.Text.Secondary,
+                        letterSpacing = 0.5.sp
                     )
-
-                    StatusBadge(text = sessionStatus)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CaptureMethodSelector(
+                        selectedMethod = selectedMethod,
+                        onMethodSelected = { selectedMethod = it }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { showCaptureStatus = true }
+                        ,
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        CaptionText(
+                            text = "Click here to know more about the capture status.",
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            painter = painterResource(R.drawable.info_outlined),
+                            contentDescription = null,
+                            tint = Color.Unspecified
+                        )
+                    }
                 }
-            }
 
-            // Capture Method Segmented Toggle
-            item {
-                Text(
-                    text = "CAPTURE METHOD",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Colors.Text.Secondary,
-                    letterSpacing = 0.5.sp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                CaptureMethodSelector(
-                    selectedMethod = selectedMethod,
-                    onMethodSelected = { selectedMethod = it }
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    CaptionText(
-                        text = "Click here to know more about the capture status.",
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        painter = painterResource(R.drawable.info_outlined),
-                        null,
-                        tint = Color.Unspecified
-                    )
-                }
-            }
-
-            // Content dynamic to selected mode
-            if (selectedMethod == CaptureMethod.SLAP) {
-                item {
+                // Content dynamic to selected mode
+                if (selectedMethod == CaptureMethod.SLAP) {
                     SlapModeContent(
                         fingerStatus = fingerStatus,
                         selected = selected,
@@ -390,9 +405,7 @@ fun FingerprintCollectionScreen(
                             }
                         }
                     )
-                }
-            } else {
-                item {
+                } else {
                     SequentialModeContent(
                         fingerStatus = fingerStatus,
                         selectedHandTab = selectedHandTab,
@@ -403,7 +416,22 @@ fun FingerprintCollectionScreen(
                 }
             }
 
+            // Pinned just above the bottom button
+            GuideLineCard(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                onClick = { showGuidelines = true }
+            )
         }
+    }
+
+    if (showGuidelines) {
+        GuideLineDialog(onDismiss = { showGuidelines = false })
+    }
+
+    if (showCaptureStatus) {
+        CaptureStatusDialog(onDismiss = { showCaptureStatus = false })
     }
 }
 
@@ -540,62 +568,6 @@ fun SlapModeContent(
                 onClick = { onGroupSelect(position) },
                 onBlockedClick = { onBlockedGroupClick(position) }
             )
-        }
-    }
-}
-
-@Composable
-fun GroupCard(
-    modifier: Modifier = Modifier,
-    position: FingerPosition,
-    status: FingerCaptureStatus,
-    isSelected: Boolean,
-    isBlocked: Boolean = false,
-    onClick: () -> Unit,
-    onBlockedClick: () -> Unit = {}
-) {
-    val isSaved = status.isSaved()
-
-    // A blocked group stays tappable so the operator gets told why it can't be used.
-    SelectableCard(
-        modifier = modifier,
-        isSelected = isSelected,
-        enabled = status.canCapture() || isBlocked,
-        onClick = if (isBlocked) onBlockedClick else onClick
-    ) {
-        Column(
-            modifier = Modifier
-                .alpha(if (isBlocked) 0.4f else 1f)
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FingerIcon(
-                    iconRes = if (position.isSlap()) R.drawable.slap_symbol else R.drawable.uncaptured_finger_symbol,
-                    position = position,
-                    tint = if (isSaved) Colors.Success.Main else Colors.Text.Primary,
-                    size = 22.dp
-                )
-                CaptureStatusLabel(
-                    status = status,
-                    isSelected = isSelected,
-                    iconSize = 14.dp
-                )
-            }
-
-            Column {
-                Text(
-                    text = position.label(),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
-                    color = Colors.Text.Primary
-                )
-                CaptionText(text = position.fingerCountText() + if (isSaved) " · Saved" else "")
-            }
         }
     }
 }
@@ -972,32 +944,165 @@ private fun CaptureStatusLabel(
 }
 
 @Composable
-private fun GuideLineCard() {
-    Column(
+private fun GuideLineCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, Color(0xFFD5D9E0)),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Title
+            Text(
+                text = "CAPTURE GUIDELINES",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp,
+                color = Color(0xFF1E2D42)
+            )
+
+            // Info Icon
+            Icon(
+                painter = painterResource(R.drawable.info_outlined),
+                contentDescription = "Capture Guidelines Info",
+                tint = Color(0xFFB8C0CC),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/** Dialog shell shared by the guideline and capture-status popups. */
+@Composable
+private fun InfoDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false // lets the card use the full width minus the padding below
+        )
+    ) {
+        InfoDialogCard(title = title, content = content)
+    }
+}
+
+// Split from InfoDialog because @Preview can't render a Dialog window; preview this instead.
+@Composable
+private fun InfoDialogCard(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White
     ) {
-        // Section Header
-        Text(
-            text = "CAPTURE GUIDELINES",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.5.sp,
-            color = Color(0xFF1E2D42),
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-
-        // Guidelines List
-        guidelineItemList.forEach { guideline ->
-            GuideLineItems(
-                icon = guideline.icon,
-                title = guideline.title,
-                subtiltle = guideline.subtitle,
-                iconBgColor = guideline.bgColor
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp,
+                color = Color(0xFF172B42)
             )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun GuideLineDialog(onDismiss: () -> Unit) =
+    InfoDialog(title = "CAPTURE GUIDELINES", onDismiss = onDismiss) { GuideLineList() }
+
+@Composable
+private fun GuideLineList() {
+    guidelineItemList.forEach { guideline ->
+        GuideLineItems(
+            icon = guideline.icon,
+            title = guideline.title,
+            subtitle = guideline.subtitle,
+            iconBgColor = guideline.bgColor
+        )
+    }
+}
+
+@Composable
+private fun CaptureStatusDialog(onDismiss: () -> Unit) =
+    InfoDialog(title = "CAPTURE STATUS", onDismiss = onDismiss) { CaptureStatusList() }
+
+// Rows reuse CaptureStatusLabel, so the icons and colours always match the finger cards.
+private data class CaptureStatusInfo(
+    val status: FingerCaptureStatus,
+    val containerColor: Color,
+    val description: String
+)
+
+@Composable
+private fun CaptureStatusList() {
+    val items = listOf(
+        CaptureStatusInfo(
+            FingerCaptureStatus.CAPTURED,
+            Colors.Success.Main.copy(alpha = 0.12f),
+            "Successful capture"
+        ),
+        CaptureStatusInfo(
+            FingerCaptureStatus.PENDING,
+            Colors.Warning.Primary.copy(alpha = 0.12f),
+            "Captured but not synced"
+        ),
+        CaptureStatusInfo(
+            FingerCaptureStatus.NOT_CAPTURED,
+            Colors.Brand.BlueLight,
+            "You are yet to capture"
+        )
+    )
+
+    items.forEachIndexed { index, item ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(item.containerColor, RoundedCornerShape(10.dp))
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CaptureStatusLabel(status = item.status, isSelected = false, iconSize = 16.dp)
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = item.description,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Colors.Text.Primary
+            )
+        }
+
+        if(index != items.size - 1) {
+         Spacer(modifier = Modifier.size(6.dp))
         }
     }
 }
@@ -1013,9 +1118,9 @@ private fun GuideLineItems(
         modifier = Modifier
             .fillMaxWidth()
             .background(color = Colors.Background.Primary)
-            .padding(Spacing.L),
+            .padding(vertical = Spacing.L),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.S, Alignment.Start)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Xxs, Alignment.Start)
     ) {
 
         Box(
@@ -1031,6 +1136,8 @@ private fun GuideLineItems(
                 modifier = Modifier.size(26.dp)
             )
         }
+
+        Spacer(modifier = Modifier.size(8.dp))
 
         Column(
             verticalArrangement = Arrangement.spacedBy(Spacing.Xxxs, Alignment.CenterVertically),
@@ -1057,9 +1164,10 @@ fun FingerprintCollectionScreenPreview() {
                 FingerPosition.LEFT_THUMB to FingerCaptureStatus.CAPTURED
             )
         )
+
+        InfoDialogCard("CAPTURE STATUS") { CaptureStatusList() }
     }
 }
-
 
 data class GuidelineItem(
     val icon: Int = R.drawable.camera_icon,
@@ -1100,4 +1208,4 @@ val guidelineItemList: List<GuidelineItem> = listOf(
         bgColor = Colors.GuidelineItems.item5Color
     )
 
-    )
+)
