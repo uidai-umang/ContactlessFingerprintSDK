@@ -24,8 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
@@ -77,6 +75,7 @@ import app.gov.uidai.registration.model.FingerCaptureStatus
 import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
 import app.gov.uidai.registration.ui.theme.Colors
+import app.gov.uidai.registration.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
 // --------------------------------------------------
@@ -177,11 +176,14 @@ private fun FingerPosition.slapFingers() = when (this) {
 
 private fun FingerStatusMap.isSlapBlocked(position: FingerPosition) =
     !fingerStatusOf(position).isSaved() && position.slapFingers().any { statusOf(it).isSaved() }
+
 private fun FingerStatusMap.isSelectable(position: FingerPosition) =
     fingerStatusOf(position).canCapture() && !isSlapBlocked(position)
 
 private fun FingerPosition.slapBlockedMessage() =
-    "${label()} isn't available because ${name.substringBefore('_').lowercase()}-hand fingers are already captured in Sequential."
+    "${label()} isn't available because ${
+        name.substringBefore('_').lowercase()
+    }-hand fingers are already captured in Sequential."
 
 private fun FingerPosition.isSlap() =
     this == FingerPosition.LEFT_SLAP || this == FingerPosition.RIGHT_SLAP
@@ -249,7 +251,7 @@ fun FingerprintCollectionScreen(
     onHelpClick: () -> Unit = {},
     onCreateCollection: (CaptureMethod, FingerPosition) -> Unit = { _, _ -> }
 ) {
-    var selectedMethod by rememberSaveable { mutableStateOf(CaptureMethod.SEQUENTIAL) }
+    var selectedMethod by rememberSaveable { mutableStateOf(CaptureMethod.SLAP) }
 
     var selectedHandTab by rememberSaveable { mutableIntStateOf(0) } // 0: Left, 1: Right
     var pickedPosition by rememberSaveable { mutableStateOf<FingerPosition?>(null) }
@@ -309,15 +311,12 @@ fun FingerprintCollectionScreen(
         },
         bottomBar = {
             BottomActionBar(
-                selectedGroupText = selected
-                    ?.let { "${it.label()} selected · ${it.fingerCountText()}" }
-                    ?: if (selectedMethod == CaptureMethod.SLAP) "No group left to capture" else "No finger left to capture",
                 enabled = selected != null,
                 onClick = { selected?.let { onCreateCollection(selectedMethod, it) } }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Colors.Background.Secondary
+        containerColor = Colors.customColor
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -328,25 +327,19 @@ fun FingerprintCollectionScreen(
         ) {
             // Header: Title & Status Chip
             item {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            text = "Fingerprints",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Colors.Text.Primary
-                        )
-                        Text(
-                            text = "Resident capture session",
-                            fontSize = 14.sp,
-                            color = Colors.Text.Secondary
-                        )
-                    }
+                    Text(
+                        text = "Fingerprints",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Colors.Brand.Text
+                    )
+
                     StatusBadge(text = sessionStatus)
                 }
             }
@@ -363,11 +356,24 @@ fun FingerprintCollectionScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 CaptureMethodSelector(
                     selectedMethod = selectedMethod,
-                    slapSaved = fingerStatus.savedCount(SlapPositions),
                     onMethodSelected = { selectedMethod = it }
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                CaptionText(text = "Counts in tabs show fingers captured with each method.")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    CaptionText(
+                        text = "Click here to know more about the capture status.",
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        painter = painterResource(R.drawable.info_outlined),
+                        null,
+                        tint = Color.Unspecified
+                    )
+                }
             }
 
             // Content dynamic to selected mode
@@ -397,36 +403,6 @@ fun FingerprintCollectionScreen(
                 }
             }
 
-            // Instructional Guidance Card
-            if (selected != null) {
-                item {
-                    GuidanceCard(
-                        title = "Next: ${selected.label()}",
-                        instruction = selected.guidance()
-                    )
-                }
-            }
-
-            // Footer Retain Note
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Info,
-                        contentDescription = null,
-                        tint = Colors.Text.Secondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    CaptionText(
-                        text = "You can switch methods at any time. A saved slap marks that hand's four fingers as done in Sequential.",
-                        lineHeight = 16.sp
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
         }
     }
 }
@@ -437,7 +413,6 @@ fun FingerprintCollectionScreen(
 @Composable
 fun CaptureMethodSelector(
     selectedMethod: CaptureMethod,
-    slapSaved: Int,
     onMethodSelected: (CaptureMethod) -> Unit
 ) {
     Row(
@@ -453,7 +428,7 @@ fun CaptureMethodSelector(
 
         MethodButton(
             modifier = Modifier.weight(1f),
-            label = "Slap ($slapSaved)",
+            label = "Slap",
             icon = painterResource(R.drawable.slap_symbol),
             isSelected = isSlap,
             onClick = { onMethodSelected(CaptureMethod.SLAP) }
@@ -524,13 +499,13 @@ fun SlapModeContent(
                 text = "Capture groups",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Colors.Text.Primary
+                color = Colors.Brand.Text
             )
             Text(
                 text = "${fingerStatus.savedCount(SlapPositions)} of ${SlapPositions.size} complete",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Colors.Text.Secondary
+                color = Colors.Brand.Text
             )
         }
 
@@ -556,28 +531,15 @@ fun SlapModeContent(
             }
         }
 
-        CaptionText(text = fingerStatus.savedSummary("group"))
-
-        // 2x2 Grid
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SlapPositions.chunked(2).forEach { rowPositions ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    rowPositions.forEach { position ->
-                        GroupCard(
-                            modifier = Modifier.weight(1f),
-                            position = position,
-                            status = fingerStatus.fingerStatusOf(position),
-                            isSelected = position == selected,
-                            isBlocked = fingerStatus.isSlapBlocked(position),
-                            onClick = { onGroupSelect(position) },
-                            onBlockedClick = { onBlockedGroupClick(position) }
-                        )
-                    }
-                }
-            }
+        SlapPositions.forEach { position ->
+            FingerRowCard(
+                position = position,
+                status = fingerStatus.fingerStatusOf(position),
+                isSelected = position == selected,
+                isBlocked = fingerStatus.isSlapBlocked(position),
+                onClick = { onGroupSelect(position) },
+                onBlockedClick = { onBlockedGroupClick(position) }
+            )
         }
     }
 }
@@ -694,8 +656,6 @@ fun SequentialModeContent(
             }
         }
 
-        CaptionText(text = fingerStatus.savedSummary("finger"))
-
         // List of Finger Cards
         fingers.forEach { position ->
             FingerRowCard(
@@ -713,26 +673,30 @@ fun FingerRowCard(
     position: FingerPosition,
     status: FingerCaptureStatus,
     isSelected: Boolean,
-    onClick: () -> Unit
+    isBlocked: Boolean = false,
+    onClick: () -> Unit,
+    onBlockedClick: () -> Unit = {}
 ) {
     val isSaved = status.isSaved()
 
+    // A blocked slap stays tappable so the operator gets told why it can't be used.
     SelectableCard(
         modifier = Modifier.fillMaxWidth(),
         isSelected = isSelected,
-        enabled = status.canCapture(),
-        onClick = onClick
+        enabled = status.canCapture() || isBlocked,
+        onClick = if (isBlocked) onBlockedClick else onClick
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .alpha(if (isBlocked) 0.4f else 1f)
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FingerIcon(
-                    iconRes = R.drawable.uncaptured_finger_symbol,
+                    iconRes = if (position.isSlap()) R.drawable.slap_symbol else R.drawable.uncaptured_finger_symbol,
                     position = position,
                     tint = if (isSaved) Colors.Success.Main else Colors.Text.Secondary,
                     size = 24.dp
@@ -745,7 +709,7 @@ fun FingerRowCard(
                     color = Colors.Text.Primary
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                CaptionText(text = if (isSaved) "1 finger · Saved" else "1 finger · Not captured")
+                CaptionText(text = "${position.fingerCountText()} · ${if (isSaved) "Saved" else "Not captured"}")
             }
 
             CaptureStatusLabel(
@@ -806,7 +770,6 @@ fun GuidanceCard(
 // --------------------------------------------------
 @Composable
 fun BottomActionBar(
-    selectedGroupText: String,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
@@ -842,7 +805,6 @@ fun BottomActionBar(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            CaptionText(text = selectedGroupText)
         }
     }
 }
@@ -902,11 +864,13 @@ private fun SelectableCard(
     Card(
         modifier = modifier.clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = if(isSelected) {
-            Colors.Brand.BlueLight
-        } else {
-            Colors.Background.Primary
-        }),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                Colors.Brand.BlueLight
+            } else {
+                Colors.Background.Primary
+            }
+        ),
         border = BorderStroke(
             width = if (isSelected) 1.8.dp else 1.dp,
             color = if (isSelected) Colors.Brand.Blue else Colors.Border.Primary
@@ -1007,6 +971,79 @@ private fun CaptureStatusLabel(
     }
 }
 
+@Composable
+private fun GuideLineCard() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
+    ) {
+        // Section Header
+        Text(
+            text = "CAPTURE GUIDELINES",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.5.sp,
+            color = Color(0xFF1E2D42),
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+
+        // Guidelines List
+        guidelineItemList.forEach { guideline ->
+            GuideLineItems(
+                icon = guideline.icon,
+                title = guideline.title,
+                subtiltle = guideline.subtitle,
+                iconBgColor = guideline.bgColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuideLineItems(
+    icon: Int,
+    title: String,
+    subtitle: String? = null,
+    iconBgColor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color = Colors.Background.Primary)
+            .padding(Spacing.L),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S, Alignment.Start)
+    ) {
+
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(color = iconBgColor, shape = CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(Spacing.Xxxs, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(text = title, color = Colors.Text.Primary, fontWeight = FontWeight.Normal)
+            subtitle?.let {
+                Text(text = subtitle, color = Colors.Text.Secondary)
+            }
+        }
+    }
+}
+
 // --------------------------------------------------
 // Previews
 // --------------------------------------------------
@@ -1022,3 +1059,45 @@ fun FingerprintCollectionScreenPreview() {
         )
     }
 }
+
+
+data class GuidelineItem(
+    val icon: Int = R.drawable.camera_icon,
+    val title: String = "Clean Camera lens befoe start",
+    val subtitle: String? = "- No Glare No Shadow",
+    val bgColor: Color = Colors.GuidelineItems.item3Color
+)
+
+val guidelineItemList: List<GuidelineItem> = listOf(
+    GuidelineItem(
+        icon = R.drawable.fingerprint,
+        title = "Finger must be clean and dry",
+        subtitle = null,
+        bgColor = Colors.GuidelineItems.item1Color
+    ),
+    GuidelineItem(
+        icon = R.drawable.sun_with_face_icon,
+        title = "Use bright, Even lighting",
+        subtitle = "- No Glare No Shadow",
+        bgColor = Colors.GuidelineItems.item2Color
+    ),
+    GuidelineItem(
+        icon = R.drawable.camera_icon,
+        title = "Clean Camera lens befoe start",
+        subtitle = "- No Glare No Shadow",
+        bgColor = Colors.GuidelineItems.item1Color
+    ),
+    GuidelineItem(
+        icon = R.drawable.live_action_icon,
+        title = "Do not use a photo or video",
+        subtitle = "- Live Capture Only",
+        bgColor = Colors.GuidelineItems.item4Color
+    ),
+    GuidelineItem(
+        icon = R.drawable.ink_icon,
+        title = "Avoid Fingers with Ink, Mehandi or tattoos",
+        subtitle = null,
+        bgColor = Colors.GuidelineItems.item5Color
+    )
+
+    )
