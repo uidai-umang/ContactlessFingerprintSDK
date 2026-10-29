@@ -1,6 +1,8 @@
 package app.gov.uidai.capture.ui.consent
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,11 +13,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -41,6 +45,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import app.gov.uidai.capture.BuildConfig
 import app.gov.uidai.capture.R
 import app.gov.uidai.registration.ui.theme.Colors
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 
 data class Consent(val title: String, val message: String)
@@ -116,6 +123,7 @@ fun ConsentScreen(
     onDebugSettings: () -> Unit = {},
     showDebugButton: Boolean = BuildConfig.DEBUG
 ) {
+    val context = LocalContext.current
     var isConsentChecked by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
@@ -128,80 +136,98 @@ fun ConsentScreen(
         hasReadAll = true
     }
 
+    // "Scroll down" hint: shown for 1s when the screen opens.
+    var showScrollHint by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(1000)
+        showScrollHint = false
+    }
+
     BackHandler(onBack = onBack)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Consent",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Colors.Text.Primary
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painter = painterResource(R.drawable.chevron_left),
-                            contentDescription = "Back",
-                            tint = Colors.Text.Primary
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Consent",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Colors.Text.Primary
                         )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                painter = painterResource(R.drawable.chevron_left),
+                                contentDescription = "Back",
+                                tint = Colors.Text.Primary
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onHelpClick) {
+                            Icon(
+                                painter = painterResource(R.drawable.help),
+                                contentDescription = "Help",
+                                tint = Colors.Text.Secondary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Colors.Background.Primary)
+                )
+            },
+            bottomBar = {
+                ConsentBottomBar(
+                    isConsentChecked = isConsentChecked,
+                    onConsentChange = { isConsentChecked = it },
+                    consentEnabled = hasReadAll,
+                    onLockedClick = {
+                        Toast.makeText(context, "Scroll down to read all points first", Toast.LENGTH_SHORT).show()
+                    },
+                    showDebugButton = showDebugButton,
+                    onDebugSettings = onDebugSettings,
+                    isLoading = isLoading,
+                    onContinueClick = {
+                        isLoading = true
+                        onProceed(txnId)
                     }
-                },
-                actions = {
-                    IconButton(onClick = onHelpClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.help),
-                            contentDescription = "Help",
-                            tint = Colors.Text.Secondary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Colors.Background.Primary)
-            )
-        },
-        bottomBar = {
-            ConsentBottomBar(
-                isConsentChecked = isConsentChecked,
-                onConsentChange = { isConsentChecked = it },
-                consentEnabled = hasReadAll,
-                showDebugButton = showDebugButton,
-                onDebugSettings = onDebugSettings,
-                isLoading = isLoading,
-                onContinueClick = {
-                    isLoading = true
-                    onProceed(txnId)
-                }
-            )
-        },
-        containerColor = Colors.customColor
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 20.dp)
-        ) {
-            Text(
-                text = "Purpose & your rights",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = Colors.Text.Primary,
-                modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)
-            )
-
-            // Only the consent points scroll; the header above and the checkbox / button below stay put.
+                )
+            },
+            containerColor = Colors.customColor
+        ) { innerPadding ->
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(scrollState)
-                    .padding(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 20.dp)
             ) {
-                ConsentPoints.forEach { ConsentItemCard(it) }
+                Text(
+                    text = "Purpose & your rights",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Colors.Text.Primary,
+                    modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)
+                )
+
+                // Only the consent points scroll; the header above and the checkbox / button below stay put.
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    ConsentPoints.forEach { ConsentItemCard(it) }
+                }
             }
+        }
+
+        // Skipped when everything already fits on screen (nothing to scroll).
+        if (showScrollHint && !hasReadAll) {
+            ScrollHintOverlay(onDismiss = { showScrollHint = false })
         }
     }
 }
@@ -211,6 +237,7 @@ private fun ConsentBottomBar(
     isConsentChecked: Boolean,
     onConsentChange: (Boolean) -> Unit,
     consentEnabled: Boolean,
+    onLockedClick: () -> Unit,
     showDebugButton: Boolean,
     onDebugSettings: () -> Unit,
     isLoading: Boolean,
@@ -224,24 +251,26 @@ private fun ConsentBottomBar(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Consent agreement: dimmed and not clickable until every point has been scrolled through.
+            // Dimmed until every point has been scrolled through; tapping it meanwhile shows a toast.
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = Colors.Warning.Primary.copy(alpha = 0.12f),
                 modifier = Modifier
                     .fillMaxWidth()
                     .alpha(if (consentEnabled) 1f else 0.5f)
-                    .clickable(enabled = consentEnabled) { onConsentChange(!isConsentChecked) }
+                    .clickable {
+                        if (consentEnabled) onConsentChange(!isConsentChecked) else onLockedClick()
+                    }
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Display only: the card above handles the tap.
                     Checkbox(
                         checked = isConsentChecked,
-                        onCheckedChange = onConsentChange,
-                        enabled = consentEnabled,
+                        onCheckedChange = null,
                         colors = CheckboxDefaults.colors(
                             checkedColor = Colors.Brand.Blue,
                             uncheckedColor = Colors.Text.Secondary
@@ -287,7 +316,6 @@ private fun ConsentBottomBar(
         }
     }
 }
-
 @Composable
 private fun ConsentItemCard(
     consent: Consent,
@@ -324,6 +352,40 @@ private fun ConsentItemCard(
                     color = Colors.Text.Secondary
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ScrollHintOverlay(onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(48.dp)
+            )
+            Text(
+                text = "Scroll down to read all points",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "You need to reach the end to continue",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 13.sp
+            )
         }
     }
 }
