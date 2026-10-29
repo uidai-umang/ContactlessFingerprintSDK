@@ -1118,7 +1118,7 @@ private fun GuideLineItems(
         modifier = Modifier
             .fillMaxWidth()
             .background(color = Colors.Background.Primary)
-            .padding(vertical = Spacing.L),
+            .padding(vertical = Spacing.M),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.Xxs, Alignment.Start)
     ) {
@@ -1165,7 +1165,7 @@ fun FingerprintCollectionScreenPreview() {
             )
         )
 
-        InfoDialogCard("CAPTURE STATUS") { CaptureStatusList() }
+        InfoDialogCard("CAPTURE GUIDELINES") { GuideLineDialog {  } }
     }
 }
 
