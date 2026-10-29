@@ -9,7 +9,6 @@ import android.view.Surface
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -55,6 +53,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.capture.BuildConfig
+import app.gov.uidai.capture.R
 import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.camera.CameraPreview
 import app.gov.uidai.capture.ui.camera.CaptureResult
@@ -173,9 +172,11 @@ fun SlapCaptureRoute(
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
                 if (hasCameraPermission) {
                     CameraPreview(
                         previewSize = viewModel.cameraController.getPreviewSize(),
@@ -259,9 +260,11 @@ fun SlapCaptureRoute(
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.systemBars)
                 ) {
-                    Row(modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(Spacing.L)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(Spacing.L)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
@@ -399,10 +402,10 @@ fun TorchIcon(isTorchOn: Boolean, modifier: Modifier = Modifier, onTorchClick: (
         Canvas(modifier = Modifier.matchParentSize()) {
             drawCircle(color = Color.White.copy(alpha = 0.5f), style = Stroke(width = 1.dp.toPx()))
         }
-        val torchIcon = if(isTorchOn) {
-            app.gov.uidai.capture.R.drawable.torch_on_icon
+        val torchIcon = if (isTorchOn) {
+            R.drawable.torch_on_icon
         } else {
-            app.gov.uidai.capture.R.drawable.torch_off_icon
+            R.drawable.torch_off_icon
         }
         Icon(
             painter = painterResource(torchIcon),
