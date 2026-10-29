@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -106,8 +107,6 @@ fun SlapCaptureRoute(
 
     LaunchedEffect(handType) {
         showHandGuide = true
-        kotlinx.coroutines.delay(3000)
-        showHandGuide = false
     }
 
     LaunchedEffect(handType) { viewModel.setExpectedHandType(handType) }
@@ -133,25 +132,6 @@ fun SlapCaptureRoute(
                 )
             } ?: true
             if (!canShowRationale) showPermanentlyDeniedDialog = true else onPopBackStack()
-        }
-    }
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        uri?.let {
-            coroutineScope.launch {
-                val bitmap = context.contentResolver.openInputStream(it)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                }
-                bitmap?.let { bmp ->
-                    // TEST-ONLY: bypasses live capture, feeds a gallery
-                    // image straight into the same pipeline
-                    // processCapturedImage() uses, to test ridge
-                    // extraction against a genuinely sharp photo.
-                    viewModel.processPickedImage(bmp, handType)
-                }
-            }
         }
     }
 
@@ -191,7 +171,8 @@ fun SlapCaptureRoute(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(PageBackground)) {
+    Box(modifier = Modifier.fillMaxSize().background(PageBackground).windowInsetsPadding(
+        WindowInsets.systemBars)) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 if (hasCameraPermission) {
@@ -203,9 +184,6 @@ fun SlapCaptureRoute(
                             controller.setUIInfoProvider(object : CameraController.UIInfoProvider {
                                 override val viewFinderSurface: Surface get() = controller.currentSurface!!
                                 override val viewFinderSize: Size get() = viewFinderSize
-                                // No guide-overlay/cutout box in this simple design --
-                                // the full viewfinder stands in for it (used by
-                                // CameraController only for AF-distance heuristics).
                                 override val overlayViewCutoutRectCoordinates: RectF
                                     get() = RectF(0f, 0f, viewFinderSize.width.toFloat(), viewFinderSize.height.toFloat())
                                 override val deviceRotation: Int get() = getDeviceRotationCompat(context)
@@ -264,33 +242,20 @@ fun SlapCaptureRoute(
                     Row(modifier = Modifier.fillMaxWidth().padding(Spacing.L)) {
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF2A2A2A)),
+                                .padding(8.dp)
+                                .clickable{
+                                    onPopBackStack()
+                                }
+                                .background(Color.Transparent),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
                             )
-                        }
-
-                        if (BuildConfig.DEBUG) {
-                            Spacer(modifier = Modifier.size(Spacing.M))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF2A2A2A))
-                                    .clickable {
-                                        imagePickerLauncher.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                        )
-                                    }
-                                    .padding(horizontal = Spacing.M, vertical = Spacing.M)
-                            ) {
-                                Text("Test: Pick Image", color = Color.White, fontSize = 12.sp)
-                            }
                         }
                     }
 
@@ -327,16 +292,6 @@ fun SlapCaptureRoute(
                 }
             }
 
-            SlapBottomBar(
-                buttonState = when {
-                    liveState.isReady -> SlapButtonState.READY
-                    !liveState.handDetected -> SlapButtonState.IDLE
-                    else -> SlapButtonState.CHECKING
-                },
-                statusMessage = liveState.statusMessage,
-                isTorchOn = isTorchOn,
-                onTorchClick = { viewModel.toggleTorch() }
-            )
         }
 
         if (showPermanentlyDeniedDialog) {
@@ -366,6 +321,14 @@ fun SlapCaptureRoute(
         if (showHandGuide) {
             SlapHandGuideOverlay(handType = handType, onClick = {showHandGuide = false})
         }
+
+        TorchIcon(
+            isTorchOn = isTorchOn,
+            onTorchClick = { viewModel.toggleTorch() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = Spacing.L, end = Spacing.L)
+        )
     }
 
     if (showReviewScreen) {
@@ -388,95 +351,23 @@ fun SlapCaptureRoute(
 }
 
 @Composable
-private fun SlapBottomBar(
-    buttonState: SlapButtonState,
-    statusMessage: String,
-    isTorchOn: Boolean,
-    onTorchClick: () -> Unit
-) {
-    val (borderColor, fillColor, dotColor) = when (buttonState) {
-        SlapButtonState.IDLE -> Triple(IdleBorder, IdleFill, null)
-        SlapButtonState.CHECKING -> Triple(CheckingColor, IdleFill, CheckingColor)
-        SlapButtonState.READY -> Triple(ReadyColor, IdleFill, ReadyColor)
-    }
-    val labelColor = when (buttonState) {
-        SlapButtonState.IDLE -> Color.White.copy(alpha = 0.5f)
-        SlapButtonState.CHECKING -> CheckingColor
-        SlapButtonState.READY -> ReadyColor
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth().background(PageBackground).padding(Spacing.Xl).windowInsetsPadding(WindowInsets.systemBars),
-        horizontalAlignment = Alignment.CenterHorizontally
+fun TorchIcon(isTorchOn: Boolean, modifier: Modifier = Modifier, onTorchClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.5f))
+            .clickable(onClick = onTorchClick),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.size(42.dp)) // spacer to balance the torch button on the right
-
-            // Auto-only for v1 -- this circle is a status indicator, not a
-            // button. TODO: wire a manual-capture tap target here if/when
-            // manual mode is added for slap capture.
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = Spacing.Xxl)
-                    .size(88.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (buttonState == SlapButtonState.READY) {
-                    // Soft glow approximation -- a larger, low-alpha circle behind the button.
-                    Box(
-                        modifier = Modifier
-                            .size(88.dp)
-                            .clip(CircleShape)
-                            .background(ReadyColor.copy(alpha = 0.25f))
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(fillColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(color = borderColor, style = Stroke(width = 3.dp.toPx()))
-                    }
-                    dotColor?.let {
-                        Box(modifier = Modifier.size(14.dp).clip(CircleShape).background(it))
-                    }
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.07f))
-                    .clickable(onClick = onTorchClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    drawCircle(color = Color.White.copy(alpha = 0.1f), style = Stroke(width = 1.dp.toPx()))
-                }
-                Icon(
-                    imageVector = Icons.Default.FlashOn,
-                    contentDescription = "Torch",
-                    tint = if (isTorchOn) Color(0xFFEAB308) else Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(Spacing.S)
-                )
-            }
+        Canvas(modifier = Modifier.matchParentSize()) {
+            drawCircle(color = Color.White.copy(alpha = 0.5f), style = Stroke(width = 1.dp.toPx()))
         }
-
-        Spacer(modifier = Modifier.size(Spacing.S))
-
-        Text(
-            text = statusMessage,
-            color = labelColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
+        Icon(
+            imageVector = Icons.Default.FlashOn,
+            contentDescription = "Torch",
+            tint = if (isTorchOn) Color(0xFFEAB308) else Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.padding(Spacing.S)
         )
     }
 }

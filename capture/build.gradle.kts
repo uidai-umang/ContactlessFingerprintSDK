@@ -190,6 +190,9 @@ dependencies {
     releaseImplementation(libs.chucker.release)
 
     implementation(libs.firebase.remote.config)
+
+    // Lottie (slap hand-guide animation)
+    implementation(libs.lottie.compose)
 }
 
 afterEvaluate {
