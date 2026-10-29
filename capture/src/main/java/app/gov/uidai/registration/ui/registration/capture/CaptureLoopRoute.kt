@@ -1,13 +1,30 @@
 package app.gov.uidai.registration.ui.registration.capture
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.capture.pref.PreferenceStore
@@ -19,26 +36,9 @@ import app.gov.uidai.capture.ui.camera.slap.SlapCaptureViewModel
 import app.gov.uidai.capture.usecase.factory.ImageProcessorFactory
 import app.gov.uidai.registration.model.FingerPosition
 import app.gov.uidai.registration.ui.registration.RegistrationViewModel
-import javax.inject.Provider
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.gov.uidai.registration.ui.theme.Colors
 import app.gov.uidai.registration.ui.theme.Spacing
+import javax.inject.Provider
 
 /**
  * Capture loop: renders the camera for [RegistrationViewModel.activeCapture]
@@ -80,6 +80,7 @@ fun CaptureLoopRoute(
                         viewModel = hiltViewModel<SlapCaptureViewModel>(key = "slap-${capture.segment}")
                     )
                 }
+
                 else -> {
                     val cameraController = remember { cameraControllerProvider.get() }
                     CameraScreen(
@@ -136,7 +137,9 @@ private fun NextCaptureCue(next: FingerPosition) {
                 )
             }
             Text(
-                text = "Next: ${next.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }}",
+                text = "Next: ${
+                    next.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+                }",
                 color = Colors.Text.Primary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold

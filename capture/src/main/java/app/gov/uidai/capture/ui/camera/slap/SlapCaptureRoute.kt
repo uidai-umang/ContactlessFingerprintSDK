@@ -3,22 +3,18 @@ package app.gov.uidai.capture.ui.camera.slap
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.util.Size
 import android.view.Surface
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size as ComposeSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -63,13 +57,10 @@ import app.gov.uidai.capture.ui.camera.CameraController
 import app.gov.uidai.capture.ui.camera.CameraPreview
 import app.gov.uidai.capture.ui.camera.CaptureResult
 import app.gov.uidai.capture.ui.camera.CaptureReviewScreen
-import app.gov.uidai.capture.usecase.slap.SlapLiveState
-import app.gov.uidai.capture.utils.KotlinUtils
 import app.gov.uidai.capture.utils.KotlinUtils.getDeviceRotationCompat
-import app.gov.uidai.capture.utils.extension.toBase64
-import `in`.gov.uidai.utility.constants.ResultCode
-import kotlinx.coroutines.launch
 import app.gov.uidai.registration.ui.theme.Spacing
+import `in`.gov.uidai.utility.constants.ResultCode
+import androidx.compose.ui.geometry.Size as ComposeSize
 
 private val PageBackground = Color(0xFF0A0D14)
 private val IdleBorder = Color(0xFF253447)
@@ -171,10 +162,18 @@ fun SlapCaptureRoute(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(PageBackground).windowInsetsPadding(
-        WindowInsets.systemBars)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PageBackground)
+            .windowInsetsPadding(
+                WindowInsets.systemBars
+            )
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Box(modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)) {
                 if (hasCameraPermission) {
                     CameraPreview(
                         previewSize = viewModel.cameraController.getPreviewSize(),
@@ -185,8 +184,16 @@ fun SlapCaptureRoute(
                                 override val viewFinderSurface: Surface get() = controller.currentSurface!!
                                 override val viewFinderSize: Size get() = viewFinderSize
                                 override val overlayViewCutoutRectCoordinates: RectF
-                                    get() = RectF(0f, 0f, viewFinderSize.width.toFloat(), viewFinderSize.height.toFloat())
-                                override val deviceRotation: Int get() = getDeviceRotationCompat(context)
+                                    get() = RectF(
+                                        0f,
+                                        0f,
+                                        viewFinderSize.width.toFloat(),
+                                        viewFinderSize.height.toFloat()
+                                    )
+                                override val deviceRotation: Int
+                                    get() = getDeviceRotationCompat(
+                                        context
+                                    )
                             })
                             controller.initializeCamera()
                             val listener = viewModel.getOrCreateListener {
@@ -212,8 +219,10 @@ fun SlapCaptureRoute(
                     if (liveState.uprightFrameWidth > 0 && liveState.uprightFrameHeight > 0) {
                         val scaleX = size.width / liveState.uprightFrameWidth.toFloat()
                         val scaleY = size.height / liveState.uprightFrameHeight.toFloat()
-                        val edgeColor = if (liveState.isReady) FingertipReadyEdge else FingertipFarEdge
-                        val fillColor = if (liveState.isReady) FingertipReadyFill else FingertipFarFill
+                        val edgeColor =
+                            if (liveState.isReady) FingertipReadyEdge else FingertipFarEdge
+                        val fillColor =
+                            if (liveState.isReady) FingertipReadyFill else FingertipFarFill
 
                         liveState.fingerBoxes.forEach { box ->
                             val topLeft = Offset(box.left * scaleX, box.top * scaleY)
@@ -222,7 +231,12 @@ fun SlapCaptureRoute(
                                 (box.bottom - box.top) * scaleY
                             )
                             drawRect(color = fillColor, topLeft = topLeft, size = boxSize)
-                            drawRect(color = edgeColor, topLeft = topLeft, size = boxSize, style = Stroke(width = 3.dp.toPx()))
+                            drawRect(
+                                color = edgeColor,
+                                topLeft = topLeft,
+                                size = boxSize,
+                                style = Stroke(width = 3.dp.toPx())
+                            )
                         }
 
                         // Small tip marker on top of each box -- keeps the
@@ -238,13 +252,19 @@ fun SlapCaptureRoute(
                     }
                 }
 
-                Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(Spacing.L)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.systemBars)
+                ) {
+                    Row(modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(Spacing.L)) {
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .padding(8.dp)
-                                .clickable{
+                                .clickable {
                                     onPopBackStack()
                                 }
                                 .background(Color.Transparent),
@@ -260,13 +280,21 @@ fun SlapCaptureRoute(
                     }
 
                     Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.Xxl),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = Spacing.Xxl),
                         contentAlignment = Alignment.Center
                     ) {
-                        Surface(shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = 0.9f)) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.White.copy(alpha = 0.9f)
+                        ) {
                             Text(
                                 text = liveState.statusMessage,
-                                modifier = Modifier.padding(horizontal = Spacing.Xxl, vertical = Spacing.S),
+                                modifier = Modifier.padding(
+                                    horizontal = Spacing.Xxl,
+                                    vertical = Spacing.S
+                                ),
                                 color = if (liveState.isReady) ReadyColor else Color.Black
                             )
                         }
@@ -274,12 +302,18 @@ fun SlapCaptureRoute(
                 }
 
                 Box(
-                    modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = Spacing.L)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = Spacing.L)
                 ) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .background(Color.White.copy(alpha = 0.6f), shape = RoundedCornerShape(8.dp))
+                            .background(
+                                Color.White.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
                             .padding(horizontal = Spacing.L, vertical = Spacing.S)
                     ) {
                         Text(
@@ -319,7 +353,7 @@ fun SlapCaptureRoute(
         }
 
         if (showHandGuide) {
-            SlapHandGuideOverlay(handType = handType, onClick = {showHandGuide = false})
+            SlapHandGuideOverlay(handType = handType, onClick = { showHandGuide = false })
         }
 
         TorchIcon(
