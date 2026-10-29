@@ -9,6 +9,7 @@ import android.view.Surface
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,6 +47,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -397,8 +399,13 @@ fun TorchIcon(isTorchOn: Boolean, modifier: Modifier = Modifier, onTorchClick: (
         Canvas(modifier = Modifier.matchParentSize()) {
             drawCircle(color = Color.White.copy(alpha = 0.5f), style = Stroke(width = 1.dp.toPx()))
         }
+        val torchIcon = if(isTorchOn) {
+            app.gov.uidai.capture.R.drawable.torch_on_icon
+        } else {
+            app.gov.uidai.capture.R.drawable.torch_off_icon
+        }
         Icon(
-            imageVector = Icons.Default.FlashOn,
+            painter = painterResource(torchIcon),
             contentDescription = "Torch",
             tint = if (isTorchOn) Color(0xFFEAB308) else Color.White.copy(alpha = 0.7f),
             modifier = Modifier.padding(Spacing.S)
