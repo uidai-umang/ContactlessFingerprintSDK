@@ -658,82 +658,68 @@ fun FingerRowCard(
         enabled = status.canCapture() || isBlocked,
         onClick = if (isBlocked) onBlockedClick else onClick
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .alpha(if (isBlocked) 0.4f else 1f)
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.Start
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FingerIcon(
-                    iconRes = if (position.isSlap()) R.drawable.slap_symbol else R.drawable.uncaptured_finger_symbol,
-                    position = position,
-                    tint = if (isSaved) Colors.Success.Main else Colors.Text.Secondary,
-                    size = 24.dp
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(if (isBlocked) 0.4f else 1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FingerIcon(
+                        iconRes = if (position.isSlap()) R.drawable.slap_symbol else R.drawable.uncaptured_finger_symbol,
+                        position = position,
+                        tint = if (isSaved) Colors.Success.Main else Colors.Text.Secondary,
+                        size = 24.dp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = position.label(),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Colors.Text.Primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    CaptionText(text = "${position.fingerCountText()} · ${if (isSaved) "Saved" else "Not captured"}")
+                }
+
+                CaptureStatusLabel(
+                    status = status,
+                    isSelected = isSelected,
+                    iconSize = 16.dp
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = position.label(),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Colors.Text.Primary
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                CaptionText(text = "${position.fingerCountText()} · ${if (isSaved) "Saved" else "Not captured"}")
             }
 
-            CaptureStatusLabel(
-                status = status,
-                isSelected = isSelected,
-                iconSize = 16.dp
-            )
-        }
-    }
-}
+            if(status == FingerCaptureStatus.PENDING){
+                Spacer(modifier = Modifier.size(Spacing.S))
 
-// --------------------------------------------------
-// Section: Guidance / Action Box
-// --------------------------------------------------
-@Composable
-fun GuidanceCard(
-    title: String,
-    instruction: String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Colors.Info.Container.copy(alpha = 0.5f)),
-        border = BorderStroke(1.dp, Colors.Brand.BlueSoft)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Fingerprint,
-                contentDescription = null,
-                tint = Colors.Brand.Blue,
-                modifier = Modifier.size(32.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = title,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Colors.Brand.Blue
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = instruction,
-                    fontSize = 13.sp,
-                    color = Colors.Text.Primary,
-                    lineHeight = 18.sp
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Colors.Warning.Primary.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CaptureStatusLabel(status = FingerCaptureStatus.PENDING, isSelected = false, iconSize = 16.dp)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Captured but not synced",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Colors.Text.Primary
+                    )
+                }
             }
         }
+
     }
 }
 
@@ -1164,8 +1150,6 @@ fun FingerprintCollectionScreenPreview() {
                 FingerPosition.LEFT_THUMB to FingerCaptureStatus.CAPTURED
             )
         )
-
-        InfoDialogCard("CAPTURE GUIDELINES") { GuideLineDialog {  } }
     }
 }
 
