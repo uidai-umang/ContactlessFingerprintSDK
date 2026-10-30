@@ -84,7 +84,6 @@ fun CaptureLoopRoute(
                 else -> {
                     val cameraController = remember { cameraControllerProvider.get() }
                     CameraScreen(
-                        txnId = capture.txnId,
                         fingerType = capture.position.name,
                         captureId = capture.id,
                         cameraController = cameraController,

@@ -50,7 +50,7 @@ object KotlinUtils {
     fun RoundedCornerShapeCompat() = RoundedCornerShape(30.dp)
 
     @Composable
-    fun headingTextFor(state: CaptureState, viewModel: CameraViewModel): String = when (state) {
+    fun headingTextFor(state: CaptureState): String = when (state) {
         is CaptureState.Initial -> "Place your finger inside the overlay"
         is CaptureState.AutoCaptureTrigger -> "Hold steady"
         is CaptureState.AutoCaptureSuccess -> "Evaluating..."
