@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,6 +132,7 @@ fun CameraScreen(
     var lastKnownImageSize by remember { mutableStateOf<Size?>(null) }
 
     var imageProcessor by remember { mutableStateOf<ImageProcessor?>(null) }
+    val currentFingerType by rememberUpdatedState(fingerType)
 
     var showReviewScreen by remember { mutableStateOf(false) }
     var pendingCaptureResult by remember { mutableStateOf<CaptureResult?>(null) }
@@ -289,6 +291,7 @@ fun CameraScreen(
             controller = imageProcessorController,
             listener = imageProcessorListener
         )
+        newProcessor.setFingerForDistance(currentFingerType)
         imageProcessor = newProcessor
         cameraController.setOnImageAvailableListener(newProcessor)
         cameraController.retakeCapture()
@@ -364,6 +367,7 @@ fun CameraScreen(
                                 controller = imageProcessorController,
                                 listener = imageProcessorListener
                             )
+                            newProcessor.setFingerForDistance(currentFingerType)
                             imageProcessor = newProcessor
                             cameraController.setOnImageAvailableListener(newProcessor)
                         },

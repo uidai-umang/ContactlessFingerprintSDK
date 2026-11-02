@@ -87,7 +87,18 @@ abstract class ImageProcessor(
         internal const val BRIGHTNESS_CHECK = "BrightnessCheck"
 
         private const val USE_YOLO_DISTANCE = true
-        private const val YOLO_DISTANCE_TOLERANCE_MM = 15f
+        private const val YOLO_DISTANCE_TOLERANCE_MM = 10f
+        const val YOLO_TARGET_SCALE = 0.89f
+
+        // Corrects YOLO's width-based distance for fingers wider/narrower than average.
+        // factor = 108 / that finger's smoothed reading at its sharp point. Measured on device 02-Nov.
+        private val FINGER_WIDTH_FACTOR = mapOf(
+            "THUMB" to 1.15f,
+            "INDEX" to 1.0f,
+            "MIDDLE" to 1.0f,
+            "RING" to 1.0f,
+            "LITTLE" to 0.86f
+        )
     }
 
     protected val blurCheck by lazy { blurCheckFactory.create() }
@@ -215,9 +226,20 @@ abstract class ImageProcessor(
 
     private val fingerDistanceTracker by lazy {
         FingerDistanceTracker(
-            targetMM = preferenceStore.get(CameraSettings.MANUAL_FOCUS_DISTANCE) * 1000f,
+            targetMM = preferenceStore.get(CameraSettings.MANUAL_FOCUS_DISTANCE) * 1000f * YOLO_TARGET_SCALE,
             toleranceMM = YOLO_DISTANCE_TOLERANCE_MM
         )
+    }
+
+    @Volatile
+    private var fingerWidthFactor = 1.0f
+
+    /** Call before each single-finger capture with the position name, e.g. "LEFT_THUMB". */
+    fun setFingerForDistance(position: String) {
+        fingerWidthFactor = FINGER_WIDTH_FACTOR.entries
+            .firstOrNull { position.endsWith(it.key) }?.value ?: 1.0f
+        fingerDistanceTracker.reset()
+        Log.i("YOLO_SINGLE", "finger=$position widthFactor=$fingerWidthFactor")
     }
 
     init {
@@ -332,39 +354,36 @@ abstract class ImageProcessor(
                         val t0 = SystemClock.uptimeMillis()
                         val boxes = analyzer.detect(frame)
                         val swapped = frame.rotationDegrees == 90 || frame.rotationDegrees == 270
-                        val upright = if (swapped) Size(frame.height, frame.width) else Size(
-                            frame.width,
-                            frame.height
-                        )
+                        val upright = if (swapped) Size(frame.height, frame.width) else Size(frame.width, frame.height)
                         val distances = boxes.map {
-                            controller.getYoloFingerDistanceMM(
-                                it,
-                                upright,
-                                frame.rotationDegrees
-                            )
+                            controller.getYoloFingerDistanceMM(it, upright, frame.rotationDegrees) * fingerWidthFactor
                         }
-                        val largest =
-                            boxes.indices.maxByOrNull { boxes[it].width() * boxes[it].height() }
-                        fingerDistanceTracker.record(largest?.let { distances[it] })
-                        val parts = boxes.mapIndexed { i, b ->
-                            "w=${b.width().toInt()}px h=${
-                                b.height().toInt()
-                            }px d=${distances[i].toInt()}mm"
-                        }
+
+                        // Box nearest the frame centre; ignore boxes covering most of the frame.
+                        val cx = upright.width / 2f
+                        val cy = upright.height / 2f
+                        val maxArea = 0.6f * upright.width * upright.height
+                        val picked = boxes.indices
+                            .filter { boxes[it].width() * boxes[it].height() < maxArea }
+                            .minByOrNull {
+                                val dx = boxes[it].centerX() - cx
+                                val dy = boxes[it].centerY() - cy
+                                dx * dx + dy * dy
+                            }
+                        fingerDistanceTracker.record(picked?.let { distances[it] })
+
                         Log.i(
                             "YOLO_SINGLE",
-                            "boxes=${boxes.size} frame=${upright.width}x${upright.height} " +
-                                    "took=${SystemClock.uptimeMillis() - t0}ms [${
-                                        parts.joinToString(
-                                            " | "
-                                        )
-                                    }] " +
+                            "boxes=${boxes.size} took=${SystemClock.uptimeMillis() - t0}ms " +
+                                    "picked=${picked?.let { "w=${boxes[it].width().toInt()}px d=${distances[it].toInt()}mm" } ?: "none"} " +
+                                    "smoothed=${fingerDistanceTracker.smoothedMM()?.toInt()}mm " +
+                                    "target=${fingerDistanceTracker.targetMM.toInt()}mm " +
                                     "verdict=${fingerDistanceTracker.verdict()} gate=${fingerDistanceTracker.isGoodAndStable()}"
                         )
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.w("YOLO_SINGLE", "test failed", e)
+                        Log.w("YOLO_SINGLE", "yolo failed", e)
                     }
                 }
                 delay(100)

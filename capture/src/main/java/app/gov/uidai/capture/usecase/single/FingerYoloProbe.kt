@@ -16,9 +16,10 @@ class FingerYoloProbe(context: Context) {
 
     companion object {
         private const val TAG = "FingerYoloProbe"
-        private const val MODEL = "best_float32.tflite"
-        private const val INPUT = 800
-        private const val NUM_BOXES = 13125
+        private const val MODEL = "finger_yolo_320.tflite"
+        private const val INPUT = 320
+        private const val PLANE = INPUT * INPUT
+        private const val NUM_BOXES = 2100
         private const val CONF = 0.25f
         private const val NMS_IOU = 0.3f
     }
@@ -26,9 +27,13 @@ class FingerYoloProbe(context: Context) {
     private class Candidate(val score: Float, val l: Float, val t: Float, val r: Float, val b: Float)
 
     private val interpreter: Interpreter = createInterpreter(context)
-    private val inputBuffer = ByteBuffer.allocateDirect(INPUT * INPUT * 3 * 4).order(ByteOrder.nativeOrder())
+
+    // Model input is NCHW [1,3,320,320]: all R values, then all G, then all B.
+    private val inputBuffer = ByteBuffer.allocateDirect(3 * PLANE * 4).order(ByteOrder.nativeOrder())
     private val inputFloats = inputBuffer.asFloatBuffer()
-    private val output = Array(1) { Array(8) { FloatArray(NUM_BOXES) } }
+
+    // Model output is [1,5,2100]: cx, cy, w, h (normalized 0..1), score.
+    private val output = Array(1) { Array(5) { FloatArray(NUM_BOXES) } }
     private val xMap = IntArray(INPUT)
     private val yMap = IntArray(INPUT)
 
@@ -40,7 +45,7 @@ class FingerYoloProbe(context: Context) {
             if (compat.isDelegateSupportedOnThisDevice) {
                 val cacheDir = File(context.cacheDir, "tflite_gpu_finger").apply { mkdirs() }
                 val gpuOptions = compat.bestOptionsForThisDevice
-                    .setSerializationParams(cacheDir.absolutePath, "finger_yolo_800_v1")
+                    .setSerializationParams(cacheDir.absolutePath, "finger_yolo_320_v1")
                 val interpreter = Interpreter(model, Interpreter.Options().addDelegate(GpuDelegate(gpuOptions)))
                 Log.i(TAG, "Using GPU delegate, init=${SystemClock.uptimeMillis() - start}ms")
                 return interpreter
@@ -81,9 +86,9 @@ class FingerYoloProbe(context: Context) {
 
         inputFloats.clear()
         val ySize = width * height
-        java.util.stream.IntStream.range(0, INPUT).parallel().forEach { j ->
+        for (j in 0 until INPUT) {
             val yu = yMap[j]
-            var out = j * INPUT * 3
+            val row = j * INPUT
             for (i in 0 until INPUT) {
                 val xu = xMap[i]
                 val sx: Int
@@ -98,9 +103,10 @@ class FingerYoloProbe(context: Context) {
                 val uvIndex = ySize + (sy shr 1) * width + (sx and 1.inv())
                 val v = (nv21[uvIndex].toInt() and 0xFF) - 128
                 val u = (nv21[uvIndex + 1].toInt() and 0xFF) - 128
-                inputFloats.put(out++, clamp(y + 1.402f * v) / 255f)
-                inputFloats.put(out++, clamp(y - 0.344136f * u - 0.714136f * v) / 255f)
-                inputFloats.put(out++, clamp(y + 1.772f * u) / 255f)
+                val p = row + i
+                inputFloats.put(p, clamp(y + 1.402f * v) / 255f)
+                inputFloats.put(PLANE + p, clamp(y - 0.344136f * u - 0.714136f * v) / 255f)
+                inputFloats.put(2 * PLANE + p, clamp(y + 1.772f * u) / 255f)
             }
         }
 
@@ -113,7 +119,7 @@ class FingerYoloProbe(context: Context) {
         val o = output[0]
         val candidates = ArrayList<Candidate>()
         for (i in 0 until NUM_BOXES) {
-            val score = maxOf(o[6][i], o[7][i])
+            val score = o[4][i]
             if (score < CONF) continue
             val cx = o[0][i]
             val cy = o[1][i]
