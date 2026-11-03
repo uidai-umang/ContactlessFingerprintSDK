@@ -488,11 +488,15 @@ class CameraController @Inject constructor(
     }
 
     fun updateTorchState() {
-        captureRequestBuilder.let {
-            val flashMode =
-                if (isTorchOn) CaptureRequest.FLASH_MODE_TORCH else CaptureRequest.FLASH_MODE_OFF
-            it.set(CaptureRequest.FLASH_MODE, flashMode)
-            captureSession.setRepeatingRequest(it.build(), captureCallback, cameraPreviewHandler)
+        if (!::captureSession.isInitialized) return
+        val flashMode = if (isTorchOn) CaptureRequest.FLASH_MODE_TORCH else CaptureRequest.FLASH_MODE_OFF
+        captureRequestBuilder.set(CaptureRequest.FLASH_MODE, flashMode)
+        try {
+            captureSession.setRepeatingRequest(captureRequestBuilder.build(), captureCallback, cameraPreviewHandler)
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "Torch change ignored: session already closed", e)
+        } catch (e: CameraAccessException) {
+            Log.w(TAG, "Torch change ignored: camera not accessible", e)
         }
     }
 
