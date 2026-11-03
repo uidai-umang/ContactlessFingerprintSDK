@@ -17,6 +17,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -431,7 +432,8 @@ fun CameraScreen(
                                 .size(48.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF2A2A2A))
-                                .then(Modifier), // clickable { finish(CaptureResult(ResultCode.CAPTURE_USER_ABORT)) }
+                                .then(Modifier)
+                                .clickable{ onPopBackStack() },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
