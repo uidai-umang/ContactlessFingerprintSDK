@@ -29,9 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.gov.uidai.capture.R
 import app.gov.uidai.registration.model.dashboard.DashboardOverviewResponse
 import app.gov.uidai.registration.ui.dashboard.components.DashColors
 import app.gov.uidai.registration.ui.dashboard.components.HeroBannerCard
@@ -123,9 +125,9 @@ fun OverviewTab(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                GenderStatItem(Icons.Default.Male, "MALE", overview.byGender["MALE"] ?: 0)
-                GenderStatItem(Icons.Default.Female, "FEMALE", overview.byGender["FEMALE"] ?: 0)
-                GenderStatItem(Icons.Default.Transgender, "OTHERS", overview.byGender["OTHER"] ?: 0)
+                GenderStatItem(R.drawable.male_icon, "MALE", overview.byGender["MALE"] ?: 0)
+                GenderStatItem(R.drawable.female_icon, "FEMALE", overview.byGender["FEMALE"] ?: 0)
+                GenderStatItem(R.drawable.others_icon, "OTHERS", overview.byGender["OTHER"] ?: 0)
             }
         }
 
@@ -168,16 +170,15 @@ fun OverviewTab(
 }
 
 @Composable
-private fun GenderStatItem(icon: ImageVector, label: String, count: Int) {
+private fun GenderStatItem(icon: Int, label: String, count: Int) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(
-            imageVector = icon,
+            painter = painterResource(icon),
             contentDescription = label,
             tint = DashColors.TextDark,
-            modifier = Modifier.size(18.dp)
         )
         Column {
             Text(

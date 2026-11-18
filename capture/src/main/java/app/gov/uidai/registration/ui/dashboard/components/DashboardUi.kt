@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import app.gov.uidai.capture.R
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -54,10 +55,10 @@ internal object DashColors {
 internal fun formatCount(value: Int): String =
     NumberFormat.getInstance(Locale.forLanguageTag("en-IN")).format(value)
 
-internal fun genderIcon(key: String): ImageVector = when (key.uppercase()) {
-    "MALE" -> Icons.Default.Male
-    "FEMALE" -> Icons.Default.Female
-    else -> Icons.Default.Transgender
+internal fun genderIcon(key: String): Int = when (key.uppercase()) {
+    "MALE" -> R.drawable.male_icon
+    "FEMALE" -> R.drawable.female_icon
+    else -> R.drawable.others_icon
 }
 
 internal fun genderLabel(key: String): String =
