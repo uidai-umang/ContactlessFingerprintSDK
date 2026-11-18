@@ -53,6 +53,11 @@ import app.gov.uidai.registration.ui.dashboard.screens.FingersTab
 import app.gov.uidai.registration.ui.dashboard.screens.OverviewTab
 import app.gov.uidai.registration.ui.theme.Colors
 import app.gov.uidai.registration.ui.theme.Spacing
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardRoute(
@@ -66,6 +71,20 @@ fun DashboardRoute(
     val quotaCheckResult by viewModel.quotaCheckResult.collectAsStateWithLifecycle()
     val overrideResult by viewModel.overrideResult.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val pagerState = rememberPagerState(
+        initialPage = uiState.selectedTab.ordinal,
+        pageCount = { DashboardTab.entries.size }
+    )
+    val scope = rememberCoroutineScope()
+
+    // Swipe -> update the selected tab once the page settles.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            val tab = DashboardTab.entries[page]
+            if (tab != uiState.selectedTab) viewModel.onTabSelected(tab)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.setContext(residentPseudonymId, operatorId)
@@ -136,7 +155,10 @@ fun DashboardRoute(
                 DashboardTab.entries.forEach { tab ->
                     Tab(
                         selected = uiState.selectedTab == tab,
-                        onClick = { viewModel.onTabSelected(tab) },
+                        onClick = {
+                            viewModel.onTabSelected(tab)
+                            scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
+                        },
                         selectedContentColor = Colors.Brand.Blue,
                         unselectedContentColor = Colors.Text.Tertiary,
                         text = {
@@ -149,7 +171,12 @@ fun DashboardRoute(
                 }
             }
 
-            DashboardContent(uiState = uiState)
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { page ->
+                DashboardContent(tab = DashboardTab.entries[page], uiState = uiState)
+            }
         }
 
         quotaCheckResult?.let { quotaCheck ->
@@ -189,8 +216,8 @@ private fun operatorInitials(operatorId: String): String {
 }
 
 @Composable
-private fun DashboardContent(uiState: DashboardUiState) {
-    when (uiState.selectedTab) {
+private fun DashboardContent(tab: DashboardTab, uiState: DashboardUiState) {
+    when (tab) {
         DashboardTab.OVERVIEW -> OverviewTab(overview = uiState.overview, isLoading = uiState.isOverviewLoading)
         DashboardTab.DIVERSITY -> DiversityTab(diversity = uiState.diversity, isLoading = uiState.isDiversityLoading)
         DashboardTab.FINGERS -> FingersTab(fingers = uiState.fingers, isLoading = uiState.isFingersLoading)
