@@ -1,42 +1,33 @@
 package app.gov.uidai.registration.ui.dashboard
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,18 +37,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.gov.uidai.registration.model.DashboardTab
 import app.gov.uidai.registration.model.DashboardUiState
 import app.gov.uidai.registration.ui.dashboard.components.BottomActionBar
+import app.gov.uidai.registration.ui.dashboard.components.DashColors
 import app.gov.uidai.registration.ui.dashboard.components.QuotaSoftPromptModal
 import app.gov.uidai.registration.ui.dashboard.components.QuotaTicker
 import app.gov.uidai.registration.ui.dashboard.screens.DiversityTab
 import app.gov.uidai.registration.ui.dashboard.screens.FingersTab
 import app.gov.uidai.registration.ui.dashboard.screens.OverviewTab
-import app.gov.uidai.registration.ui.theme.Colors
-import app.gov.uidai.registration.ui.theme.Spacing
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardRoute(
@@ -116,55 +103,59 @@ fun DashboardRoute(
     Scaffold(
         modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars),
         topBar = {
-            TopAppBar(
-                title = { Text(titleForTab(uiState.selectedTab), fontWeight = FontWeight.Bold, color = Color.White) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back", tint = Color.White)
-                    }
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "Dashboard",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color.White
+                    )
                 },
-                actions = { OperatorAvatar(operatorId) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Colors.Brand.Navy)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = DashColors.TopBarNavy
+                )
             )
         },
         bottomBar = { BottomActionBar(onNewCollection = onNewCollection) },
-        containerColor = Colors.Background.Secondary,
+        containerColor = DashColors.ScreenBg,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             QuotaTicker(alerts = uiState.alerts)
 
             TabRow(
-                selectedTabIndex = uiState.selectedTab.ordinal,
+                selectedTabIndex = pagerState.currentPage,
                 containerColor = Color.White,
+                divider = { HorizontalDivider(color = DashColors.TabDivider, thickness = 1.dp) },
                 indicator = { tabPositions ->
-                    val position = tabPositions[uiState.selectedTab.ordinal]
-                    val indicatorOffset by animateDpAsState(targetValue = position.left, label = "tabIndicatorOffset")
-                    val indicatorWidth by animateDpAsState(targetValue = position.width, label = "tabIndicatorWidth")
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .wrapContentSize(Alignment.BottomStart)
-                            .offset(x = indicatorOffset)
-                            .width(indicatorWidth)
-                            .height(2.5.dp)
-                            .background(Colors.Brand.Blue)
-                    )
+                    if (pagerState.currentPage < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                            height = 2.5.dp,
+                            color = DashColors.PrimaryBlue
+                        )
+                    }
                 }
             ) {
-                DashboardTab.entries.forEach { tab ->
+                DashboardTab.entries.forEachIndexed { index, tab ->
+                    val isSelected = pagerState.currentPage == index
                     Tab(
-                        selected = uiState.selectedTab == tab,
+                        selected = isSelected,
                         onClick = {
                             viewModel.onTabSelected(tab)
-                            scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
+                            scope.launch { pagerState.animateScrollToPage(index) }
                         },
-                        selectedContentColor = Colors.Brand.Blue,
-                        unselectedContentColor = Colors.Text.Tertiary,
+                        modifier = Modifier.background(
+                            if (isSelected) DashColors.SelectedTabBg else Color.White
+                        ),
                         text = {
                             Text(
                                 text = titleForTab(tab),
-                                fontWeight = if (uiState.selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) DashColors.PrimaryBlue else DashColors.TextDark,
+                                maxLines = 1
                             )
                         }
                     )
@@ -193,29 +184,6 @@ fun DashboardRoute(
 }
 
 @Composable
-private fun OperatorAvatar(operatorId: String) {
-    val initials = remember(operatorId) { operatorInitials(operatorId) }
-    Box(
-        modifier = Modifier
-            .padding(end = Spacing.M)
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(Colors.Accent.Teal.copy(alpha = 0.2f))
-            .border(1.5.dp, Colors.Accent.Teal.copy(alpha = 0.4f), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = initials, color = Colors.Accent.Teal, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-    }
-}
-
-// No operator-name field exists on this screen yet (only the id), so the chip
-// shows the first two alphanumeric characters of the operator id as a stand-in.
-private fun operatorInitials(operatorId: String): String {
-    val alnum = operatorId.filter { it.isLetterOrDigit() }
-    return if (alnum.length >= 2) alnum.take(2).uppercase() else "OP"
-}
-
-@Composable
 private fun DashboardContent(tab: DashboardTab, uiState: DashboardUiState) {
     when (tab) {
         DashboardTab.OVERVIEW -> OverviewTab(overview = uiState.overview, isLoading = uiState.isOverviewLoading)
@@ -225,7 +193,7 @@ private fun DashboardContent(tab: DashboardTab, uiState: DashboardUiState) {
 }
 
 private fun titleForTab(tab: DashboardTab): String = when (tab) {
-    DashboardTab.OVERVIEW -> "My Dashboard"
-    DashboardTab.DIVERSITY -> "Diversity Targets"
+    DashboardTab.OVERVIEW -> "Dashboard"
+    DashboardTab.DIVERSITY -> "Target Slots"
     DashboardTab.FINGERS -> "Finger Counts"
 }

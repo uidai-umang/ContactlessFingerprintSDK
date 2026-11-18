@@ -1,50 +1,62 @@
 package app.gov.uidai.registration.ui.dashboard.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Female
+import androidx.compose.material.icons.filled.Male
+import androidx.compose.material.icons.filled.Transgender
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.gov.uidai.registration.model.dashboard.DashboardOverviewResponse
-import app.gov.uidai.registration.ui.dashboard.components.TileColors
-import app.gov.uidai.registration.ui.theme.Spacer
+import app.gov.uidai.registration.ui.dashboard.components.DashColors
+import app.gov.uidai.registration.ui.dashboard.components.HeroBannerCard
+import app.gov.uidai.registration.ui.dashboard.components.WhiteSectionCard
 import app.gov.uidai.registration.ui.theme.Colors
-import app.gov.uidai.registration.ui.theme.Spacing
+
+private val AGE_GROUPS = listOf(
+    "5-17" to Color(0xFFEDF7FD),
+    "18-40" to Color(0xFFD3E7FC),
+    "41-60" to Color(0xFFBDD9FB),
+    "60+" to Color(0xFFEBF0FC)
+)
+
 @Composable
 fun OverviewTab(
     overview: DashboardOverviewResponse?,
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.L)
-            .verticalScroll(scrollState)
-        ,
-        verticalArrangement = Arrangement.spacedBy(Spacing.L)
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         if (isLoading && overview == null) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -55,56 +67,99 @@ fun OverviewTab(
 
         if (overview == null) return@Column
 
-        HeroCard(overview)
-
-        DashboardCard(title = "By gender") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.M)
+        HeroBannerCard(showPhoneGraphic = true) {
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                CountTile(
-                    label = "Male",
-                    count = overview.byGender["MALE"] ?: 0,
-                    colors = TileColors(Colors.Info.Container, Colors.Info.Border, Colors.Info.Main),
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = overview.capturedToday.toString(),
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                CountTile(
-                    label = "Female",
-                    count = overview.byGender["FEMALE"] ?: 0,
-                    colors = TileColors(Colors.Success.Container, Colors.Success.Border, Colors.Success.Main),
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = "TODAY",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 13.sp,
+                    letterSpacing = 0.5.sp
                 )
-                CountTile(
-                    label = "Other",
-                    count = overview.byGender["OTHER"] ?: 0,
-                    colors = TileColors(Colors.Accent.PurpleContainer, Colors.Accent.Purple, Colors.Accent.Purple),
-                    modifier = Modifier.weight(1f)
-                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF043A70).copy(alpha = 0.7f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "TOTAL ENROLLED",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = overview.totalCaptured.toString(),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
 
-        DashboardCard(title = "By age group") {
-            val ageTiles = listOf(
-                Triple("5-17", "5-17", TileColors(Colors.Accent.PurpleContainer, Colors.Accent.Purple, Colors.Accent.Purple)),
-                Triple("18-40", "18-40", TileColors(Colors.Info.Container, Colors.Info.Border, Colors.Info.Main)),
-                Triple("41-60", "41-60", TileColors(Colors.Success.Container, Colors.Success.Border, Colors.Success.Main)),
-                Triple("60+", "60+", TileColors(Colors.Warning.Container, Colors.Warning.Border, Colors.Warning.Main))
+        WhiteSectionCard {
+            Text(
+                text = "BY GENDER",
+                color = DashColors.LabelGray,
+                fontSize = 12.sp,
+                letterSpacing = 0.8.sp
             )
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.M)) {
-                ageTiles.chunked(2).forEach { row ->
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                GenderStatItem(Icons.Default.Male, "MALE", overview.byGender["MALE"] ?: 0)
+                GenderStatItem(Icons.Default.Female, "FEMALE", overview.byGender["FEMALE"] ?: 0)
+                GenderStatItem(Icons.Default.Transgender, "OTHERS", overview.byGender["OTHER"] ?: 0)
+            }
+        }
+
+        WhiteSectionCard {
+            Text(
+                text = "BY AGE GROUP",
+                color = DashColors.LabelGray,
+                fontSize = 12.sp,
+                letterSpacing = 0.8.sp
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AGE_GROUPS.forEach { (key, bgColor) ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.M)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(bgColor)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        row.forEach { (key, label, colors) ->
-                            CountTile(
-                                label = label,
-                                count = overview.byAgeGroup[key] ?: 0,
-                                colors = colors,
-                                fontSize = 26.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                        Text(
+                            text = key,
+                            color = DashColors.TextDark,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = (overview.byAgeGroup[key] ?: 0).toString(),
+                            color = DashColors.TextDark,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -113,82 +168,36 @@ fun OverviewTab(
 }
 
 @Composable
-private fun HeroCard(overview: DashboardOverviewResponse) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Brush.linearGradient(listOf(Colors.Brand.BlueDark, Colors.Brand.Blue)))
-            .padding(Spacing.Xl)
+private fun GenderStatItem(icon: ImageVector, label: String, count: Int) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = "MY TOTAL CAPTURED",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White.copy(alpha = 0.5f)
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = DashColors.TextDark,
+            modifier = Modifier.size(18.dp)
         )
-        Spacer(Spacing.Xs)
-        Text(
-            text = "${overview.totalCaptured}",
-            fontSize = 48.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
-        Text(
-            text = "residents enrolled",
-            fontSize = 13.sp,
-            color = Color.White.copy(alpha = 0.55f)
-        )
-        Spacer(Spacing.L)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color.White.copy(alpha = 0.1f))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
-                .padding(horizontal = Spacing.L, vertical = Spacing.M)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Captured today",
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.55f)
-                )
-                Text(
-                    text = "${overview.capturedToday}",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
+        Column {
+            Text(
+                text = label,
+                color = DashColors.LabelGray,
+                fontSize = 11.sp,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = count.toString(),
+                color = DashColors.TextDark,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
 
-@Composable
-fun DashboardCard(
-    title: String,
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(1.dp, Colors.Border.Primary, RoundedCornerShape(14.dp))
-            .padding(Spacing.L)
-    ) {
-        SectionTitle(title)
-        Spacer(Spacing.M)
-        content()
-    }
-}
-
+// Also used by QuotaSoftPromptModal.
 @Composable
 fun SectionTitle(text: String) {
     Text(
@@ -199,36 +208,4 @@ fun SectionTitle(text: String) {
         letterSpacing = 1.sp,
         color = Colors.Text.Tertiary
     )
-}
-
-@Composable
-private fun CountTile(
-    label: String,
-    count: Int,
-    colors: TileColors,
-    modifier: Modifier = Modifier,
-    fontSize: androidx.compose.ui.unit.TextUnit = 28.sp
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.background)
-            .border(1.dp, colors.border, RoundedCornerShape(10.dp))
-            .padding(vertical = Spacing.L, horizontal = Spacing.S),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "$count",
-            fontSize = fontSize,
-            fontWeight = FontWeight.Bold,
-            color = colors.text
-        )
-        Spacer(Spacing.Xxs)
-        Text(
-            text = label.uppercase(),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.text
-        )
-    }
 }
