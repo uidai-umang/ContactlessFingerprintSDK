@@ -92,10 +92,12 @@ fun DashboardRoute(
                 viewModel.clearOverrideResult()
                 viewModel.clearQuotaCheckResult()
             }
+
             is OverrideResult.Error -> {
                 snackbarHostState.showSnackbar((overrideResult as OverrideResult.Error).message)
                 viewModel.clearOverrideResult()
             }
+
             else -> {}
         }
     }
@@ -121,7 +123,9 @@ fun DashboardRoute(
         containerColor = DashColors.ScreenBg,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
-        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)) {
             QuotaTicker(alerts = uiState.alerts)
 
             TabRow(
@@ -177,7 +181,12 @@ fun DashboardRoute(
                 onDismiss = viewModel::clearQuotaCheckResult,
                 onChange = viewModel::clearQuotaCheckResult,
                 onProceed = viewModel::clearQuotaCheckResult,
-                onOverrideConfirmed = { dimension, key -> viewModel.confirmOverride(dimension, key) }
+                onOverrideConfirmed = { dimension, key ->
+                    viewModel.confirmOverride(
+                        dimension,
+                        key
+                    )
+                }
             )
         }
     }
@@ -186,9 +195,20 @@ fun DashboardRoute(
 @Composable
 private fun DashboardContent(tab: DashboardTab, uiState: DashboardUiState) {
     when (tab) {
-        DashboardTab.OVERVIEW -> OverviewTab(overview = uiState.overview, isLoading = uiState.isOverviewLoading)
-        DashboardTab.DIVERSITY -> DiversityTab(diversity = uiState.diversity, isLoading = uiState.isDiversityLoading)
-        DashboardTab.FINGERS -> FingersTab(fingers = uiState.fingers, isLoading = uiState.isFingersLoading)
+        DashboardTab.OVERVIEW -> OverviewTab(
+            overview = uiState.overview,
+            isLoading = uiState.isOverviewLoading
+        )
+
+        DashboardTab.DIVERSITY -> DiversityTab(
+            diversity = uiState.diversity,
+            isLoading = uiState.isDiversityLoading
+        )
+
+        DashboardTab.FINGERS -> FingersTab(
+            fingers = uiState.fingers,
+            isLoading = uiState.isFingersLoading
+        )
     }
 }
 
