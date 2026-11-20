@@ -41,6 +41,7 @@ import app.gov.uidai.capture.utils.convertCroppedRectToSensorMeteringRect
 import app.gov.uidai.capture.utils.extension.getFPSRange
 import dagger.hilt.android.qualifiers.ApplicationContext
 import app.gov.uidai.capture.R
+import app.gov.uidai.capture.ui.camera.focus.ContinuousAF
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
@@ -107,6 +108,7 @@ class CameraController @Inject constructor(
         get() = preferenceStore.get(CameraSettings.SHUTTER_SPEED).toLong()
 
     private val slapAverageFingerWidthMM = 15f
+    private val slapDistanceScale = 1.5f
 
 
     private val cameraManager = context.getSystemService(
@@ -296,6 +298,22 @@ class CameraController @Inject constructor(
                 ===============================
                 """.trimIndent()
             )
+
+            if ((frameCounter.get() % 10).toInt() == 0) {
+                Log.d(
+                    TAG,
+                    "SLAPDBG_LENS -- focusDio=${result.get(CaptureResult.LENS_FOCUS_DISTANCE)} " +
+                            "focusRange=${result.get(CaptureResult.LENS_FOCUS_RANGE)} " +
+                            "lensState=${result.get(CaptureResult.LENS_STATE)} " +
+                            "afMode=${result.get(CaptureResult.CONTROL_AF_MODE)} " +
+                            "afState=${result.get(CaptureResult.CONTROL_AF_STATE)} " +
+                            "focalUsed=${result.get(CaptureResult.LENS_FOCAL_LENGTH)} " +
+                            "aperture=${result.get(CaptureResult.LENS_APERTURE)} " +
+                            "expNs=${result.get(CaptureResult.SENSOR_EXPOSURE_TIME)} " +
+                            "iso=${result.get(CaptureResult.SENSOR_SENSITIVITY)} " +
+                            "crop=${result.get(CaptureResult.SCALER_CROP_REGION)}"
+                )
+            }
         }
     }
 
@@ -516,7 +534,35 @@ class CameraController @Inject constructor(
      * capture (a separate CameraController instance) is unaffected.
      */
     fun useSlapFixedFocus(distanceMM: Float) {
-        focusManager = SlapFixedDistanceFocus(this, distanceMM)
+        val calibration = characteristics.get(CameraCharacteristics.LENS_INFO_FOCUS_DISTANCE_CALIBRATION)
+        // UNCALIBRATED lenses (e.g. Vivo Y19) treat LENS_FOCUS_DISTANCE as an
+        // arbitrary lens position, not real diopters -- "120mm" lands wherever.
+        // Let the camera's own AF find the hand there instead.
+        focusManager = if (calibration == CameraMetadata.LENS_INFO_FOCUS_DISTANCE_CALIBRATION_UNCALIBRATED) {
+            ContinuousAF(this)
+        } else {
+            SlapFixedDistanceFocus(this, distanceMM)
+        }
+        Log.i(
+            TAG,
+            "SLAPDBG_FOCUS -- calib=$calibration strategy=${focusManager::class.simpleName} " +
+                    "lensTarget=${distanceMM}mm minFocus=${getMinFocusDistanceInMM()}mm"
+        )
+        Log.i(
+            TAG,
+            "SLAPDBG_SPEC -- model=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} " +
+                    "lensTarget=${distanceMM}mm " +
+                    "minFocusDio=${characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)} " +
+                    "hyperfocalDio=${characteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE)} " +
+                    "calib=${characteristics.get(CameraCharacteristics.LENS_INFO_FOCUS_DISTANCE_CALIBRATION)} " +
+                    "caps=${characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)?.toList()} " +
+                    "hwLevel=${characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL)} " +
+                    "focalLengths=${characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.toList()} " +
+                    "apertures=${characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)?.toList()} " +
+                    "sensorMM=${getSensorPhysicalSize()} active=${getSensorActiveArraySize()} " +
+                    "captureSize=$captureSize " +
+                    "intrinsics=${characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)?.toList()}"
+        )
     }
 
     fun triggerFocusLock(fingerRect: RectF, cutoutRect: RectF, imageSize: Size) {
@@ -727,22 +773,52 @@ class CameraController @Inject constructor(
 
     fun getFingerDistanceMM(fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float {
         val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
-        val sensorPhysical = getSensorPhysicalSize()
         val sensorWidthMMForUprightWidthAxis =
-            if (axesSwapped) sensorPhysical.height else sensorPhysical.width
+            coveredSensorSizeMM(uprightImageSize, axesSwapped).let { covered ->
+                if (axesSwapped) covered.height else covered.width
+            }
 
-        // Row-projection banding (SlapFingerBandDetector) means each
-        // finger is a horizontal strip -- its HEIGHT in the upright image
-        // is its physical WIDTH (what averageFingerWidthMM measures), NOT
-        // the box's .width(), which is just the tip-anchored ROI length
-        // along the finger and has nothing to do with the finger's real
-        // width.
+        // YOLO finger boxes in the upright frame: the box HEIGHT spans the
+        // finger's physical width (fingers point sideways in slap).
         val perceivedWidthPixels = fingerBoxUpright.height()
         val imageWidthPixels = uprightImageSize.width.toFloat()
-        if (perceivedWidthPixels <= 0) return 0f
+        if (perceivedWidthPixels <= 0 || sensorWidthMMForUprightWidthAxis <= 0f) return 0f
 
-        return 2 * (getFocalLengthInMM() * slapAverageFingerWidthMM * imageWidthPixels) /
+        val distanceMM = slapDistanceScale *
+                (getFocalLengthInMM() * slapAverageFingerWidthMM * imageWidthPixels) /
                 (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
+        Log.d(
+            TAG,
+            "SLAPDBG_DIST -- boxW=${fingerBoxUpright.width().toInt()} boxH=${perceivedWidthPixels.toInt()} " +
+                    "imgW=${imageWidthPixels.toInt()} imgH=${uprightImageSize.height} rot=$rotationDegrees " +
+                    "f=${getFocalLengthInMM()} sensorW=$sensorWidthMMForUprightWidthAxis " +
+                    "scale=$slapDistanceScale -> ${distanceMM.toInt()}mm"
+        )
+        return distanceMM
+    }
+
+    /**
+     * Physical sensor area (mm, sensor orientation) that the output frame
+     * actually covers. A frame whose aspect differs from the active array
+     * (e.g. 16:9 output on a 4:3 sensor) is a centre crop of the sensor, so
+     * using the full physical size overstates mm-per-pixel on the cropped axis.
+     */
+    private fun coveredSensorSizeMM(uprightImageSize: Size, axesSwapped: Boolean): SizeF {
+        val physical = getSensorPhysicalSize()
+        val active = getSensorActiveArraySize()
+        val frameW = (if (axesSwapped) uprightImageSize.height else uprightImageSize.width).toFloat()
+        val frameH = (if (axesSwapped) uprightImageSize.width else uprightImageSize.height).toFloat()
+        if (active.width() <= 0 || active.height() <= 0 || frameW <= 0f || frameH <= 0f) return physical
+
+        val activeAspect = active.width().toFloat() / active.height()
+        val frameAspect = frameW / frameH
+        return if (frameAspect > activeAspect) {
+            // Wider output: full width, height cropped.
+            SizeF(physical.width, physical.height * (activeAspect / frameAspect))
+        } else {
+            // Narrower (or equal) output: full height, width cropped.
+            SizeF(physical.width * (frameAspect / activeAspect), physical.height)
+        }
     }
 
     fun getSingleYoloDistanceMM(fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float {

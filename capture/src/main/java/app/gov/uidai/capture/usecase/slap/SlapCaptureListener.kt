@@ -230,6 +230,14 @@ class SlapCaptureListener(
             )
         }
 
+        if (framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES) {
+            Log.i(
+                TAG,
+                "SLAPDBG_TRIGGER -- median=${handDistanceMM?.toInt()}mm " +
+                        "boxH=${result.fingerBoxes.map { it.height().toInt() }} fingers=$detectedCount"
+            )
+        }
+
         if (framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES &&
             isCaptured.compareAndSet(false, true)
         ) {
@@ -242,7 +250,28 @@ class SlapCaptureListener(
             val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
             val uprightBitmap = byteArray.toBitmap(size).rotate(frame.rotationDegrees)
 
-            val blurResult = blurChecker.check(uprightBitmap)
+            // Score only the hand region: DenseNet resizes to 224x224, so on the full
+            // frame the fingers shrink to ~40px and the score reflects the background.
+            val blurInput = result.box?.let { box ->
+                val padX = box.width() * CROP_PADDING_PERCENT
+                val padY = box.height() * CROP_PADDING_PERCENT
+                uprightBitmap.crop(
+                    RectF(
+                        (box.left - padX).coerceAtLeast(0f),
+                        (box.top - padY).coerceAtLeast(0f),
+                        (box.right + padX).coerceAtMost(uprightBitmap.width.toFloat()),
+                        (box.bottom + padY).coerceAtMost(uprightBitmap.height.toFloat())
+                    )
+                )
+            } ?: uprightBitmap
+
+            val blurResult = blurChecker.check(blurInput)
+
+            Log.i(
+                TAG,
+                "SLAPDBG_BLUR -- passed=${blurResult.passed} conf=${blurResult.densenetConfidence} " +
+                        "blurInput=${blurInput.width}x${blurInput.height} frame=${uprightBitmap.width}x${uprightBitmap.height}"
+            )
 
             if (!blurResult.passed) {
                 Log.w(
