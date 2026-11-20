@@ -1,7 +1,11 @@
 package app.gov.uidai.capture.usecase.slap
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PointF
+import android.graphics.Rect
 import android.graphics.RectF
 import android.media.ImageReader
 import android.os.SystemClock
@@ -9,9 +13,7 @@ import android.util.Log
 import android.util.Size
 import app.gov.uidai.capture.domain.model.CameraFrame
 import app.gov.uidai.capture.domain.model.SlapFrameResult
-import app.gov.uidai.capture.slap.processing.SlapFingerBandDetector
 import app.gov.uidai.capture.utils.extension.crop
-import app.gov.uidai.capture.utils.extension.inflatedByPercent
 import app.gov.uidai.capture.utils.extension.rotate
 import app.gov.uidai.capture.utils.extension.toBitmap
 import app.gov.uidai.capture.utils.extension.toByteArray
@@ -80,7 +82,6 @@ class SlapCaptureListener(
     val capturedBitmap = _capturedBitmap.asStateFlow()
 
 
-
     override fun onImageAvailable(reader: ImageReader) {
         val image = try {
             reader.acquireLatestImage()
@@ -102,7 +103,8 @@ class SlapCaptureListener(
         val rotationDegrees = getRotationDegrees()
         val now = SystemClock.uptimeMillis()
 
-        val eligible = now - lastProcessedAt.get() >= THROTTLE_MS && isProcessing.compareAndSet(false, true)
+        val eligible =
+            now - lastProcessedAt.get() >= THROTTLE_MS && isProcessing.compareAndSet(false, true)
 
         if (!eligible) {
             image.close()
@@ -144,8 +146,10 @@ class SlapCaptureListener(
     private suspend fun processFrame(frame: CameraFrame, rotationDegrees: Int) {
         val result = analyzer.analyze(frame, expectedHandType)
 
-        val uprightWidth = if (rotationDegrees == 90 || rotationDegrees == 270) frame.height else frame.width
-        val uprightHeight = if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
+        val uprightWidth =
+            if (rotationDegrees == 90 || rotationDegrees == 270) frame.height else frame.width
+        val uprightHeight =
+            if (rotationDegrees == 90 || rotationDegrees == 270) frame.width else frame.height
 
         val detectedCount = result.fingerBoxes.size
 
@@ -230,14 +234,6 @@ class SlapCaptureListener(
             )
         }
 
-        if (framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES) {
-            Log.i(
-                TAG,
-                "SLAPDBG_TRIGGER -- median=${handDistanceMM?.toInt()}mm " +
-                        "boxH=${result.fingerBoxes.map { it.height().toInt() }} fingers=$detectedCount"
-            )
-        }
-
         if (framePassed && consecutivePasses >= REQUIRED_CONSECUTIVE_PASSES &&
             isCaptured.compareAndSet(false, true)
         ) {
@@ -247,7 +243,10 @@ class SlapCaptureListener(
 
     private suspend fun attemptCapture(frame: CameraFrame, result: SlapFrameResult) {
         try {
-            val (byteArray, size) = frame.getByteArray(requiresCropping = false, cutoutRect = RectF())
+            val (byteArray, size) = frame.getByteArray(
+                requiresCropping = false,
+                cutoutRect = RectF()
+            )
             val uprightBitmap = byteArray.toBitmap(size).rotate(frame.rotationDegrees)
 
             // Score only the hand region: DenseNet resizes to 224x224, so on the full
@@ -265,13 +264,7 @@ class SlapCaptureListener(
                 )
             } ?: uprightBitmap
 
-            val blurResult = blurChecker.check(blurInput)
-
-            Log.i(
-                TAG,
-                "SLAPDBG_BLUR -- passed=${blurResult.passed} conf=${blurResult.densenetConfidence} " +
-                        "blurInput=${blurInput.width}x${blurInput.height} frame=${uprightBitmap.width}x${uprightBitmap.height}"
-            )
+            val blurResult = blurChecker.check(letterboxForBlur(blurInput))
 
             if (!blurResult.passed) {
                 Log.w(
@@ -290,6 +283,31 @@ class SlapCaptureListener(
             Log.e(TAG, "Error finishing slap capture", e)
             consecutivePasses = 0
             isCaptured.set(false)
+        }
+    }
+
+    /**
+     * Fits [src] into a SIZE x SIZE square without changing its aspect ratio,
+     * padding the empty sides with black. Built directly at DenseNet's input
+     * size so no full-resolution square bitmap is allocated (a 3416px square
+     * would be ~46MB on a 3GB phone).
+     */
+    private fun letterboxForBlur(src: Bitmap, size: Int = 224): Bitmap {
+        val scale = size.toFloat() / maxOf(src.width, src.height)
+        val w = (src.width * scale).toInt().coerceAtLeast(1)
+        val h = (src.height * scale).toInt().coerceAtLeast(1)
+        val left = (size - w) / 2
+        val top = (size - h) / 2
+        return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { out ->
+            Canvas(out).apply {
+                drawColor(Color.BLACK)
+                drawBitmap(
+                    src,
+                    null,
+                    Rect(left, top, left + w, top + h),
+                    Paint(Paint.FILTER_BITMAP_FLAG)
+                )
+            }
         }
     }
 

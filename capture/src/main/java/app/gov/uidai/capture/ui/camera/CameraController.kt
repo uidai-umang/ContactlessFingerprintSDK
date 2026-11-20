@@ -299,21 +299,6 @@ class CameraController @Inject constructor(
                 """.trimIndent()
             )
 
-            if ((frameCounter.get() % 10).toInt() == 0) {
-                Log.d(
-                    TAG,
-                    "SLAPDBG_LENS -- focusDio=${result.get(CaptureResult.LENS_FOCUS_DISTANCE)} " +
-                            "focusRange=${result.get(CaptureResult.LENS_FOCUS_RANGE)} " +
-                            "lensState=${result.get(CaptureResult.LENS_STATE)} " +
-                            "afMode=${result.get(CaptureResult.CONTROL_AF_MODE)} " +
-                            "afState=${result.get(CaptureResult.CONTROL_AF_STATE)} " +
-                            "focalUsed=${result.get(CaptureResult.LENS_FOCAL_LENGTH)} " +
-                            "aperture=${result.get(CaptureResult.LENS_APERTURE)} " +
-                            "expNs=${result.get(CaptureResult.SENSOR_EXPOSURE_TIME)} " +
-                            "iso=${result.get(CaptureResult.SENSOR_SENSITIVITY)} " +
-                            "crop=${result.get(CaptureResult.SCALER_CROP_REGION)}"
-                )
-            }
         }
     }
 
@@ -543,26 +528,6 @@ class CameraController @Inject constructor(
         } else {
             SlapFixedDistanceFocus(this, distanceMM)
         }
-        Log.i(
-            TAG,
-            "SLAPDBG_FOCUS -- calib=$calibration strategy=${focusManager::class.simpleName} " +
-                    "lensTarget=${distanceMM}mm minFocus=${getMinFocusDistanceInMM()}mm"
-        )
-        Log.i(
-            TAG,
-            "SLAPDBG_SPEC -- model=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} " +
-                    "lensTarget=${distanceMM}mm " +
-                    "minFocusDio=${characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)} " +
-                    "hyperfocalDio=${characteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE)} " +
-                    "calib=${characteristics.get(CameraCharacteristics.LENS_INFO_FOCUS_DISTANCE_CALIBRATION)} " +
-                    "caps=${characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)?.toList()} " +
-                    "hwLevel=${characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL)} " +
-                    "focalLengths=${characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.toList()} " +
-                    "apertures=${characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)?.toList()} " +
-                    "sensorMM=${getSensorPhysicalSize()} active=${getSensorActiveArraySize()} " +
-                    "captureSize=$captureSize " +
-                    "intrinsics=${characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)?.toList()}"
-        )
     }
 
     fun triggerFocusLock(fingerRect: RectF, cutoutRect: RectF, imageSize: Size) {
@@ -784,17 +749,9 @@ class CameraController @Inject constructor(
         val imageWidthPixels = uprightImageSize.width.toFloat()
         if (perceivedWidthPixels <= 0 || sensorWidthMMForUprightWidthAxis <= 0f) return 0f
 
-        val distanceMM = slapDistanceScale *
+        return slapDistanceScale *
                 (getFocalLengthInMM() * slapAverageFingerWidthMM * imageWidthPixels) /
                 (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
-        Log.d(
-            TAG,
-            "SLAPDBG_DIST -- boxW=${fingerBoxUpright.width().toInt()} boxH=${perceivedWidthPixels.toInt()} " +
-                    "imgW=${imageWidthPixels.toInt()} imgH=${uprightImageSize.height} rot=$rotationDegrees " +
-                    "f=${getFocalLengthInMM()} sensorW=$sensorWidthMMForUprightWidthAxis " +
-                    "scale=$slapDistanceScale -> ${distanceMM.toInt()}mm"
-        )
-        return distanceMM
     }
 
     /**
