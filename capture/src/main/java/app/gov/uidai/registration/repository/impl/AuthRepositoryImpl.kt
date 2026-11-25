@@ -2,6 +2,8 @@ package app.gov.uidai.registration.repository.impl
 
 import app.gov.uidai.registration.auth.TokenStore
 import app.gov.uidai.registration.data.remote.api.ClfApiService
+import app.gov.uidai.registration.data.remote.network.ApiResult
+import app.gov.uidai.registration.data.remote.network.ResponseHandler
 import app.gov.uidai.registration.model.auth.AuthTokenRequest
 import app.gov.uidai.registration.model.auth.LogoutRequest
 import app.gov.uidai.registration.model.auth.RefreshTokenRequest
@@ -21,11 +23,14 @@ class AuthRepositoryImpl @Inject constructor(
     // One lock for login + refresh: refresh tokens rotate, so only one may run at a time.
     private val lock = Any()
 
-    override suspend fun ensureSession(operatorRefId: String): Boolean =
+    override suspend fun ensureSession(operatorRefId: String): ApiResult<Unit> =
         withContext(Dispatchers.IO) {
             synchronized(lock) {
-                if (tokenStore.hasSession() && tokenStore.getOperatorRefId() == operatorRefId) true
-                else loginBlocking(operatorRefId)
+                if (tokenStore.hasSession() && tokenStore.getOperatorRefId() == operatorRefId) {
+                    ApiResult.Success(Unit)
+                } else {
+                    loginBlocking(operatorRefId)
+                }
             }
         }
 
@@ -62,18 +67,23 @@ class AuthRepositoryImpl @Inject constructor(
 
         // Refresh token missing/expired/revoked: log in again with the stored ref id.
         val refId = tokenStore.getOperatorRefId()
-        if (refId != null && loginBlocking(refId)) tokenStore.getAccessToken() else null
+        if (refId != null && loginBlocking(refId) is ApiResult.Success) tokenStore.getAccessToken() else null
     }
 
-    private fun loginBlocking(operatorRefId: String): Boolean = try {
-        val response = runBlocking { authApi.issueToken(AuthTokenRequest(operatorRefId)) }
-        val body = response.body()
-        if (response.isSuccessful && body != null) {
-            tokenStore.save(body.accessToken, body.refreshToken, body.expiresIn)
-            tokenStore.saveOperatorRefId(operatorRefId)
-            true
-        } else false
-    } catch (e: IOException) {
-        false
+    // Goes through ResponseHandler so backend errors ({"message": ...}) and network
+// failures come back as readable messages instead of a bare false.
+    private fun loginBlocking(operatorRefId: String): ApiResult<Unit> {
+        val result = runBlocking {
+            ResponseHandler.safeApiCall { authApi.issueToken(AuthTokenRequest(operatorRefId)) }
+        }
+        return when (result) {
+            is ApiResult.Success -> {
+                val body = result.data
+                tokenStore.save(body.accessToken, body.refreshToken, body.expiresIn)
+                tokenStore.saveOperatorRefId(operatorRefId)
+                ApiResult.Success(Unit)
+            }
+            is ApiResult.Error -> result
+        }
     }
 }

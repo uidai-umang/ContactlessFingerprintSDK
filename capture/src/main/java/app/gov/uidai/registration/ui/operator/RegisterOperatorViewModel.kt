@@ -41,8 +41,9 @@ class RegisterOperatorViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
         viewModelScope.launch {
-            if (!authRepository.ensureSession(refId)) {
-                fail("Could not sign in. Check your connection and try again.")
+            val session = authRepository.ensureSession(refId)
+            if (session is ApiResult.Error) {
+                fail(session.message)
                 return@launch
             }
             when (val result = operatorRepository.registerOperator(refId)) {
