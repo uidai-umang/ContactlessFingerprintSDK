@@ -8,6 +8,7 @@ import retrofit2.Response
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import kotlin.coroutines.cancellation.CancellationException
 
 object ResponseHandler {
 
@@ -19,6 +20,8 @@ object ResponseHandler {
         return try {
             val response = call()
             handleResponse(response)
+        } catch (e: CancellationException) {
+            throw e   // caller's scope was cancelled; let the coroutine stop
         } catch (e: Exception) {
             handleException(e)
         }
