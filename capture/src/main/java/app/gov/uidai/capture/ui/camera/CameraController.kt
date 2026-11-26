@@ -161,7 +161,7 @@ class CameraController @Inject constructor(
     private var focusManager: FocusManager = focusFactory.create(this)
 
     // Media Player for shutter sound
-    private val mediaPlayer = MediaPlayer.create(context, R.raw.shutter_sound).apply {
+    private val mediaPlayer: MediaPlayer? = MediaPlayer.create(context, R.raw.shutter_sound).apply {
         setOnCompletionListener {
             it.seekTo(0)
         }
@@ -798,6 +798,7 @@ class CameraController @Inject constructor(
         sessionExecutor.shutdown()
         imageReaderThread.quitSafely()
         cameraPreviewThread.quitSafely()
+        mediaPlayer?.release()
         cameraDevice = null
     }
 
