@@ -1,6 +1,7 @@
 package app.gov.uidai.registration.data.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -46,4 +47,7 @@ interface PendingCaptureDao {
     // Returns count of pending captures — used by WorkManager to decide if work is needed
     @Query("SELECT COUNT(*) FROM pending_captures")
     suspend fun getPendingCount(): Int
+
+    @Delete
+    suspend fun delete(captures: List<PendingCaptureEntity>)
 }

@@ -81,31 +81,15 @@ class CaptureQueueManagerImpl @Inject constructor(
 
         return when (result) {
             is ApiResult.Success -> {
-                pendingCaptures.forEach { entity ->
-                    captureFileStorage.delete(entity.imageFilePath)
-                    pendingCaptureDao.deleteByResidentAndFingerType(
-                        entity.residentPseudonymId,
-                        entity.fingerType
-                    )
-                }
-                Log.d(TAG, "Batch upload succeeded. Cleared ${pendingCaptures.size} pending by resident+fingerType.")
+                clearUploaded(pendingCaptures)
+                Log.d(TAG, "Batch upload succeeded. Cleared ${pendingCaptures.size} pending.")
                 ApiResult.Success(result.data)
             }
 
             is ApiResult.Error -> {
                 if (ErrorCodeMapper.behaviorFor(result.code) == ErrorBehavior.TREAT_AS_DUPLICATE_SUCCESS) {
-                    pendingCaptures.forEach { entity ->
-                        captureFileStorage.delete(entity.imageFilePath)
-                        pendingCaptureDao.deleteByResidentAndFingerType(
-                            entity.residentPseudonymId,
-                            entity.fingerType
-                        )
-                    }
-                    pendingCaptureDao.deleteByResidentAndFingerType(
-                        newRequest.residentPseudonymId,
-                        newRequest.fingerType
-                    )
-                    Log.d(TAG, "Batch upload 409 — all fingers already captured. Cleared pending queue by resident+fingerType.")
+                    clearUploaded(pendingCaptures)
+                    Log.d(TAG, "Batch upload 409 — all fingers already captured. Cleared pending queue.")
                     return ApiResult.Success(emptyList())
                 }
                 Log.w(TAG, "Batch upload failed. Saving new to queue: ${result.message}")
@@ -146,14 +130,8 @@ class CaptureQueueManagerImpl @Inject constructor(
 
             when (result) {
                 is ApiResult.Success -> {
-                    retryable.forEach { entity ->
-                        captureFileStorage.delete(entity.imageFilePath)
-                        pendingCaptureDao.deleteByResidentAndFingerType(
-                            entity.residentPseudonymId,
-                            entity.fingerType
-                        )
-                    }
-                    Log.d(TAG, "Sync: Resident $residentId uploaded successfully. Cleared ${retryable.size} pending by resident+fingerType.")
+                    clearUploaded(retryable)
+                    Log.d(TAG, "Sync: Resident $residentId uploaded successfully. Cleared ${retryable.size} pending.")
                 }
 
                 is ApiResult.Error -> {
@@ -165,6 +143,15 @@ class CaptureQueueManagerImpl @Inject constructor(
         }
 
         return ApiResult.Success(Unit)
+    }
+
+    // Row first, then file: a crash in between leaves an orphan file (harmless),
+    // never a row pointing at a missing file (which would fail every later sync).
+    private suspend fun clearUploaded(captures: List<PendingCaptureEntity>) {
+        pendingCaptureDao.delete(captures)
+        withContext(Dispatchers.IO) {
+            captures.forEach { captureFileStorage.delete(it.imageFilePath) }
+        }
     }
 
     private suspend fun saveToPendingQueue(request: CaptureRequest) {
