@@ -479,6 +479,7 @@ class RegistrationViewModel @Inject constructor(
             consented = true
         )
         viewModelScope.launch {
+            // Intentional: capture continues even if the consent call fails.
             residentUseCase.postResidentConsent(request)
             isConsented = true
         }
