@@ -431,42 +431,43 @@ class RegistrationViewModel @Inject constructor(
         )
 
         val result = uploadMutex.withLock { captureQueueManager.uploadOrQueue(request) }
+        viewModelScope.launch {
+            when (result) {
+                is ApiResult.Success -> {
+                    val lastResponse = result.data.lastOrNull()
 
-        when (result) {
-            is ApiResult.Success -> {
-                val lastResponse = result.data.lastOrNull()
-
-                // Mark EVERY finger in the batch response as CAPTURED, not just the
-                // one that triggered this call -- CaptureQueueManager may have bundled
-                // previously-pending fingers into the same batch upload
-                val updatedStatusMap = _uiState.value.fingerUploadStatus.toMutableMap()
-                result.data.forEach { captureResponse ->
-                    val respondedPosition = FingerPosition.entries.find {
-                        it.name == captureResponse.fingerType
-                    }
-                    respondedPosition?.let {
-                        updatedStatusMap[it] = FingerCaptureStatus.CAPTURED
-                    }
-                }
-
-                _uiState.update { state ->
-                    state.copy(
-                        captureMode = captureMode,
-                        totalCaptured = lastResponse?.totalCaptured ?: state.totalCaptured,
-                        isComplete = lastResponse?.isComplete ?: state.isComplete,
-                        fingerUploadStatus = updatedStatusMap
-                    )
-                }
-            }
-
-            is ApiResult.Error -> {
-                _uiState.update { state ->
-                    state.copy(
-                        message = "Upload queued — will retry automatically",
-                        fingerUploadStatus = state.fingerUploadStatus.toMutableMap().apply {
-                            set(fingerPosition, FingerCaptureStatus.PENDING)
+                    // Mark EVERY finger in the batch response as CAPTURED, not just the
+                    // one that triggered this call -- CaptureQueueManager may have bundled
+                    // previously-pending fingers into the same batch upload
+                    val updatedStatusMap = _uiState.value.fingerUploadStatus.toMutableMap()
+                    result.data.forEach { captureResponse ->
+                        val respondedPosition = FingerPosition.entries.find {
+                            it.name == captureResponse.fingerType
                         }
-                    )
+                        respondedPosition?.let {
+                            updatedStatusMap[it] = FingerCaptureStatus.CAPTURED
+                        }
+                    }
+
+                    _uiState.update { state ->
+                        state.copy(
+                            captureMode = captureMode,
+                            totalCaptured = lastResponse?.totalCaptured ?: state.totalCaptured,
+                            isComplete = lastResponse?.isComplete ?: state.isComplete,
+                            fingerUploadStatus = updatedStatusMap
+                        )
+                    }
+                }
+
+                is ApiResult.Error -> {
+                    _uiState.update { state ->
+                        state.copy(
+                            message = "Upload queued — will retry automatically",
+                            fingerUploadStatus = state.fingerUploadStatus.toMutableMap().apply {
+                                set(fingerPosition, FingerCaptureStatus.PENDING)
+                            }
+                        )
+                    }
                 }
             }
         }
