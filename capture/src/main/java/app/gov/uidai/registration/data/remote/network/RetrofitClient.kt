@@ -33,6 +33,7 @@ object RetrofitClient {
     private fun provideLoggingInterceptor(): HttpLoggingInterceptor =
         HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
+            redactHeader("Authorization")
         }
 
     // Chucker — visual HTTP inspector accessible via notification, debug only
@@ -46,6 +47,7 @@ object RetrofitClient {
             .collector(collector)
             .maxContentLength(250_000L)
             .alwaysReadResponseBody(true)
+            .redactHeaders("Authorization")
             .build()
     }
 
