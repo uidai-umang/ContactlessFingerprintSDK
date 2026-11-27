@@ -39,8 +39,8 @@ class DensenetBlur(
     private fun initializeInterpreter() {
         try {
             val options = Interpreter.Options().apply {
-                /*numThreads = 4
-                Interpreter.Options.setUseNNAPI = true // Use Android Neural Networks API if available*/
+                numThreads = 4
+//                Interpreter.Options.setUseNNAPI = true // Use Android Neural Networks API if available
             }
 
             val model = FileUtil.loadMappedFile(context, modelPath)

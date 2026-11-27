@@ -39,14 +39,18 @@ class DensenetBlurMethod(
         try {
             val callId = callCounter++
             val bitmap = provider.getAsUprightBitmap()
-            val croppedBitmap = cropToFingerIfPossible(bitmap, callId)
-            val blurResult = densenetBlur.detectBlur(
-                croppedBitmap,
-                blurConfig.threshold
-            )
+            val (croppedBitmap, cropLabel) = cropToFingerIfPossible(bitmap)
+            val blurResult = densenetBlur.detectBlur(croppedBitmap, blurConfig.threshold)
             val passed = blurResult?.isSharp ?: false
             val confidence = blurResult?.confidence ?: 0f
-            Log.i(TAG, "STAGE2_DEBUG [DenseNet call=$callId] confidence=$confidence passed=$passed")
+            Log.i(TAG, "STAGE2_DEBUG [DenseNet call=$callId] confidence=$confidence passed=$passed crop=$cropLabel")
+
+            if (!passed) {
+                val conf = String.format("%.3f", confidence)
+                saveDebugCrop(bitmap, callId, "FAIL_${conf}_input")          // what came in
+                saveDebugCrop(croppedBitmap, callId, "FAIL_${conf}_$cropLabel") // what DenseNet scored
+            }
+
             return if (passed) {
                 ProcessingResult.Passed(data = Unit, confidence = confidence)
             } else {
@@ -62,7 +66,7 @@ class DensenetBlurMethod(
         }
     }
 
-    private fun cropToFingerIfPossible(bitmap: Bitmap, callId: Int): Bitmap {
+    private fun cropToFingerIfPossible(bitmap: Bitmap): Pair<Bitmap, String> {
         return try {
             val argbBitmap = if (bitmap.config == Bitmap.Config.ARGB_8888) {
                 bitmap
@@ -71,39 +75,24 @@ class DensenetBlurMethod(
             }
             val buffer = ByteBuffer.allocate(argbBitmap.byteCount)
             argbBitmap.copyPixelsToBuffer(buffer)
-            val rgbaBytes = buffer.array()
 
-            val bboxResult = fingerSegmentModule.callAttr(
-                "get_finger_bbox_from_rgba", rgbaBytes, argbBitmap.width, argbBitmap.height
-            )
-            val bboxList = bboxResult.asList()
-            if (bboxList.size < 4) {
-                Log.d(TAG, "FINGER_CROP -- segmentation unavailable, scoring whole frame")
-                saveDebugCrop(bitmap, callId, "wholeFrame")
-                return bitmap
-            }
+            val bboxList = fingerSegmentModule.callAttr(
+                "get_finger_bbox_from_rgba", buffer.array(), argbBitmap.width, argbBitmap.height
+            ).asList()
+            if (bboxList.size < 4) return bitmap to "wholeFrame"
 
             val x = bboxList[0].toInt().coerceIn(0, argbBitmap.width - 1)
             val y = bboxList[1].toInt().coerceIn(0, argbBitmap.height - 1)
             val w = bboxList[2].toInt().coerceAtMost(argbBitmap.width - x)
             val h = bboxList[3].toInt().coerceAtMost(argbBitmap.height - y)
-            if (w <= 0 || h <= 0) {
-                Log.w(TAG, "FINGER_CROP -- degenerate bbox ($x,$y,$w,$h), scoring whole frame")
-                saveDebugCrop(bitmap, callId, "degenerateBbox")
-                return bitmap
-            }
+            if (w <= 0 || h <= 0) return bitmap to "degenerateBbox"
 
-            Log.d(TAG, "FINGER_CROP -- cropped to finger bbox=($x,$y,${w}x$h) from ${argbBitmap.width}x${argbBitmap.height}")
-            val cropped = Bitmap.createBitmap(argbBitmap, x, y, w, h)
-            saveDebugCrop(cropped, callId, "bbox_${x}_${y}_${w}x$h")
-            cropped
+            Bitmap.createBitmap(argbBitmap, x, y, w, h) to "bbox_${x}_${y}_${w}x$h"
         } catch (e: Exception) {
             Log.w(TAG, "FINGER_CROP -- failed, scoring whole frame", e)
-            saveDebugCrop(bitmap, callId, "cropFailed")
-            bitmap
+            bitmap to "cropFailed"
         }
     }
-
     private fun saveDebugCrop(bitmap: Bitmap, callId: Int, label: String) {
         try {
             onDebugCrop?.invoke(bitmap, callId, label)
