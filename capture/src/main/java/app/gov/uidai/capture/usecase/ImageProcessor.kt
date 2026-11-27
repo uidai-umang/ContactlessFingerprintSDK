@@ -96,7 +96,7 @@ abstract class ImageProcessor(
             "THUMB" to 1.15f,
             "INDEX" to 1.0f,
             "MIDDLE" to 1.0f,
-            "RING" to 1.0f,
+            "RING" to 0.85f,
             "LITTLE" to 0.86f
         )
     }

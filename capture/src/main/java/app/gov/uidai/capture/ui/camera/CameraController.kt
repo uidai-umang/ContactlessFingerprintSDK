@@ -780,12 +780,14 @@ class CameraController @Inject constructor(
 
     fun getSingleYoloDistanceMM(fingerBoxUpright: RectF, uprightImageSize: Size, rotationDegrees: Int): Float {
         val axesSwapped = rotationDegrees == 90 || rotationDegrees == 270
-        val sensorPhysical = getSensorPhysicalSize()
-        val sensorWidthMMForUprightWidthAxis = if (axesSwapped) sensorPhysical.height else sensorPhysical.width
+        // Same crop-aware sensor width as the slap formula: on 16:9 output from a
+        // 4:3 sensor the frame covers only part of the sensor's short side.
+        val sensorWidthMMForUprightWidthAxis =
+            coveredSensorSizeMM(uprightImageSize, axesSwapped).let { if (axesSwapped) it.height else it.width }
         // A finger box is elongated, so its SHORT side is the finger's physical width.
         val perceivedWidthPixels = minOf(fingerBoxUpright.width(), fingerBoxUpright.height())
-        if (perceivedWidthPixels <= 0) return 0f
-        return 2 * (getFocalLengthInMM() * averageFingerWidthMM * uprightImageSize.width.toFloat()) /
+        if (perceivedWidthPixels <= 0 || sensorWidthMMForUprightWidthAxis <= 0f) return 0f
+        return slapDistanceScale * (getFocalLengthInMM() * averageFingerWidthMM * uprightImageSize.width.toFloat()) /
                 (perceivedWidthPixels * sensorWidthMMForUprightWidthAxis)
     }
 
